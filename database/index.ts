@@ -1,9 +1,9 @@
 import { Database } from '@nozbe/watermelondb';
-import SQLiteAdapter from '@nozbe/watermelondb/adapters/sqlite';
+import LokiJSAdapter from '@nozbe/watermelondb/adapters/lokijs';
+
 import { schema } from './schema';
 import { migrations } from './migrations';
 
-// Importação dos Models
 import Talhao from './models/Talhao';
 import Animal from './models/Animal';
 import Tratamento from './models/Tratamento';
@@ -11,23 +11,67 @@ import EstoqueItem from './models/EstoqueItem';
 import Maquina from './models/Maquina';
 import Ordenha from './models/Ordenha';
 
-const adapter = new SQLiteAdapter({
-  schema,
-  migrations,
-  jsi: true, // Habilita JSI para melhor performance no Android/iOS(ver se funfa mesmo)
-  onSetUpError: (error) => {
-    console.error('Erro ao configurar o bd:', error);
-  },
-});
+export const modelClasses = [
+  Talhao,
+  Animal,
+  Tratamento,
+  EstoqueItem,
+  Maquina,
+  Ordenha,
+];
+
+function getPlatformOS(): string {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-exports, @typescript-eslint/no-require-imports
+    const RN = require('react-native');
+    return RN?.Platform?.OS || 'web';
+  } catch {
+    return 'web';
+  }
+}
+
+function createAdapter() {
+  const os = getPlatformOS();
+  const isNative = os === 'ios' || os === 'android';
+
+  if (isNative) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-exports, @typescript-eslint/no-require-imports
+      const SQLiteAdapter = require('@nozbe/watermelondb/adapters/sqlite').default;
+      return new SQLiteAdapter({
+        schema,
+        migrations,
+        jsi: os === 'ios',
+        onSetUpError: (error: any) => {
+          console.error('Erro ao configurar SQLite nativo:', error);
+        },
+      });
+    } catch (e) {
+      console.warn('Fallback para LokiJSAdapter:', e);
+    }
+  }
+
+  return new LokiJSAdapter({
+    schema,
+    migrations,
+    useWebWorker: false,
+    useIncrementalIndexedDB: typeof window !== 'undefined' && !!(window as any).indexedDB,
+    onSetUpError: (error: any) => {
+      console.error('Erro ao configurar LokiJS/Web:', error);
+    },
+  });
+}
+
+export const adapter = createAdapter();
 
 export const database = new Database({
   adapter,
-  modelClasses: [
-    Talhao,
-    Animal,
-    Tratamento,
-    EstoqueItem,
-    Maquina,
-    Ordenha,
-  ],
+  modelClasses,
 });
+
+export * from './schema';
+export * from './migrations';
+export * from './models';
+export * from './repositories';
+export * from './tests/persistenceTest';
+export * from './sync';
