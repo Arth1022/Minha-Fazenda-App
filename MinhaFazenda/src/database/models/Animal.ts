@@ -1,16 +1,15 @@
 import { Model, Query, Relation } from '@nozbe/watermelondb';
 import { field, date, readonly, relation, children } from '@nozbe/watermelondb/decorators';
-import Talhao from './Talhao';
-import Tratamento from './Tratamento';
+import type Talhao from './Talhao';
+import type Tratamento from './Tratamento';
 
 export default class Animal extends Model {
   static table = 'animais';
 
-  
   static associations = {
-    talhoes: { type: 'belongs_to', key: 'talhao_id' },
-    tratamentos: { type: 'has_many', foreignKey: 'animal_id' },
-  } as const; //validando relacionamento
+    talhoes: { type: 'belongs_to' as const, key: 'talhao_id' },
+    tratamentos: { type: 'has_many' as const, foreignKey: 'animal_id' },
+  };
 
   @field('brinco') brinco!: string;
   @field('nome') nome?: string;
