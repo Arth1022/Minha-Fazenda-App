@@ -1,16 +1,16 @@
-import * as Device from 'expo-device';
-import { Platform, ScrollView, StyleSheet } from 'react-native';
+import React from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 
-import { AnimatedIcon } from '@/components/animated-icon';
+import { AgroHeader } from '@/components/agro-header';
 import { DatabasePersistenceTest } from '@/components/database-persistence-test';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { AgroColors, BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 
 export default function HomeScreen() {
+  const router = useRouter();
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
@@ -18,31 +18,66 @@ export default function HomeScreen() {
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}>
-          <ThemedView style={styles.heroSection}>
-            <AnimatedIcon />
-            <ThemedText type="title" style={styles.title}>
-              Minha Fazenda App
-            </ThemedText>
-            <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center' }}>
-              Gestão rural inteligente com persistência local offline-first
-            </ThemedText>
-          </ThemedView>
+          <AgroHeader
+            title="AgroFazenda"
+            subtitle="Gestão Rural Local-First • Operação sem Internet"
+          />
 
-          {/* Teste de Persistência e Banco de Dados */}
-          <DatabasePersistenceTest />
+          {/* Botão Principal de Acesso ao Mapeamento (Sprint 1) */}
+          <Pressable
+            onPress={() => router.push('/mapa')}
+            style={({ pressed }) => [styles.primaryHeroBanner, pressed && styles.pressed]}>
+            <View style={styles.heroTextCol}>
+              <Text style={styles.heroBadge}>ACESSO PRINCIPAL • CAMPO</Text>
+              <Text style={styles.heroTitle}>🗺️ Mapeamento & Áreas da Fazenda</Text>
+              <Text style={styles.heroDesc}>
+                Registre suas terras, divida em talhões, calcule hectares, cercas e sementes mesmo sem sinal.
+              </Text>
+            </View>
+            <View style={styles.heroCtaBox}>
+              <Text style={styles.heroCtaText}>Abrir Mapa →</Text>
+            </View>
+          </Pressable>
 
-          <ThemedView type="backgroundElement" style={styles.stepContainer}>
-            <HintRow
-              title="Camada de Dados"
-              hint={<ThemedText type="code">src/database/repositories</ThemedText>}
-            />
-            <HintRow
-              title="Schema & Migrations"
-              hint={<ThemedText type="code">src/database/schema.ts</ThemedText>}
-            />
-          </ThemedView>
+          {/* Atalhos Grandes e Legíveis para os Módulos */}
+          <View style={styles.modulesGrid}>
+            <Pressable
+              onPress={() => router.push('/mapa')}
+              style={({ pressed }) => [styles.moduleCard, pressed && styles.pressed]}>
+              <Text style={styles.moduleEmoji}>📐</Text>
+              <Text style={styles.moduleTitle}>Mapa & Talhões</Text>
+              <Text style={styles.moduleSub}>Áreas em Ha e Cercas</Text>
+            </Pressable>
 
-          {Platform.OS === 'web' && <WebBadge />}
+            <Pressable
+              onPress={() => router.push('/rebanho')}
+              style={({ pressed }) => [styles.moduleCard, pressed && styles.pressed]}>
+              <Text style={styles.moduleEmoji}>🐄</Text>
+              <Text style={styles.moduleTitle}>Rebanho</Text>
+              <Text style={styles.moduleSub}>Gado e Tratamentos</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => router.push('/estoque')}
+              style={({ pressed }) => [styles.moduleCard, pressed && styles.pressed]}>
+              <Text style={styles.moduleEmoji}>🌾</Text>
+              <Text style={styles.moduleTitle}>Estoque</Text>
+              <Text style={styles.moduleSub}>Insumos e Vacinas</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => router.push('/maquinas')}
+              style={({ pressed }) => [styles.moduleCard, pressed && styles.pressed]}>
+              <Text style={styles.moduleEmoji}>🚜</Text>
+              <Text style={styles.moduleTitle}>Máquinas & Ordenha</Text>
+              <Text style={styles.moduleSub}>Frota e Produção</Text>
+            </Pressable>
+          </View>
+
+          {/* Painel de Validação e Persistência Local WatermelonDB */}
+          <View style={styles.fullWidth}>
+            <DatabasePersistenceTest />
+          </View>
         </ScrollView>
       </SafeAreaView>
     </ThemedView>
@@ -64,30 +99,85 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   scrollContent: {
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
+    paddingHorizontal: Spacing.three,
+    alignItems: 'stretch',
     gap: Spacing.three,
     paddingTop: Spacing.three,
     paddingBottom: BottomTabInset + Spacing.four,
   },
-  heroSection: {
+  fullWidth: {
+    width: '100%',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
+  },
+  primaryHeroBanner: {
+    backgroundColor: AgroColors.primary,
+    borderRadius: Spacing.three,
+    padding: Spacing.four,
+    gap: Spacing.three,
+    borderWidth: 2,
+    borderColor: AgroColors.primaryDark,
+  },
+  pressed: {
+    opacity: 0.85,
+  },
+  heroTextCol: {
+    gap: 6,
+  },
+  heroBadge: {
+    color: '#A7F3D0',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  heroTitle: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  heroDesc: {
+    color: '#ECFDF5',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  heroCtaBox: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: Spacing.two,
+  },
+  heroCtaText: {
+    color: AgroColors.primaryDark,
+    fontWeight: '800',
+    fontSize: 16,
+  },
+  modulesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: Spacing.two,
   },
-  title: {
-    textAlign: 'center',
+  moduleCard: {
+    minWidth: '47%',
+    flex: 1,
+    backgroundColor: AgroColors.mintBg,
+    borderWidth: 2,
+    borderColor: AgroColors.mintBorder,
+    borderRadius: Spacing.three,
+    padding: Spacing.three,
+    gap: 4,
   },
-  code: {
-    textTransform: 'uppercase',
+  moduleEmoji: {
+    fontSize: 28,
   },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+  moduleTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#112211',
+    marginTop: 2,
+  },
+  moduleSub: {
+    fontSize: 13,
+    color: '#374151',
+    fontWeight: '600',
   },
 });

@@ -1,0 +1,1 @@
+export { tratamentoRepository } from '@/database';

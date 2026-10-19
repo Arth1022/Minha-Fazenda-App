@@ -1,0 +1,1 @@
+export { estoqueRepository } from '@/database';
