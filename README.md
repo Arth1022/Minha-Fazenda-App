@@ -42,20 +42,40 @@ __tests__/                 # Testes automatizados de persistência e regras
 
 ---
 
-## 3. Como Executar
+## 3. Execução e Build Nativo (Development Client)
 
-1. Instale as dependências:
-   ```bash
-   npm install
-   ```
+O **WatermelonDB** utiliza código nativo C++ e bindings JSI de alto desempenho para o SQLite, garantindo persistência local confiável e operação offline total no campo.
 
-2. Inicie o servidor de desenvolvimento:
-   ```bash
-   npx expo start
-   ```
+> [!IMPORTANT]
+> **O app NÃO roda no Expo Go padrão** devido aos módulos nativos do WatermelonDB.
+> A configuração nativa é injetada automaticamente via Config Plugin (`@morrowdigital/watermelondb-expo-plugin`) configurado no [`app.json`](file:///c:/Users/ti/Documents/GitHub/Minha-Fazenda-App/app.json) durante o prebuild do Expo.
+> 
+> Falhas de inicialização do SQLite no aparelho não realizam fallback silencioso para banco volátil em memória; elas disparam um erro visível imediato para proteger a integridade dos dados rurais.
 
-3. Comandos de verificação e testes:
-   ```bash
-   npm run lint
-   npm run test:db
-   ```
+### Executar no Android (Recomendado):
+```bash
+# 1. Instalar dependências
+npm install
+
+# 2. Gerar build nativa de desenvolvimento e executar no dispositivo/emulador Android
+npx expo run:android
+```
+
+### Executar no iOS:
+```bash
+npx expo run:ios
+```
+
+### Executar na Web (Simulação com LokiJS/IndexedDB):
+```bash
+npx expo start --web
+```
+
+### Testes e Verificação:
+```bash
+# Validação de tipos e ESLint
+npm run lint
+
+# Teste automatizado de persistência e timestamps do WatermelonDB
+npm run test:db
+```

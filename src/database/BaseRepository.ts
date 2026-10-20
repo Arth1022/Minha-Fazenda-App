@@ -1,5 +1,6 @@
 import { Collection, Database, Model, Q } from '@nozbe/watermelondb';
 import { Observable } from 'rxjs';
+import { database } from './database';
 
 /**
  * Repositório base genérico para operações de persistência local no WatermelonDB.
@@ -15,12 +16,7 @@ export abstract class BaseRepository<T extends Model> {
   }
 
   protected get db(): Database {
-    if (this.customDb) {
-      return this.customDb;
-    }
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { database } = require('./database') as typeof import('./database');
-    return database;
+    return this.customDb ?? database;
   }
 
   protected get collection(): Collection<T> {
