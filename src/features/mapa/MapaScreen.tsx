@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -10,34 +10,31 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Button } from '@/components/Button';
+import { Card } from '@/components/Card';
 import { Header } from '@/components/Header';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { AgroColors, BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-import Talhao from '@/entities/Talhao';
 import { formatHectares } from '@/utils/formatters';
 import {
   calculateFenceMaterials,
   calculateSeedRequirementKg,
   estimatePerimeterFromHectares,
 } from './calculos';
-import { talhaoRepository } from './TalhaoRepository';
+import { TalhaoCard } from './TalhaoCard';
+import { useTalhoes } from './useTalhoes';
 
 type ActiveTool = 'area' | 'cercas' | 'sementes';
 
 export default function MapaScreen() {
-  const [talhoes, setTalhoes] = useState<Talhao[]>([]);
+  const { talhoes, createTalhao } = useTalhoes();
   const [activeTool, setActiveTool] = useState<ActiveTool>('area');
   const [modalVisible, setModalVisible] = useState(false);
 
   const [novoNome, setNovoNome] = useState('');
   const [novoTipo, setNovoTipo] = useState('Pastagem');
   const [novaAreaHa, setNovaAreaHa] = useState('');
-
-  useEffect(() => {
-    const subscription = talhaoRepository.observeAll().subscribe(setTalhoes);
-    return () => subscription.unsubscribe();
-  }, []);
 
   const totalAreaHa = talhoes.reduce((acc, t) => acc + (t.areaHa || 0), 0);
   const totalPerimeterM = talhoes.reduce(
@@ -53,7 +50,7 @@ export default function MapaScreen() {
       return;
     }
 
-    await talhaoRepository.createTalhao({
+    await createTalhao({
       nome: novoNome.trim(),
       tipo: novoTipo.trim() || 'Pastagem',
       areaHa: areaNumber,
@@ -118,14 +115,10 @@ export default function MapaScreen() {
             </View>
           </View>
 
-          <ThemedView type="backgroundElement" style={styles.sectionCard}>
+          <Card>
             <View style={styles.sectionHeaderRow}>
               <ThemedText type="subtitle">Talhões da Propriedade</ThemedText>
-              <Pressable
-                onPress={() => setModalVisible(true)}
-                style={({ pressed }) => [styles.addButton, pressed && styles.pressed]}>
-                <Text style={styles.addButtonText}>+ Novo Talhão</Text>
-              </Pressable>
+              <Button label="+ Novo Talhão" onPress={() => setModalVisible(true)} />
             </View>
 
             {talhoes.length === 0 ? (
@@ -133,38 +126,9 @@ export default function MapaScreen() {
                 Cadastre o primeiro talhão da sua propriedade para visualizar a área em hectares.
               </ThemedText>
             ) : (
-              talhoes.map((t) => {
-                const isLavoura =
-                  (t.tipo || '').toLowerCase().includes('lavoura') ||
-                  (t.nome || '').toLowerCase().includes('lavoura');
-                return (
-                  <View key={t.id} style={styles.talhaoRow}>
-                    <View style={styles.talhaoLeft}>
-                      <View
-                        style={[
-                          styles.colorIndicator,
-                          {
-                            backgroundColor: isLavoura
-                              ? AgroColors.wheatGold
-                              : AgroColors.primaryLight,
-                          },
-                        ]}
-                      />
-                      <View>
-                        <ThemedText style={styles.talhaoName}>{t.nome}</ThemedText>
-                        <ThemedText type="small" themeColor="textSecondary">
-                          {t.tipo || 'Área Rural'} • {t.possuiCerca ? 'Com cerca' : 'Sem cerca'}
-                        </ThemedText>
-                      </View>
-                    </View>
-                    <ThemedText style={styles.talhaoArea}>
-                      {formatHectares(t.areaHa)}
-                    </ThemedText>
-                  </View>
-                );
-              })
+              talhoes.map((t) => <TalhaoCard key={t.id} talhao={t} />)
             )}
-          </ThemedView>
+          </Card>
 
           <View style={styles.bigActionsRow}>
             <Pressable
@@ -203,7 +167,7 @@ export default function MapaScreen() {
             </Pressable>
           </View>
 
-          <ThemedView type="backgroundElement" style={styles.toolDetailCard}>
+          <Card>
             {activeTool === 'area' && (
               <View style={styles.toolDetailBody}>
                 <ThemedText type="smallBold">
@@ -245,7 +209,7 @@ export default function MapaScreen() {
                 </Text>
               </View>
             )}
-          </ThemedView>
+          </Card>
         </ScrollView>
 
         <Modal
@@ -286,16 +250,17 @@ export default function MapaScreen() {
               />
 
               <View style={styles.modalButtonsRow}>
-                <Pressable
+                <Button
+                  label="Cancelar"
+                  variant="secondary"
                   onPress={() => setModalVisible(false)}
-                  style={[styles.modalBtn, styles.modalBtnCancel]}>
-                  <Text style={styles.modalBtnCancelText}>Cancelar</Text>
-                </Pressable>
-                <Pressable
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  label="Salvar Offline"
                   onPress={handleAddTalhao}
-                  style={[styles.modalBtn, styles.modalBtnConfirm]}>
-                  <Text style={styles.modalBtnConfirmText}>Salvar Offline</Text>
-                </Pressable>
+                  style={{ flex: 1 }}
+                />
               </View>
             </View>
           </View>
@@ -416,56 +381,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 14,
   },
-  sectionCard: {
-    padding: Spacing.three,
-    borderRadius: Spacing.three,
-    gap: Spacing.two,
-  },
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: Spacing.one,
-  },
-  addButton: {
-    backgroundColor: AgroColors.primary,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: Spacing.two,
-  },
-  addButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 14,
-  },
-  pressed: {
-    opacity: 0.8,
-  },
-  talhaoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(128,128,128,0.15)',
-  },
-  talhaoLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
-  colorIndicator: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-  },
-  talhaoName: {
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  talhaoArea: {
-    fontWeight: '800',
-    fontSize: 17,
   },
   bigActionsRow: {
     flexDirection: 'row',
@@ -501,10 +421,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 13,
     textAlign: 'center',
-  },
-  toolDetailCard: {
-    padding: Spacing.three,
-    borderRadius: Spacing.three,
   },
   toolDetailBody: {
     gap: 6,
@@ -555,27 +471,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing.two,
     marginTop: Spacing.three,
-  },
-  modalBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: Spacing.two,
-    alignItems: 'center',
-  },
-  modalBtnCancel: {
-    backgroundColor: '#E5E7EB',
-  },
-  modalBtnCancelText: {
-    color: '#1F2937',
-    fontWeight: '700',
-    fontSize: 15,
-  },
-  modalBtnConfirm: {
-    backgroundColor: AgroColors.primary,
-  },
-  modalBtnConfirmText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 15,
   },
 });
