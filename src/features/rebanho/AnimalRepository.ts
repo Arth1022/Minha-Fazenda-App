@@ -1,6 +1,6 @@
 import { Database, Q } from '@nozbe/watermelondb';
 import { Observable } from 'rxjs';
-import { BaseRepository } from '@/database';
+import { BaseRepository } from '@/database/BaseRepository';
 import Animal from '@/entities/Animal';
 
 export interface CreateAnimalDTO {

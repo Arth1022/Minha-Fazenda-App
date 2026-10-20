@@ -1,5 +1,5 @@
 import { Database, Q } from '@nozbe/watermelondb';
-import { BaseRepository } from '@/database';
+import { BaseRepository } from '@/database/BaseRepository';
 import Talhao from '@/entities/Talhao';
 
 export interface CreateTalhaoDTO {

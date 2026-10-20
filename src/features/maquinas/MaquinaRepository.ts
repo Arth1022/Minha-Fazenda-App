@@ -1,6 +1,6 @@
 import { Database, Q } from '@nozbe/watermelondb';
 import { Observable } from 'rxjs';
-import { BaseRepository } from '@/database';
+import { BaseRepository } from '@/database/BaseRepository';
 import Maquina from '@/entities/Maquina';
 
 export interface CreateMaquinaDTO {

@@ -21,8 +21,8 @@ import { formatHectares } from '@/utils/formatters';
 import Talhao from '@/entities/Talhao';
 import {
   calculateFenceMaterials,
+  calculatePerimeterFromTalhao,
   calculateSeedRequirementKg,
-  estimatePerimeterFromHectares,
 } from './calculos';
 import { TalhaoCard } from './TalhaoCard';
 import { useTalhoes } from './useTalhoes';
@@ -40,7 +40,8 @@ export default function MapaScreen() {
 
   const totalAreaHa = talhoes.reduce((acc: number, t: Talhao) => acc + (t.areaHa || 0), 0);
   const totalPerimeterM = talhoes.reduce(
-    (acc: number, t: Talhao) => acc + estimatePerimeterFromHectares(t.areaHa || 0),
+    (acc: number, t: Talhao) =>
+      acc + calculatePerimeterFromTalhao(t.areaHa, t.poligonoGeoJson),
     0
   );
   const fenceEstimate = calculateFenceMaterials(totalPerimeterM, 2.5, 5);
