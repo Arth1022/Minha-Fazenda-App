@@ -26,16 +26,16 @@ export default class Tratamento extends Model {
     animais: { type: 'belongs_to' as const, key: 'animal_id' },
   };
 
-  @field('animal_id') animalId!: string;
-  @field('medicamento') medicamento!: string;
-  @date('data_inicio') dataInicio!: Date;
+  @field('animal_id') animalId: string;
+  @field('medicamento') medicamento: string;
+  @date('data_inicio') dataInicio: Date;
   @date('data_fim') dataFim?: Date;
-  @json('dias_confirmados', sanitizeDiasConfirmados) diasConfirmados!: number[];
+  @json('dias_confirmados', sanitizeDiasConfirmados) diasConfirmados: number[];
   @date('proxima_dose_em') proximaDoseEm?: Date;
   @field('notificacao_ativa') notificacaoAtiva?: boolean;
 
-  @relation('animais', 'animal_id') animal!: Relation<Animal>;
+  @relation('animais', 'animal_id') animal: Relation<Animal>;
 
-  @readonly @date('created_at') createdAt!: Date;
-  @readonly @date('updated_at') updatedAt!: Date;
+  @readonly @date('created_at') createdAt: Date;
+  @readonly @date('updated_at') updatedAt: Date;
 }

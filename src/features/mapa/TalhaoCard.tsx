@@ -1,80 +1,63 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
-import { ThemedText } from '@/components/ThemedText';
 import { AgroColors, Spacing } from '@/constants/theme';
 import Talhao from '@/entities/Talhao';
 import { formatHectares } from '@/utils/formatters';
 
-interface TalhaoCardProps {
+export interface TalhaoCardProps {
   talhao: Talhao;
+  showDivider?: boolean;
 }
 
-export function TalhaoCard({ talhao }: TalhaoCardProps) {
+/**
+ * Linha de item de talhão alinhada ao card de áreas da Tela 1 do Figma
+ * (ex.: ● Pasto 1 ........ 15.2 Ha).
+ */
+export function TalhaoCard({ talhao, showDivider = false }: TalhaoCardProps) {
   const isLavoura = talhao.tipo === 'lavoura';
-  const displayTipo =
-    talhao.tipo === 'pastagem'
-      ? 'Pastagem'
-      : talhao.tipo === 'lavoura'
-      ? 'Lavoura'
-      : talhao.tipo === 'reserva'
-      ? 'Reserva'
-      : talhao.tipo === 'outro'
-      ? 'Outro'
-      : 'Área Rural';
+  const dotColor = isLavoura ? AgroColors.wheatGold : AgroColors.primaryLight;
 
   return (
-    <View style={styles.talhaoRow}>
-      <View style={styles.talhaoLeft}>
-        <View
-          style={[
-            styles.colorIndicator,
-            {
-              backgroundColor: isLavoura
-                ? AgroColors.wheatGold
-                : AgroColors.primaryLight,
-            },
-          ]}
-        />
-        <View>
-          <ThemedText style={styles.talhaoName}>{talhao.nome}</ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            {displayTipo} • {talhao.possuiCerca ? 'Com cerca' : 'Sem cerca'}
-          </ThemedText>
-        </View>
+    <View style={[styles.row, showDivider && styles.rowDivider]}>
+      <View style={styles.leftGroup}>
+        <View style={[styles.dot, { backgroundColor: dotColor }]} />
+        <Text style={styles.nameText}>{talhao.nome}</Text>
       </View>
-      <ThemedText style={styles.talhaoArea}>
-        {formatHectares(talhao.areaHa)}
-      </ThemedText>
+      <Text style={styles.areaText}>{formatHectares(talhao.areaHa)}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  talhaoRow: {
+  row: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(128,128,128,0.15)',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
   },
-  talhaoLeft: {
+  rowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: AgroColors.divider,
+  },
+  leftGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
   },
-  colorIndicator: {
-    width: 18,
-    height: 18,
+  dot: {
+    width: 8,
+    height: 8,
     borderRadius: 4,
   },
-  talhaoName: {
-    fontWeight: '700',
-    fontSize: 16,
+  nameText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: AgroColors.textSecondary,
   },
-  talhaoArea: {
-    fontWeight: '800',
-    fontSize: 17,
+  areaText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: AgroColors.textPrimary,
   },
 });

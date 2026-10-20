@@ -1,283 +1,353 @@
-import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { RelativePathString, useRouter } from 'expo-router';
 
-import { Header } from '@/components/Header';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
-import { AgroColors, BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import {
+  ChipSelector,
+  type ChipOption,
+  CustomInput,
+  FormModal,
+} from '@/components/forms';
+import {
+  Card,
+  Header,
+  ScreenContainer,
+  SegmentedTabs,
+  type SegmentedTabItem,
+} from '@/components/ui';
+import { AgroColors, Spacing } from '@/constants/theme';
 import Animal from '@/entities/Animal';
-import Ordenha from '@/entities/Ordenha';
-import Tratamento from '@/entities/Tratamento';
+import { useQuickAction } from '@/providers/QuickActionContext';
+import { AnimalCard } from './AnimalCard';
 import { useRebanho } from './useRebanho';
+
+type RebanhoTabKey = 'rebanho' | 'pasto';
+
+const TABS: SegmentedTabItem<RebanhoTabKey>[] = [
+  { key: 'rebanho', label: 'Rebanho' },
+  { key: 'pasto', label: 'Pasto' },
+];
+
+const RACA_OPTIONS: ChipOption<string>[] = [
+  { label: 'Holandesa', value: 'Holandesa', icon: '🐄' },
+  { label: 'Nelore', value: 'Nelore', icon: '🐂' },
+  { label: 'Girolando', value: 'Girolando', icon: '🐮' },
+  { label: 'Jersey', value: 'Jersey', icon: '🥛' },
+];
 
 export default function RebanhoScreen() {
   const router = useRouter();
-  const { animais, tratamentos, ordenhas, totalVolumeL } = useRebanho();
+  const { animais, createAnimal } = useRebanho();
+  const { registerQuickAction } = useQuickAction();
+
+  const [activeTab, setActiveTab] = useState<RebanhoTabKey>('rebanho');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [onlyHighMilkFilter, setOnlyHighMilkFilter] = useState(false);
+
+  // Estado do formulário modular para Novo Animal
+  const [modalVisible, setModalVisible] = useState(false);
+  const [brinco, setBrinco] = useState('');
+  const [nome, setNome] = useState('');
+  const [raca, setRaca] = useState('Holandesa');
+  const [pesoKg, setPesoKg] = useState('');
+  const [producaoLeiteL, setProducaoLeiteL] = useState('');
+  const [crias, setCrias] = useState('1');
+  const [racaoKgDia, setRacaoKgDia] = useState('6.5');
+  const [errors, setErrors] = useState<{ brinco?: string; peso?: string }>({});
+  const [saving, setSaving] = useState(false);
+
+  const openModal = useCallback(() => {
+    setErrors({});
+    setModalVisible(true);
+  }, []);
+
+  useEffect(() => {
+    return registerQuickAction('rebanho', openModal);
+  }, [registerQuickAction, openModal]);
+
+  const filteredAnimais = useMemo(() => {
+    let list = animais;
+    if (onlyHighMilkFilter) {
+      list = list.filter((a) => (a.producaoLeiteL ?? 0) >= 20);
+    }
+    if (activeTab === 'pasto') {
+      list = list.filter((a) => Boolean(a.talhaoId) || true);
+    }
+    return list;
+  }, [animais, onlyHighMilkFilter, activeTab]);
+
+  const selectedAnimal: Animal | null = useMemo(() => {
+    if (filteredAnimais.length === 0) return null;
+    if (selectedId) {
+      const found = filteredAnimais.find((a) => a.id === selectedId);
+      if (found) return found;
+    }
+    return filteredAnimais[0];
+  }, [filteredAnimais, selectedId]);
+
+  const handleAnimalPress = (animal: Animal) => {
+    if (selectedAnimal?.id === animal.id) {
+      router.push(`/animal/${animal.id}` as RelativePathString);
+    } else {
+      setSelectedId(animal.id);
+    }
+  };
+
+  const handleAddAnimal = async () => {
+    const nextErrors: { brinco?: string; peso?: string } = {};
+    if (!brinco.trim()) {
+      nextErrors.brinco = 'Informe o número do brinco (ex: #104).';
+    }
+    const pesoNumber = parseFloat(pesoKg.replace(',', '.'));
+    if (!pesoKg.trim() || isNaN(pesoNumber) || pesoNumber <= 0) {
+      nextErrors.peso = 'Informe um peso válido em kg.';
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const formattedBrinco = brinco.trim().startsWith('#')
+        ? brinco.trim()
+        : `#${brinco.trim()}`;
+
+      const created = await createAnimal({
+        brinco: formattedBrinco,
+        nome: nome.trim() || `Brinco ${formattedBrinco}`,
+        raca,
+        pesoKg: pesoNumber,
+        producaoLeiteL: parseFloat(producaoLeiteL.replace(',', '.')) || 0,
+        crias: parseInt(crias, 10) || 0,
+        racaoKgDia: parseFloat(racaoKgDia.replace(',', '.')) || 0,
+      });
+
+      setSelectedId(created.id);
+      setBrinco('');
+      setNome('');
+      setPesoKg('');
+      setProducaoLeiteL('');
+      setModalVisible(false);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}>
-          <Header
-            title="Rebanho & Manejo"
-            subtitle="Gado, Tratamento Sanitário e Ordenha"
+    <ScreenContainer
+      header={
+        <Header
+          title="Gerenciamento Rebanho"
+          showBack
+          showMore
+          onRightPress={openModal}
+        />
+      }>
+      {/* Abas Rebanho / Pasto + Ícone de Filtro (Fiel ao Figma) */}
+      <SegmentedTabs
+        tabs={TABS}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        showFilter
+        filterActive={onlyHighMilkFilter}
+        onFilterPress={() => setOnlyHighMilkFilter((prev) => !prev)}
+      />
+
+      {/* Lista de Animais */}
+      <View style={styles.listColumn}>
+        {filteredAnimais.map((animal: Animal) => (
+          <AnimalCard
+            key={animal.id}
+            animal={animal}
+            selected={selectedAnimal?.id === animal.id}
+            onPress={() => handleAnimalPress(animal)}
+          />
+        ))}
+      </View>
+
+      {/* Card Inferior de Métricas Detalhadas do Animal Selecionado (Fiel à Tela 2 do Figma) */}
+      {selectedAnimal && (
+        <Card padding="three">
+          <View style={styles.summaryList}>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Peso</Text>
+              <Text style={styles.summaryValue}>
+                {selectedAnimal.pesoKg ?? 0} kg
+              </Text>
+            </View>
+
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Produção de Leite</Text>
+              <Text style={styles.summaryValueBlue}>
+                {(selectedAnimal.producaoLeiteL ?? 0).toFixed(1)} L
+              </Text>
+            </View>
+
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Crias</Text>
+              <Text style={styles.summaryValue}>
+                {selectedAnimal.crias ?? 0}
+              </Text>
+            </View>
+
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Ração Concentrado</Text>
+              <Text style={styles.summaryValue}>
+                {selectedAnimal.racaoKgDia ?? 0} kg/dia
+              </Text>
+            </View>
+          </View>
+
+          <Pressable
+            onPress={() =>
+              router.push(`/animal/${selectedAnimal.id}` as RelativePathString)
+            }
+            style={({ pressed }) => [
+              styles.treatmentLinkRow,
+              pressed && styles.pressed,
+            ]}>
+            <Text style={styles.treatmentLinkText}>
+              Abrir Tratamento Animal ({selectedAnimal.brinco}) →
+            </Text>
+          </Pressable>
+        </Card>
+      )}
+
+      {/* Modal de Formulário Modular para Cadastro de Animal */}
+      <FormModal
+        visible={modalVisible}
+        title="Novo Animal"
+        subtitle="Cadastre um novo animal no rebanho local"
+        onClose={() => setModalVisible(false)}
+        onSubmit={handleAddAnimal}
+        submitLabel="Salvar Animal"
+        loading={saving}>
+        <CustomInput
+          label="Identificação (Brinco)"
+          required
+          value={brinco}
+          onChangeText={(t) => {
+            setBrinco(t);
+            if (errors.brinco)
+              setErrors((prev) => ({ ...prev, brinco: undefined }));
+          }}
+          placeholder="Ex: #104"
+          error={errors.brinco}
+        />
+
+        <CustomInput
+          label="Nome do Animal (Opcional)"
+          value={nome}
+          onChangeText={setNome}
+          placeholder="Ex: Mimosa"
+        />
+
+        <ChipSelector
+          label="Raça"
+          options={RACA_OPTIONS}
+          value={raca}
+          onChange={setRaca}
+        />
+
+        <View style={styles.twoColInputs}>
+          <CustomInput
+            containerStyle={{ flex: 1 }}
+            label="Peso"
+            required
+            value={pesoKg}
+            onChangeText={(t) => {
+              setPesoKg(t);
+              if (errors.peso)
+                setErrors((prev) => ({ ...prev, peso: undefined }));
+            }}
+            placeholder="512"
+            keyboardType="numeric"
+            suffix="kg"
+            error={errors.peso}
           />
 
-          <ThemedView type="backgroundElement" style={styles.sectionCard}>
-            <ThemedText type="subtitle">🐄 Rebanho Registrado ({animais.length})</ThemedText>
-            {animais.length === 0 ? (
-              <ThemedText type="small" themeColor="textSecondary">
-                Nenhum animal cadastrado ainda no banco local.
-              </ThemedText>
-            ) : (
-              animais.map((animal: Animal) => (
-                <Pressable
-                  key={animal.id}
-                  onPress={() => router.push(`/animal/${animal.id}` as RelativePathString)}
-                  style={({ pressed }) => [styles.animalCard, pressed && styles.pressed]}>
-                  <View style={styles.animalHeader}>
-                    <View style={styles.avatarCircle}>
-                      <Text style={styles.avatarEmoji}>🐄</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.brincoTitle}>
-                        Brinco {animal.brinco} {animal.nome ? `• ${animal.nome}` : ''}
-                      </Text>
-                      <Text style={styles.breedSubtitle}>
-                        {animal.raca || 'Sem raça definida'}
-                      </Text>
-                    </View>
-                    <View style={styles.activeCheckBadge}>
-                      <Text style={styles.activeCheckText}>Ficha →</Text>
-                    </View>
-                  </View>
+          <CustomInput
+            containerStyle={{ flex: 1 }}
+            label="Produção de Leite"
+            value={producaoLeiteL}
+            onChangeText={setProducaoLeiteL}
+            placeholder="22.1"
+            keyboardType="numeric"
+            suffix="L"
+          />
+        </View>
 
-                  <View style={styles.metricsGrid}>
-                    <View style={styles.metricItem}>
-                      <Text style={styles.metricLabel}>Peso</Text>
-                      <Text style={styles.metricValue}>{animal.pesoKg || 0} kg</Text>
-                    </View>
-                    <View style={styles.metricItem}>
-                      <Text style={styles.metricLabel}>Produção de Leite</Text>
-                      <Text style={[styles.metricValue, { color: AgroColors.waterBlue }]}>
-                        💧 {animal.producaoLeiteL || 0} L
-                      </Text>
-                    </View>
-                    <View style={styles.metricItem}>
-                      <Text style={styles.metricLabel}>Crias</Text>
-                      <Text style={styles.metricValue}>{animal.crias || 0}</Text>
-                    </View>
-                    <View style={styles.metricItem}>
-                      <Text style={styles.metricLabel}>Ração Consumida</Text>
-                      <Text style={styles.metricValue}>{animal.racaoKgDia || 0} kg/dia</Text>
-                    </View>
-                  </View>
-                </Pressable>
-              ))
-            )}
-          </ThemedView>
+        <View style={styles.twoColInputs}>
+          <CustomInput
+            containerStyle={{ flex: 1 }}
+            label="Crias"
+            value={crias}
+            onChangeText={setCrias}
+            placeholder="3"
+            keyboardType="numeric"
+          />
 
-          <ThemedView type="backgroundElement" style={styles.sectionCard}>
-            <ThemedText type="subtitle">💊 Tratamento Animal ({tratamentos.length})</ThemedText>
-            {tratamentos.length === 0 ? (
-              <ThemedText type="small" themeColor="textSecondary">
-                Nenhum tratamento sanitário ativo no momento.
-              </ThemedText>
-            ) : (
-              tratamentos.map((trat: Tratamento) => (
-                <View key={trat.id} style={styles.treatmentCard}>
-                  <View style={styles.treatmentTop}>
-                    <Text style={styles.medName}>{trat.medicamento}</Text>
-                    <Text style={styles.notifBadge}>
-                      {trat.notificacaoAtiva ? '🔔 Alerta Ativo' : 'Silenciado'}
-                    </Text>
-                  </View>
-                </View>
-              ))
-            )}
-          </ThemedView>
-
-          <ThemedView type="backgroundElement" style={styles.sectionCard}>
-            <ThemedText type="subtitle">🥛 Controle de Ordenha ({ordenhas.length})</ThemedText>
-            {ordenhas.map((o: Ordenha) => (
-              <View key={o.id} style={styles.ordenhaRow}>
-                <View>
-                  <Text style={styles.periodoTitle}>
-                    {o.periodo === 'manha' ? '🌅 Manhã' : '🌇 Tarde'}
-                  </Text>
-                  <Text style={styles.horarioText}>
-                    Horário: {o.horarioPrevisto || '06:00'} • Notificação:{' '}
-                    {o.horarioNotificacao || '05:45'}
-                  </Text>
-                </View>
-                <Text style={styles.volumeBadge}>{o.volumeLitros || 0} L</Text>
-              </View>
-            ))}
-
-            <View style={styles.totalVolumeRow}>
-              <ThemedText type="smallBold">Volume Diário Registrado</ThemedText>
-              <Text style={styles.totalVolumeValue}>{totalVolumeL} L</Text>
-            </View>
-          </ThemedView>
-        </ScrollView>
-      </SafeAreaView>
-    </ThemedView>
+          <CustomInput
+            containerStyle={{ flex: 1 }}
+            label="Ração Concentrado"
+            value={racaoKgDia}
+            onChangeText={setRacaoKgDia}
+            placeholder="6.5"
+            keyboardType="numeric"
+            suffix="kg/dia"
+          />
+        </View>
+      </FormModal>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
+  listColumn: {
+    gap: Spacing.sm,
   },
-  safeArea: {
-    flex: 1,
-    maxWidth: MaxContentWidth,
+  summaryList: {
+    gap: 12,
   },
-  scrollView: {
-    flex: 1,
-    width: '100%',
-  },
-  scrollContent: {
-    paddingHorizontal: Spacing.three,
-    paddingTop: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.four,
-    gap: Spacing.three,
-  },
-  sectionCard: {
-    padding: Spacing.three,
-    borderRadius: Spacing.three,
-    gap: Spacing.two,
-  },
-  animalCard: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1.5,
-    borderColor: '#CBD5E1',
-    borderRadius: Spacing.two,
-    padding: Spacing.three,
-    gap: Spacing.two,
-  },
-  pressed: {
-    opacity: 0.8,
-  },
-  animalHeader: {
+  summaryRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
-  },
-  avatarCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: AgroColors.mintBg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarEmoji: {
-    fontSize: 24,
-  },
-  brincoTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#112211',
-  },
-  breedSubtitle: {
-    fontSize: 13,
-    color: '#475569',
-  },
-  activeCheckBadge: {
-    backgroundColor: AgroColors.mintBg,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  activeCheckText: {
-    color: AgroColors.primaryDark,
-    fontWeight: '800',
-    fontSize: 12,
-  },
-  metricsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.two,
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    paddingTop: Spacing.two,
-  },
-  metricItem: {
-    minWidth: '45%',
-    flex: 1,
-  },
-  metricLabel: {
-    fontSize: 12,
-    color: '#64748B',
-  },
-  metricValue: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#112211',
-  },
-  treatmentCard: {
-    backgroundColor: AgroColors.mintBg,
-    borderRadius: Spacing.two,
-    padding: Spacing.three,
-    gap: Spacing.two,
-  },
-  treatmentTop: {
-    flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
   },
-  medName: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#112211',
+  summaryLabel: {
+    fontSize: 13,
+    fontWeight: '400',
+    color: AgroColors.textSecondary,
   },
-  notifBadge: {
+  summaryValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: AgroColors.textPrimary,
+  },
+  summaryValueBlue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: AgroColors.waterBlue,
+  },
+  treatmentLinkRow: {
+    marginTop: 6,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: AgroColors.divider,
+    alignItems: 'flex-end',
+  },
+  treatmentLinkText: {
     fontSize: 12,
     fontWeight: '700',
-    color: AgroColors.primaryDark,
-  },
-  ordenhaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: AgroColors.mintBg,
-    padding: Spacing.three,
-    borderRadius: Spacing.two,
-  },
-  periodoTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#112211',
-  },
-  horarioText: {
-    fontSize: 13,
-    color: '#334155',
-    marginTop: 2,
-  },
-  volumeBadge: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: AgroColors.primaryDark,
-  },
-  totalVolumeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: Spacing.two,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(128,128,128,0.2)',
-  },
-  totalVolumeValue: {
-    fontSize: 20,
-    fontWeight: '800',
     color: AgroColors.primary,
+  },
+  pressed: {
+    opacity: 0.75,
+  },
+  twoColInputs: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
   },
 });

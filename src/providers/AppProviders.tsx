@@ -5,6 +5,7 @@ import { DatabaseProvider } from '@nozbe/watermelondb/react';
 
 import { database } from '@/database';
 import { runDevSeed } from '@/database/seeds/devSeed';
+import { QuickActionProvider } from './QuickActionContext';
 
 export type DatabaseStatus = 'loading' | 'ready' | 'error';
 
@@ -61,9 +62,11 @@ export function AppProviders({ children }: AppProvidersProps) {
   return (
     <DatabaseProvider database={database}>
       <DatabaseStatusContext.Provider value={{ status, error }}>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          {children}
-        </ThemeProvider>
+        <QuickActionProvider>
+          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+            {children}
+          </ThemeProvider>
+        </QuickActionProvider>
       </DatabaseStatusContext.Provider>
     </DatabaseProvider>
   );

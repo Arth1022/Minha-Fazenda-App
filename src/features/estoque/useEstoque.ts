@@ -1,7 +1,7 @@
 import { Alert } from 'react-native';
 import { useEffect, useState } from 'react';
 import EstoqueItem from '@/entities/EstoqueItem';
-import { estoqueRepository } from './EstoqueRepository';
+import { CreateEstoqueItemDTO, estoqueRepository } from './EstoqueRepository';
 
 export function useEstoque() {
   const [itens, setItens] = useState<EstoqueItem[]>([]);
@@ -15,15 +15,25 @@ export function useEstoque() {
     try {
       await estoqueRepository.adjustQuantity(id, delta);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Falha ao ajustar quantidade de estoque';
+      const message =
+        err instanceof Error
+          ? err.message
+          : 'Falha ao ajustar quantidade de estoque';
       Alert.alert('Ajuste de Estoque', message);
     }
   };
 
+  const criarItem = async (dto: CreateEstoqueItemDTO) => {
+    return await estoqueRepository.createItem(dto);
+  };
+
   return {
     insumos: itens.filter((i: EstoqueItem) => i.categoria === 'insumo'),
-    medicamentos: itens.filter((i: EstoqueItem) => i.categoria === 'medicamento'),
+    medicamentos: itens.filter(
+      (i: EstoqueItem) => i.categoria === 'medicamento'
+    ),
     pecas: itens.filter((i: EstoqueItem) => i.categoria === 'peca_maquina'),
     ajustarQuantidade,
+    criarItem,
   };
 }

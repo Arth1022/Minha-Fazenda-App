@@ -1,226 +1,493 @@
-import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Header } from '@/components/Header';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
-import { AgroColors, BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-import EstoqueItem from '@/entities/EstoqueItem';
+import {
+  ChipSelector,
+  type ChipOption,
+  CustomInput,
+  FormModal,
+} from '@/components/forms';
+import {
+  Badge,
+  Card,
+  Header,
+  ScreenContainer,
+  SectionHeader,
+  StatActionCard,
+} from '@/components/ui';
+import { AgroColors, Radius, Spacing } from '@/constants/theme';
+import EstoqueItem, { CategoriaEstoque } from '@/entities/EstoqueItem';
+import { useQuickAction } from '@/providers/QuickActionContext';
 import { useEstoque } from './useEstoque';
 
+const CATEGORIA_OPTIONS: ChipOption<CategoriaEstoque>[] = [
+  { label: 'Insumo', value: 'insumo', icon: '🌾' },
+  { label: 'Medicamento', value: 'medicamento', icon: '💉' },
+  { label: 'Peça Máquina', value: 'peca_maquina', icon: '⚙️' },
+];
+
+function formatEstoqueValue(quantidade: number, unidade: string): string {
+  if (unidade.toLowerCase() === 'kg' && quantidade >= 1000) {
+    return `${(quantidade / 1000).toFixed(1)} Ton`;
+  }
+  return `${quantidade} ${unidade}`;
+}
+
+function getItemVisuals(nome: string, categoria: CategoriaEstoque) {
+  const lower = nome.toLowerCase();
+  if (lower.includes('ração') || lower.includes('racao')) {
+    return { icon: '🌾', bg: '#FEF3C7' };
+  }
+  if (lower.includes('semente')) {
+    return { icon: '🌱', bg: AgroColors.mintBg };
+  }
+  if (lower.includes('adubo') || lower.includes('fertilizante')) {
+    return { icon: '🪴', bg: AgroColors.mintBg };
+  }
+  if (lower.includes('vacina')) {
+    return { icon: '💉', bg: AgroColors.waterBlueBg };
+  }
+  if (lower.includes('antibiótico') || lower.includes('antibiotico')) {
+    return { icon: '💊', bg: AgroColors.purpleMedBg };
+  }
+  if (categoria === 'medicamento') {
+    return { icon: '💊', bg: AgroColors.waterBlueBg };
+  }
+  if (categoria === 'peca_maquina') {
+    return { icon: '⚙️', bg: '#F3F4F6' };
+  }
+  return { icon: '📦', bg: AgroColors.mintBg };
+}
+
+/**
+ * Tela 4 do Figma: "Estoque Fazenda"
+ * Exibe as 3 seções (Insumos, Medicamentos, Peças Máquinas) com cartões em grade,
+ * ícones semânticos e badge de alerta "⚠️ Estoque baixo".
+ */
 export default function EstoqueScreen() {
-  const { insumos, medicamentos, pecas, ajustarQuantidade: handleAdjust } = useEstoque();
+  const {
+    insumos,
+    medicamentos,
+    pecas,
+    ajustarQuantidade,
+    criarItem,
+  } = useEstoque();
+  const { registerQuickAction } = useQuickAction();
+
+  const [selectedItem, setSelectedItem] = useState<EstoqueItem | null>(null);
+
+  // Estado do formulário modular para Novo Item de Estoque
+  const [modalVisible, setModalVisible] = useState(false);
+  const [categoria, setCategoria] = useState<CategoriaEstoque>('insumo');
+  const [nome, setNome] = useState('');
+  const [quantidade, setQuantidade] = useState('');
+  const [unidade, setUnidade] = useState('kg');
+  const [estoqueMinimo, setEstoqueMinimo] = useState('10');
+  const [errors, setErrors] = useState<{ nome?: string; quantidade?: string }>(
+    {}
+  );
+  const [saving, setSaving] = useState(false);
+
+  const openModalWithCategory = useCallback(
+    (cat: CategoriaEstoque = 'insumo') => {
+      setCategoria(cat);
+      setUnidade(
+        cat === 'medicamento'
+          ? 'doses'
+          : cat === 'peca_maquina'
+          ? 'un'
+          : 'kg'
+      );
+      setErrors({});
+      setModalVisible(true);
+    },
+    []
+  );
+
+  useEffect(() => {
+    return registerQuickAction('estoque', () =>
+      openModalWithCategory('insumo')
+    );
+  }, [registerQuickAction, openModalWithCategory]);
+
+  const handleSaveItem = async () => {
+    const nextErrors: { nome?: string; quantidade?: string } = {};
+    if (!nome.trim()) {
+      nextErrors.nome = 'Informe o nome do item.';
+    }
+    const qtyNumber = parseFloat(quantidade.replace(',', '.'));
+    if (!quantidade.trim() || isNaN(qtyNumber) || qtyNumber < 0) {
+      nextErrors.quantidade = 'Informe uma quantidade válida.';
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await criarItem({
+        categoria,
+        nome: nome.trim(),
+        quantidade: qtyNumber,
+        unidade: unidade.trim() || 'un',
+        estoqueMinimo: parseFloat(estoqueMinimo.replace(',', '.')) || 0,
+      });
+
+      setNome('');
+      setQuantidade('');
+      setErrors({});
+      setModalVisible(false);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}>
-          <Header
-            title="Estoque Fazenda"
-            subtitle="Insumos, Medicamentos e Peças (Offline)"
+    <ScreenContainer
+      header={<Header title="Estoque Fazenda" showBack />}>
+      {/* Seção 1: Insumos */}
+      <View style={styles.sectionBlock}>
+        <SectionHeader
+          title="Insumos"
+          showChevron
+          onPress={() => openModalWithCategory('insumo')}
+        />
+
+        <View style={styles.cardsGridRow}>
+          {insumos.map((item: EstoqueItem) => {
+            const visuals = getItemVisuals(item.nome, item.categoria);
+            const isSelected = selectedItem?.id === item.id;
+            return (
+              <StatActionCard
+                key={item.id}
+                align="center"
+                icon={visuals.icon}
+                iconBgColor={visuals.bg}
+                title={item.nome}
+                subtitle={formatEstoqueValue(item.quantidade, item.unidade)}
+                active={isSelected}
+                onPress={() =>
+                  setSelectedItem(isSelected ? null : item)
+                }
+              />
+            );
+          })}
+        </View>
+      </View>
+
+      {/* Seção 2: Medicamentos */}
+      <View style={styles.sectionBlock}>
+        <SectionHeader
+          title="Medicamentos"
+          showChevron
+          onPress={() => openModalWithCategory('medicamento')}
+        />
+
+        <View style={styles.cardsGridRow}>
+          {medicamentos.map((item: EstoqueItem) => {
+            const visuals = getItemVisuals(item.nome, item.categoria);
+            const isSelected = selectedItem?.id === item.id;
+            return (
+              <StatActionCard
+                key={item.id}
+                align="center"
+                icon={visuals.icon}
+                iconBgColor={visuals.bg}
+                title={item.nome}
+                subtitle={formatEstoqueValue(item.quantidade, item.unidade)}
+                active={isSelected}
+                onPress={() =>
+                  setSelectedItem(isSelected ? null : item)
+                }
+              />
+            );
+          })}
+          {/* Espaçador invisível caso haja 2 cards para manter proporção */}
+          {medicamentos.length === 2 && <View style={{ flex: 0.4 }} />}
+        </View>
+      </View>
+
+      {/* Seção 3: Peças Máquinas */}
+      <View style={styles.sectionBlock}>
+        <SectionHeader
+          title="Peças Máquinas"
+          showChevron
+          onPress={() => openModalWithCategory('peca_maquina')}
+        />
+
+        <View style={styles.pecasColumn}>
+          {pecas.map((item: EstoqueItem) => {
+            const isLow = item.quantidade <= (item.estoqueMinimo || 0);
+            const isSelected = selectedItem?.id === item.id;
+            return (
+              <Card
+                key={item.id}
+                variant={isSelected ? 'selected' : 'default'}
+                padding="md"
+                onPress={() =>
+                  setSelectedItem(isSelected ? null : item)
+                }>
+                <View style={styles.pecaRow}>
+                  <View style={styles.pecaLeft}>
+                    <View style={styles.gearIconBox}>
+                      <Text style={styles.gearIconText}>⚙️</Text>
+                    </View>
+                    <View style={styles.pecaInfoCol}>
+                      <Text style={styles.pecaTitle}>{item.nome}</Text>
+                      <Text style={styles.pecaSubtitle}>
+                        Quantidade: {item.quantidade}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {isLow ? (
+                    <Badge
+                      label="Estoque baixo"
+                      icon="⚠️"
+                      variant="warning"
+                    />
+                  ) : (
+                    <Badge
+                      label={`${item.quantidade} ${item.unidade}`}
+                      variant="success"
+                    />
+                  )}
+                </View>
+              </Card>
+            );
+          })}
+        </View>
+      </View>
+
+      {/* Barra de Ajuste Rápido quando um item é selecionado */}
+      {selectedItem && (
+        <Card variant="mint" padding="md">
+          <View style={styles.adjustRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.adjustTitle}>
+                Ajustar saldo: {selectedItem.nome}
+              </Text>
+              <Text style={styles.adjustSubtitle}>
+                Saldo atual: {selectedItem.quantidade} {selectedItem.unidade}
+              </Text>
+            </View>
+
+            <View style={styles.adjustButtons}>
+              <Pressable
+                onPress={() =>
+                  ajustarQuantidade(
+                    selectedItem.id,
+                    selectedItem.unidade === 'kg' &&
+                      selectedItem.quantidade >= 100
+                      ? -10
+                      : -1
+                  )
+                }
+                style={styles.qtyBtnOutline}>
+                <Text style={styles.qtyBtnOutlineText}>
+                  {selectedItem.unidade === 'kg' &&
+                  selectedItem.quantidade >= 100
+                    ? '-10'
+                    : '-1'}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() =>
+                  ajustarQuantidade(
+                    selectedItem.id,
+                    selectedItem.unidade === 'kg' &&
+                      selectedItem.quantidade >= 100
+                      ? 10
+                      : 1
+                  )
+                }
+                style={styles.qtyBtnPrimary}>
+                <Text style={styles.qtyBtnPrimaryText}>
+                  {selectedItem.unidade === 'kg' &&
+                  selectedItem.quantidade >= 100
+                    ? '+10'
+                    : '+1'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </Card>
+      )}
+
+      {/* Modal de Formulário Modular para Novo Item de Estoque */}
+      <FormModal
+        visible={modalVisible}
+        title="Novo Item de Estoque"
+        subtitle="Adicione insumos, medicamentos ou peças no banco local"
+        onClose={() => setModalVisible(false)}
+        onSubmit={handleSaveItem}
+        submitLabel="Salvar no Estoque"
+        loading={saving}>
+        <ChipSelector
+          label="Categoria"
+          options={CATEGORIA_OPTIONS}
+          value={categoria}
+          onChange={(cat) => {
+            setCategoria(cat);
+            setUnidade(
+              cat === 'medicamento'
+                ? 'doses'
+                : cat === 'peca_maquina'
+                ? 'un'
+                : 'kg'
+            );
+          }}
+        />
+
+        <CustomInput
+          label="Nome do Item"
+          required
+          value={nome}
+          onChangeText={(t) => {
+            setNome(t);
+            if (errors.nome)
+              setErrors((prev) => ({ ...prev, nome: undefined }));
+          }}
+          placeholder="Ex: Ração, Sementes, Vacinas..."
+          error={errors.nome}
+        />
+
+        <View style={styles.twoColRow}>
+          <CustomInput
+            containerStyle={{ flex: 1 }}
+            label="Quantidade Inicial"
+            required
+            value={quantidade}
+            onChangeText={(t) => {
+              setQuantidade(t);
+              if (errors.quantidade)
+                setErrors((prev) => ({ ...prev, quantidade: undefined }));
+            }}
+            placeholder="100"
+            keyboardType="numeric"
+            error={errors.quantidade}
           />
 
-          <ThemedView type="backgroundElement" style={styles.sectionCard}>
-            <ThemedText type="subtitle">🌾 Insumos</ThemedText>
-            {insumos.length === 0 ? (
-              <ThemedText type="small" themeColor="textSecondary">
-                Nenhum insumo registrado no estoque local.
-              </ThemedText>
-            ) : (
-              <View style={styles.gridRow}>
-                {insumos.map((item: EstoqueItem) => (
-                  <View key={item.id} style={styles.insumoCard}>
-                    <Text style={styles.insumoTitle}>{item.nome}</Text>
-                    <Text style={styles.insumoQty}>
-                      {item.quantidade} {item.unidade}
-                    </Text>
-                    <View style={styles.qtyActions}>
-                      <Pressable
-                        onPress={() => handleAdjust(item.id, -10)}
-                        style={styles.qtyBtn}>
-                        <Text style={styles.qtyBtnText}>-10</Text>
-                      </Pressable>
-                      <Pressable
-                        onPress={() => handleAdjust(item.id, 10)}
-                        style={[styles.qtyBtn, styles.qtyBtnPlus]}>
-                        <Text style={styles.qtyBtnPlusText}>+10</Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
-          </ThemedView>
+          <CustomInput
+            containerStyle={{ flex: 1 }}
+            label="Unidade"
+            value={unidade}
+            onChangeText={setUnidade}
+            placeholder="kg, sacas, doses, un"
+          />
+        </View>
 
-          <ThemedView type="backgroundElement" style={styles.sectionCard}>
-            <ThemedText type="subtitle">💉 Medicamentos</ThemedText>
-            {medicamentos.length === 0 ? (
-              <ThemedText type="small" themeColor="textSecondary">
-                Nenhum medicamento registrado no estoque local.
-              </ThemedText>
-            ) : (
-              medicamentos.map((item: EstoqueItem) => (
-                <View key={item.id} style={styles.listRow}>
-                  <View>
-                    <ThemedText style={styles.itemName}>{item.nome}</ThemedText>
-                    <ThemedText type="small" themeColor="textSecondary">
-                      Mínimo ideal: {item.estoqueMinimo ?? 0} {item.unidade}
-                    </ThemedText>
-                  </View>
-                  <Text style={styles.itemQtyBadge}>
-                    {item.quantidade} {item.unidade}
-                  </Text>
-                </View>
-              ))
-            )}
-          </ThemedView>
-
-          <ThemedView type="backgroundElement" style={styles.sectionCard}>
-            <ThemedText type="subtitle">⚙️ Peças de Máquinas</ThemedText>
-            {pecas.length === 0 ? (
-              <ThemedText type="small" themeColor="textSecondary">
-                Nenhuma peça de máquina registrada no estoque local.
-              </ThemedText>
-            ) : (
-              pecas.map((item: EstoqueItem) => {
-                const isLow = item.quantidade <= (item.estoqueMinimo || 0);
-                return (
-                  <View
-                    key={item.id}
-                    style={[styles.listRow, isLow && styles.lowStockRow]}>
-                    <View>
-                      <ThemedText style={styles.itemName}>{item.nome}</ThemedText>
-                      {isLow && (
-                        <Text style={styles.warningText}>
-                          ⚠️ Alerta: Abaixo do estoque mínimo ({item.estoqueMinimo} {item.unidade})
-                        </Text>
-                      )}
-                    </View>
-                    <Text style={[styles.itemQtyBadge, isLow && styles.lowStockBadge]}>
-                      {item.quantidade} {item.unidade}
-                    </Text>
-                  </View>
-                );
-              })
-            )}
-          </ThemedView>
-        </ScrollView>
-      </SafeAreaView>
-    </ThemedView>
+        <CustomInput
+          label="Alerta de Estoque Mínimo"
+          value={estoqueMinimo}
+          onChangeText={setEstoqueMinimo}
+          placeholder="10"
+          keyboardType="numeric"
+          suffix={unidade}
+          helperText="Exibe o alerta 'Estoque baixo' quando atingir este limite."
+        />
+      </FormModal>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
+  sectionBlock: {
+    gap: Spacing.sm,
+  },
+  cardsGridRow: {
     flexDirection: 'row',
+    gap: Spacing.sm,
   },
-  safeArea: {
-    flex: 1,
-    maxWidth: MaxContentWidth,
+  pecasColumn: {
+    gap: Spacing.sm,
   },
-  scrollView: {
-    flex: 1,
-    width: '100%',
-  },
-  scrollContent: {
-    paddingHorizontal: Spacing.three,
-    paddingTop: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.four,
-    gap: Spacing.three,
-  },
-  sectionCard: {
-    padding: Spacing.three,
-    borderRadius: Spacing.three,
-    gap: Spacing.two,
-  },
-  gridRow: {
+  pecaRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.two,
-  },
-  insumoCard: {
-    flex: 1,
-    minWidth: 140,
-    backgroundColor: AgroColors.mintBg,
-    borderWidth: 1.5,
-    borderColor: AgroColors.mintBorder,
-    borderRadius: Spacing.two,
-    padding: Spacing.three,
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'space-between',
+    gap: Spacing.sm,
   },
-  insumoTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#112211',
+  pecaLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    flex: 1,
   },
-  insumoQty: {
+  gearIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.sm,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gearIconText: {
     fontSize: 18,
-    fontWeight: '800',
+  },
+  pecaInfoCol: {
+    gap: 2,
+    flex: 1,
+  },
+  pecaTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: AgroColors.textPrimary,
+  },
+  pecaSubtitle: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: AgroColors.textMuted,
+  },
+  adjustRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.sm,
+  },
+  adjustTitle: {
+    fontSize: 13,
+    fontWeight: '700',
     color: AgroColors.primaryDark,
   },
-  qtyActions: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 4,
-  },
-  qtyBtn: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  qtyBtnText: {
-    fontWeight: '700',
-    color: '#334155',
-    fontSize: 12,
-  },
-  qtyBtnPlus: {
-    backgroundColor: AgroColors.primary,
-    borderColor: AgroColors.primary,
-  },
-  qtyBtnPlusText: {
-    fontWeight: '700',
-    color: '#FFFFFF',
-    fontSize: 12,
-  },
-  listRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: Spacing.two,
-    borderRadius: Spacing.two,
-    borderWidth: 1,
-    borderColor: 'rgba(128,128,128,0.18)',
-  },
-  lowStockRow: {
-    backgroundColor: AgroColors.warningBg,
-    borderColor: AgroColors.warning,
-  },
-  itemName: {
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  warningText: {
-    color: '#B45309',
-    fontWeight: '700',
-    fontSize: 12,
+  adjustSubtitle: {
+    fontSize: 11,
+    color: AgroColors.textSecondary,
     marginTop: 2,
   },
-  itemQtyBadge: {
-    fontWeight: '800',
-    fontSize: 16,
-    color: AgroColors.primary,
+  adjustButtons: {
+    flexDirection: 'row',
+    gap: Spacing.two,
   },
-  lowStockBadge: {
-    color: AgroColors.danger,
+  qtyBtnOutline: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: Radius.xs,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: AgroColors.borderStrong,
+  },
+  qtyBtnOutlineText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: AgroColors.textPrimary,
+  },
+  qtyBtnPrimary: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: Radius.xs,
+    backgroundColor: AgroColors.primary,
+  },
+  qtyBtnPrimaryText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: AgroColors.textInverse,
+  },
+  twoColRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
   },
 });

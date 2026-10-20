@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import Maquina from '@/entities/Maquina';
-import { maquinaRepository } from './MaquinaRepository';
+import {
+  CreateMaquinaDTO,
+  maquinaRepository,
+  UpdateMaquinaDTO,
+} from './MaquinaRepository';
 
 export function useMaquinas() {
   const [maquinas, setMaquinas] = useState<Maquina[]>([]);
@@ -10,5 +14,13 @@ export function useMaquinas() {
     return () => subscription.unsubscribe();
   }, []);
 
-  return { maquinas };
+  const createMaquina = async (dto: CreateMaquinaDTO) => {
+    return await maquinaRepository.createMaquina(dto);
+  };
+
+  const updateMaquina = async (id: string, dto: UpdateMaquinaDTO) => {
+    return await maquinaRepository.updateMaquina(id, dto);
+  };
+
+  return { maquinas, createMaquina, updateMaquina };
 }

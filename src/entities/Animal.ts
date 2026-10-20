@@ -11,7 +11,7 @@ export default class Animal extends Model {
     tratamentos: { type: 'has_many' as const, foreignKey: 'animal_id' },
   };
 
-  @field('brinco') brinco!: string;
+  @field('brinco') brinco: string;
   @field('nome') nome?: string;
   @field('raca') raca?: string;
   @field('peso_kg') pesoKg?: number;
@@ -20,11 +20,11 @@ export default class Animal extends Model {
   @field('racao_kg_dia') racaoKgDia?: number;
   @field('talhao_id') talhaoId?: string;
 
-  @relation('talhoes', 'talhao_id') talhao!: Relation<Talhao>;
-  @children('tratamentos') tratamentos!: Query<Tratamento>;
+  @relation('talhoes', 'talhao_id') talhao: Relation<Talhao>;
+  @children('tratamentos') tratamentos: Query<Tratamento>;
 
-  @readonly @date('created_at') createdAt!: Date;
-  @readonly @date('updated_at') updatedAt!: Date;
+  @readonly @date('created_at') createdAt: Date;
+  @readonly @date('updated_at') updatedAt: Date;
 
   @writer async deleteCascade(): Promise<void> {
     await this.tratamentos.markAllAsDeleted();

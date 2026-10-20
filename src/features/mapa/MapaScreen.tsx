@@ -1,24 +1,25 @@
-import React, { useState } from 'react';
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Button } from '@/components/Button';
-import { Card } from '@/components/Card';
-import { Header } from '@/components/Header';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+import {
+  ChipSelector,
+  type ChipOption,
+  CustomInput,
+  FormModal,
+} from '@/components/forms';
+import {
+  Badge,
+  Card,
+  Header,
+  ScreenContainer,
+  SectionHeader,
+  StatActionCard,
+} from '@/components/ui';
 import { APP_NAME } from '@/constants/app';
-import { AgroColors, BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-import { formatHectares } from '@/utils/formatters';
+import { AgroColors, Radius, Shadows, Spacing } from '@/constants/theme';
 import Talhao, { TipoTalhao } from '@/entities/Talhao';
+import { useQuickAction } from '@/providers/QuickActionContext';
+import { formatHectares } from '@/utils/formatters';
 import {
   calculateFenceMaterials,
   calculatePerimeterFromTalhao,
@@ -27,496 +28,482 @@ import {
 import { TalhaoCard } from './TalhaoCard';
 import { useTalhoes } from './useTalhoes';
 
-type ActiveTool = 'area' | 'cercas' | 'sementes';
+type ActiveTool = 'area' | 'cercas' | 'sementes' | null;
+
+const TIPO_TALHAO_OPTIONS: ChipOption<TipoTalhao>[] = [
+  { label: 'Pastagem', value: 'pastagem', icon: '🌿' },
+  { label: 'Lavoura', value: 'lavoura', icon: '🌾' },
+  { label: 'Reserva', value: 'reserva', icon: '🌳' },
+  { label: 'Outro', value: 'outro', icon: '📍' },
+];
 
 export default function MapaScreen() {
   const { talhoes, createTalhao } = useTalhoes();
-  const [activeTool, setActiveTool] = useState<ActiveTool>('area');
+  const { registerQuickAction } = useQuickAction();
+
+  const [activeTool, setActiveTool] = useState<ActiveTool>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
+  // Estado do formulário modular com validação
   const [novoNome, setNovoNome] = useState('');
   const [novoTipo, setNovoTipo] = useState<TipoTalhao>('pastagem');
   const [novaAreaHa, setNovaAreaHa] = useState('');
+  const [errors, setErrors] = useState<{ nome?: string; area?: string }>({});
+  const [saving, setSaving] = useState(false);
 
-  const totalAreaHa = talhoes.reduce((acc: number, t: Talhao) => acc + (t.areaHa || 0), 0);
+  const openModal = useCallback(() => {
+    setErrors({});
+    setModalVisible(true);
+  }, []);
+
+  useEffect(() => {
+    const unsubIndex = registerQuickAction('index', openModal);
+    const unsubMapa = registerQuickAction('mapa', openModal);
+    return () => {
+      unsubIndex();
+      unsubMapa();
+    };
+  }, [registerQuickAction, openModal]);
+
+  const pastoPrincipal = talhoes.find((t) => t.tipo === 'pastagem') ?? talhoes[0];
+  const lavouraPrincipal = talhoes.find((t) => t.tipo === 'lavoura') ?? talhoes[1];
+
+  const totalAreaHa = talhoes.reduce(
+    (acc: number, t: Talhao) => acc + (t.areaHa || 0),
+    0
+  );
+  const displayMainAreaHa = pastoPrincipal?.areaHa ?? (totalAreaHa || 15.2);
+
   const totalPerimeterM = talhoes.reduce(
     (acc: number, t: Talhao) =>
       acc + calculatePerimeterFromTalhao(t.areaHa, t.poligonoGeoJson),
     0
   );
-  const fenceEstimate = calculateFenceMaterials(totalPerimeterM, 2.5, 5);
-  const totalSeedKg = calculateSeedRequirementKg(totalAreaHa, 20);
+  const perimeterKm =
+    totalPerimeterM > 0 ? (totalPerimeterM / 1000).toFixed(1) : '1.4';
+  const fenceEstimate = calculateFenceMaterials(totalPerimeterM || 1400, 2.5, 5);
+  const totalSeedKg =
+    totalAreaHa > 0 ? calculateSeedRequirementKg(totalAreaHa, 20) : 420;
 
   const handleAddTalhao = async () => {
+    const nextErrors: { nome?: string; area?: string } = {};
+    if (!novoNome.trim()) {
+      nextErrors.nome = 'Informe o nome do talhão.';
+    }
     const areaNumber = parseFloat(novaAreaHa.replace(',', '.'));
-    if (!novoNome.trim() || isNaN(areaNumber) || areaNumber <= 0) {
+    if (!novaAreaHa.trim() || isNaN(areaNumber) || areaNumber <= 0) {
+      nextErrors.area = 'Informe uma área válida em hectares (ex: 15.2).';
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
       return;
     }
 
-    await createTalhao({
-      nome: novoNome.trim(),
-      tipo: novoTipo,
-      areaHa: areaNumber,
-      possuiCerca: true,
-    });
+    setSaving(true);
+    try {
+      await createTalhao({
+        nome: novoNome.trim(),
+        tipo: novoTipo,
+        areaHa: areaNumber,
+        possuiCerca: true,
+      });
 
-    setNovoNome('');
-    setNovoTipo('pastagem');
-    setNovaAreaHa('');
-    setModalVisible(false);
+      setNovoNome('');
+      setNovoTipo('pastagem');
+      setNovaAreaHa('');
+      setErrors({});
+      setModalVisible(false);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}>
-          <Header
-            title="Mapeamento & Áreas"
-            subtitle={`${APP_NAME} • Operação Offline`}
+    <ScreenContainer
+      header={
+        <Header
+          title={APP_NAME}
+          showMenu
+          showNotification
+        />
+      }>
+      <SectionHeader title="Mapeamento & Áreas" size="lg" />
+
+      {/* Mapa Satélite / Polígonos de Talhões (Fiel ao Figma) */}
+      <View style={styles.mapCard}>
+        {/* Fundo estilizado de terreno satélite */}
+        <View style={styles.terrainBandTop} />
+        <View style={styles.terrainBandBottom} />
+
+        {/* Barra de topo sobreposta no mapa */}
+        <View style={styles.mapOverlayTop}>
+          <Badge
+            label="Fazenda Recanto Verde"
+            variant="overlayLight"
           />
 
-          <View style={styles.mapPreviewCard}>
-            <View style={styles.mapTopBar}>
-              <Text style={styles.mapPropertyTitle}>Mapa de Talhões</Text>
-              <View style={styles.gpsBadge}>
-                <Text style={styles.gpsBadgeText}>📍 GPS Local Ativo</Text>
-              </View>
-            </View>
+          <View style={styles.mapControlsCol}>
+            <Pressable
+              onPress={openModal}
+              style={({ pressed }) => [
+                styles.mapControlBtn,
+                pressed && styles.pressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Camadas do mapa">
+              <Text style={styles.mapControlIcon}>❖</Text>
+            </Pressable>
+            <Pressable
+              onPress={() =>
+                setActiveTool((prev) => (prev === 'area' ? null : 'area'))
+              }
+              style={({ pressed }) => [
+                styles.mapControlBtn,
+                pressed && styles.pressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Centralizar GPS">
+              <Text style={styles.mapControlIcon}>⊕</Text>
+            </Pressable>
+          </View>
+        </View>
 
-            <View style={styles.satelliteCanvas}>
-              {talhoes.length === 0 ? (
-                <Text style={styles.emptyMapText}>
-                  Nenhum talhão cadastrado ainda. Toque em &quot;+ Novo Talhão&quot; para iniciar.
-                </Text>
-              ) : (
-                talhoes.map((t: Talhao) => {
-                  const isLavoura = t.tipo === 'lavoura';
-                  return (
-                    <View
-                      key={t.id}
-                      style={[
-                        styles.polygonBox,
-                        isLavoura ? styles.polygonLavoura : styles.polygonPasto,
-                      ]}>
-                      <Text style={styles.polygonLabel}>{t.nome}</Text>
-                      <Text style={styles.polygonSubLabel}>{formatHectares(t.areaHa)}</Text>
-                    </View>
-                  );
-                })
-              )}
-            </View>
-
-            <View style={styles.mapFooterBar}>
-              <Text style={styles.mapFooterText}>
-                {talhoes.length} talhões registrados no aparelho
+        {/* Área central dos polígonos */}
+        <View style={styles.polygonsStage}>
+          <View style={styles.polygonsTopRow}>
+            <View style={[styles.polygonShape, styles.polygonPasto1]}>
+              <Text style={styles.polygonText}>
+                {pastoPrincipal?.nome ?? 'Pasto 1'}
               </Text>
-              <Text style={styles.mapTotalHaText}>Total: {formatHectares(totalAreaHa)}</Text>
-            </View>
-          </View>
-
-          <Card>
-            <View style={styles.sectionHeaderRow}>
-              <ThemedText type="subtitle">Talhões da Propriedade</ThemedText>
-              <Button label="+ Novo Talhão" onPress={() => setModalVisible(true)} />
             </View>
 
-            {talhoes.length === 0 ? (
-              <ThemedText type="small" themeColor="textSecondary">
-                Cadastre o primeiro talhão da sua propriedade para visualizar a área em hectares.
-              </ThemedText>
-            ) : (
-              talhoes.map((t: Talhao) => <TalhaoCard key={t.id} talhao={t} />)
-            )}
-          </Card>
-
-          <View style={styles.bigActionsRow}>
-            <Pressable
-              onPress={() => setActiveTool('area')}
-              style={[
-                styles.bigActionCard,
-                activeTool === 'area' && styles.bigActionCardActive,
-              ]}>
-              <Text style={styles.bigActionIcon}>📐</Text>
-              <Text style={styles.bigActionTitle}>Calcular Área</Text>
-              <Text style={styles.bigActionValue}>{formatHectares(totalAreaHa)}</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => setActiveTool('cercas')}
-              style={[
-                styles.bigActionCard,
-                activeTool === 'cercas' && styles.bigActionCardActive,
-              ]}>
-              <Text style={styles.bigActionIcon}>🚧</Text>
-              <Text style={styles.bigActionTitle}>Cercas</Text>
-              <Text style={styles.bigActionValue}>
-                {(totalPerimeterM / 1000).toFixed(1)} km
+            <View style={[styles.polygonShape, styles.polygonLavoura2]}>
+              <Text style={styles.polygonText}>
+                {lavouraPrincipal?.nome ?? 'Lavoura 2'}
               </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => setActiveTool('sementes')}
-              style={[
-                styles.bigActionCard,
-                activeTool === 'sementes' && styles.bigActionCardActive,
-              ]}>
-              <Text style={styles.bigActionIcon}>🌱</Text>
-              <Text style={styles.bigActionTitle}>Kg Sementes</Text>
-              <Text style={styles.bigActionValue}>{totalSeedKg} kg</Text>
-            </Pressable>
-          </View>
-
-          <Card>
-            {activeTool === 'area' && (
-              <View style={styles.toolDetailBody}>
-                <ThemedText type="smallBold">
-                  📐 Resumo de Área Total (Cálculo Offline)
-                </ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  Soma automática de todos os polígonos de talhões salvos no banco local:
-                </ThemedText>
-                <Text style={styles.highlightMetric}>
-                  {formatHectares(totalAreaHa)} ({Math.round(totalAreaHa * 10000).toLocaleString()} m²)
-                </Text>
-              </View>
-            )}
-
-            {activeTool === 'cercas' && (
-              <View style={styles.toolDetailBody}>
-                <ThemedText type="smallBold">
-                  🚧 Estimativa de Material para Cercas (5 fios / 2.5m)
-                </ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  Perímetro estimado: {fenceEstimate.perimeterMeters} metros
-                </ThemedText>
-                <Text style={styles.highlightMetric}>
-                  {fenceEstimate.postsNeeded} mourões • {fenceEstimate.wireMetersNeeded}m de arame ({fenceEstimate.wireRolls500m} rolos)
-                </Text>
-              </View>
-            )}
-
-            {activeTool === 'sementes' && (
-              <View style={styles.toolDetailBody}>
-                <ThemedText type="smallBold">
-                  🌱 Planejamento de Sementes (Taxa base: 20 kg/ha)
-                </ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  Necessidade estimada para cobrir {formatHectares(totalAreaHa)}:
-                </ThemedText>
-                <Text style={styles.highlightMetric}>
-                  {totalSeedKg} kg de sementes ({Math.ceil(totalSeedKg / 20)} sacas de 20kg)
-                </Text>
-              </View>
-            )}
-          </Card>
-        </ScrollView>
-
-        <Modal
-          visible={modalVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setModalVisible(false)}>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle}>Novo Talhão (Salvo no Celular)</Text>
-
-              <Text style={styles.inputLabel}>Nome do Talhão</Text>
-              <TextInput
-                value={novoNome}
-                onChangeText={setNovoNome}
-                placeholder="Ex: Pasto 1 ou Lavoura Milho"
-                placeholderTextColor="#7A8C7D"
-                style={styles.input}
-              />
-
-              <Text style={styles.inputLabel}>Tipo de Uso</Text>
-              <View style={styles.chipRow}>
-                {(['pastagem', 'lavoura', 'reserva', 'outro'] as const).map((tipo) => (
-                  <Pressable
-                    key={tipo}
-                    onPress={() => setNovoTipo(tipo)}
-                    style={[
-                      styles.chipBtn,
-                      novoTipo === tipo && styles.chipBtnActive,
-                    ]}>
-                    <Text
-                      style={[
-                        styles.chipText,
-                        novoTipo === tipo && styles.chipTextActive,
-                      ]}>
-                      {tipo === 'pastagem'
-                        ? 'Pastagem'
-                        : tipo === 'lavoura'
-                        ? 'Lavoura'
-                        : tipo === 'reserva'
-                        ? 'Reserva'
-                        : 'Outro'}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-
-              <Text style={styles.inputLabel}>Área (Hectares)</Text>
-              <TextInput
-                value={novaAreaHa}
-                onChangeText={setNovaAreaHa}
-                placeholder="Ex: 15.2"
-                keyboardType="numeric"
-                placeholderTextColor="#7A8C7D"
-                style={styles.input}
-              />
-
-              <View style={styles.modalButtonsRow}>
-                <Button
-                  label="Cancelar"
-                  variant="secondary"
-                  onPress={() => setModalVisible(false)}
-                  style={{ flex: 1 }}
-                />
-                <Button
-                  label="Salvar Offline"
-                  onPress={handleAddTalhao}
-                  style={{ flex: 1 }}
-                />
-              </View>
             </View>
           </View>
-        </Modal>
-      </SafeAreaView>
-    </ThemedView>
+
+          <View style={[styles.polygonShape, styles.polygonPastoDashed]}>
+            <Text style={styles.polygonText}>Pasto</Text>
+          </View>
+        </View>
+
+        {/* Rodapé do Mapa: Google + Escala 50 m */}
+        <View style={styles.mapOverlayBottom}>
+          <Text style={styles.googleWatermark}>Google</Text>
+          <View style={styles.scalePill}>
+            <Text style={styles.scaleText}>50 m</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Card de Lista Resumida de Talhões (● Pasto 1: 15.2 Ha / ● Lavoura 2: 28 Ha) */}
+      <Card padding="md">
+        {talhoes.length === 0 ? (
+          <>
+            <TalhaoCard
+              talhao={{ nome: 'Pasto 1', tipo: 'pastagem', areaHa: 15.2 } as Talhao}
+              showDivider
+            />
+            <TalhaoCard
+              talhao={{ nome: 'Lavoura 2', tipo: 'lavoura', areaHa: 28 } as Talhao}
+            />
+          </>
+        ) : (
+          talhoes.map((talhao: Talhao, idx: number) => (
+            <TalhaoCard
+              key={talhao.id}
+              talhao={talhao}
+              showDivider={idx < talhoes.length - 1}
+            />
+          ))
+        )}
+      </Card>
+
+      {/* Linha de 3 Cartões de Ação / Cálculo Rápido (Calcular Área | Cercas | Kg Sementes) */}
+      <View style={styles.quickCardsRow}>
+        <StatActionCard
+          icon={<View style={styles.areaDashedIcon} />}
+          title="Calcular Área"
+          subtitle={`${formatHectares(displayMainAreaHa)} Total`}
+          active={activeTool === 'area'}
+          onPress={() =>
+            setActiveTool((prev) => (prev === 'area' ? null : 'area'))
+          }
+        />
+
+        <StatActionCard
+          icon={<Text style={styles.greenIconText}>#</Text>}
+          title="Cercas"
+          subtitle={`${perimeterKm} km estacas`}
+          active={activeTool === 'cercas'}
+          onPress={() =>
+            setActiveTool((prev) => (prev === 'cercas' ? null : 'cercas'))
+          }
+        />
+
+        <StatActionCard
+          icon={<Text style={styles.greenIconText}>🌱</Text>}
+          title="Kg Sementes"
+          subtitle={`${totalSeedKg} kg necessário`}
+          active={activeTool === 'sementes'}
+          onPress={() =>
+            setActiveTool((prev) => (prev === 'sementes' ? null : 'sementes'))
+          }
+        />
+      </View>
+
+      {/* Card expansível quando uma ferramenta é selecionada */}
+      {activeTool !== null && (
+        <Card variant="mint" padding="md">
+          {activeTool === 'area' && (
+            <View style={styles.toolDetailBox}>
+              <Text style={styles.toolDetailTitle}>
+                Resumo de Área Total ({talhoes.length} talhões)
+              </Text>
+              <Text style={styles.toolDetailSub}>
+                Soma total mapeada: {formatHectares(totalAreaHa)} (
+                {Math.round(totalAreaHa * 10000).toLocaleString()} m²)
+              </Text>
+            </View>
+          )}
+
+          {activeTool === 'cercas' && (
+            <View style={styles.toolDetailBox}>
+              <Text style={styles.toolDetailTitle}>
+                Estimativa de Cercas ({perimeterKm} km)
+              </Text>
+              <Text style={styles.toolDetailSub}>
+                {fenceEstimate.postsNeeded} mourões (a cada 2.5m) •{' '}
+                {fenceEstimate.wireRolls500m} rolos de arame (5 fios)
+              </Text>
+            </View>
+          )}
+
+          {activeTool === 'sementes' && (
+            <View style={styles.toolDetailBox}>
+              <Text style={styles.toolDetailTitle}>
+                Planejamento de Sementes (20 kg/Ha)
+              </Text>
+              <Text style={styles.toolDetailSub}>
+                Total estimado: {totalSeedKg} kg (
+                {Math.ceil(totalSeedKg / 20)} sacas de 20 kg)
+              </Text>
+            </View>
+          )}
+        </Card>
+      )}
+
+      {/* Modal de Formulário Modular para Novo Talhão */}
+      <FormModal
+        visible={modalVisible}
+        title="Novo Talhão"
+        subtitle="Cadastre uma nova área ou piquete na propriedade"
+        onClose={() => setModalVisible(false)}
+        onSubmit={handleAddTalhao}
+        submitLabel="Salvar Talhão"
+        loading={saving}>
+        <CustomInput
+          label="Nome do Talhão"
+          required
+          value={novoNome}
+          onChangeText={(text) => {
+            setNovoNome(text);
+            if (errors.nome) setErrors((prev) => ({ ...prev, nome: undefined }));
+          }}
+          placeholder="Ex: Pasto 1 ou Lavoura 2"
+          error={errors.nome}
+        />
+
+        <ChipSelector
+          label="Tipo de Uso da Área"
+          options={TIPO_TALHAO_OPTIONS}
+          value={novoTipo}
+          onChange={setNovoTipo}
+        />
+
+        <CustomInput
+          label="Área Mapeada"
+          required
+          value={novaAreaHa}
+          onChangeText={(text) => {
+            setNovaAreaHa(text);
+            if (errors.area) setErrors((prev) => ({ ...prev, area: undefined }));
+          }}
+          placeholder="Ex: 15.2"
+          keyboardType="numeric"
+          suffix="Ha"
+          error={errors.area}
+          helperText="O cálculo de cercas e sementes será atualizado automaticamente."
+        />
+      </FormModal>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  safeArea: {
-    flex: 1,
-    maxWidth: MaxContentWidth,
-  },
-  scrollView: {
-    flex: 1,
+  mapCard: {
     width: '100%',
-  },
-  scrollContent: {
-    paddingHorizontal: Spacing.three,
-    paddingTop: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.four,
-    gap: Spacing.three,
-  },
-  mapPreviewCard: {
-    backgroundColor: '#1E3F24',
-    borderRadius: Spacing.three,
+    height: 190,
+    backgroundColor: AgroColors.mapTerrainBg,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: '#2E5A36',
+    justifyContent: 'space-between',
+    padding: Spacing.sm,
+    position: 'relative',
+    ...Shadows.sm,
   },
-  mapTopBar: {
+  terrainBandTop: {
+    position: 'absolute',
+    top: -30,
+    right: -20,
+    width: 220,
+    height: 110,
+    borderRadius: 60,
+    backgroundColor: 'rgba(110, 145, 85, 0.35)',
+    transform: [{ rotate: '-12deg' }],
+  },
+  terrainBandBottom: {
+    position: 'absolute',
+    bottom: -35,
+    left: -20,
+    width: 260,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(55, 82, 46, 0.45)',
+    transform: [{ rotate: '8deg' }],
+  },
+  mapOverlayTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'flex-start',
+    zIndex: 2,
   },
-  mapPropertyTitle: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 15,
-  },
-  gpsBadge: {
-    backgroundColor: 'rgba(46, 125, 50, 0.85)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  gpsBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  satelliteCanvas: {
-    minHeight: 170,
-    padding: Spacing.three,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.two,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyMapText: {
-    color: '#D1FAE5',
-    fontSize: 13,
-    textAlign: 'center',
-    paddingHorizontal: Spacing.three,
-  },
-  polygonBox: {
-    minWidth: 130,
-    paddingVertical: Spacing.three,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.two,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  polygonPasto: {
-    backgroundColor: 'rgba(76, 175, 80, 0.35)',
-    borderColor: '#81C784',
-  },
-  polygonLavoura: {
-    backgroundColor: 'rgba(245, 158, 11, 0.35)',
-    borderColor: '#FCD34D',
-  },
-  polygonLabel: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 16,
-  },
-  polygonSubLabel: {
-    color: '#E8F5E9',
-    fontWeight: '700',
-    fontSize: 13,
-    marginTop: 2,
-  },
-  mapFooterBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  mapFooterText: {
-    color: '#D1FAE5',
-    fontSize: 12,
-  },
-  mapTotalHaText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 14,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.one,
-  },
-  bigActionsRow: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-  },
-  bigActionCard: {
-    flex: 1,
-    backgroundColor: AgroColors.mintBg,
-    borderWidth: 2,
-    borderColor: AgroColors.mintBorder,
-    borderRadius: Spacing.three,
-    paddingVertical: Spacing.three,
-    paddingHorizontal: Spacing.two,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  bigActionCardActive: {
-    borderColor: AgroColors.primaryDark,
-    backgroundColor: '#D1FAE5',
-  },
-  bigActionIcon: {
-    fontSize: 26,
-  },
-  bigActionTitle: {
-    color: '#112211',
-    fontWeight: '800',
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  bigActionValue: {
-    color: AgroColors.primaryDark,
-    fontWeight: '800',
-    fontSize: 13,
-    textAlign: 'center',
-  },
-  toolDetailBody: {
+  mapControlsCol: {
     gap: 6,
   },
-  highlightMetric: {
-    color: AgroColors.primary,
-    fontSize: 16,
-    fontWeight: '800',
-    marginTop: 4,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+  mapControlBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: Radius.xs,
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: Spacing.three,
+    ...Shadows.sm,
   },
-  modalCard: {
-    width: '100%',
-    maxWidth: 420,
-    backgroundColor: '#FFFFFF',
-    borderRadius: Spacing.three,
-    padding: Spacing.four,
-    gap: Spacing.two,
+  pressed: {
+    opacity: 0.8,
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#112211',
-    marginBottom: Spacing.one,
-  },
-  inputLabel: {
-    fontSize: 13,
+  mapControlIcon: {
+    fontSize: 14,
+    color: AgroColors.textPrimary,
     fontWeight: '700',
-    color: '#374151',
-    marginTop: 4,
   },
-  input: {
-    borderWidth: 1.5,
-    borderColor: '#CBD5E1',
-    borderRadius: Spacing.two,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    color: '#112211',
-  },
-  modalButtonsRow: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-    marginTop: Spacing.three,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  polygonsStage: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     gap: 8,
-    marginVertical: 4,
+    paddingHorizontal: Spacing.xs,
+    marginTop: -6,
   },
-  chipBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: Spacing.two,
+  polygonsTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    gap: Spacing.sm,
+  },
+  polygonShape: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 4,
+  },
+  polygonPasto1: {
+    flex: 1,
+    height: 48,
+    backgroundColor: 'rgba(59, 150, 68, 0.82)',
     borderWidth: 1.5,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#F8FAFC',
+    borderColor: '#FFFFFF',
+    transform: [{ skewX: '-8deg' }],
   },
-  chipBtnActive: {
-    backgroundColor: AgroColors.mintBg,
-    borderColor: AgroColors.primaryDark,
+  polygonLavoura2: {
+    flex: 1.05,
+    height: 52,
+    backgroundColor: 'rgba(168, 134, 62, 0.82)',
+    borderWidth: 1.5,
+    borderColor: '#FEF9C3',
+    transform: [{ skewX: '6deg' }],
   },
-  chipText: {
+  polygonPastoDashed: {
+    width: '62%',
+    height: 42,
+    backgroundColor: 'rgba(59, 150, 68, 0.78)',
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#FFFFFF',
+    transform: [{ skewX: '-6deg' }],
+  },
+  polygonText: {
+    color: AgroColors.textInverse,
+    fontSize: 11,
+    fontWeight: '700',
+    textShadowColor: 'rgba(0, 0, 0, 0.35)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  mapOverlayBottom: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    zIndex: 2,
+  },
+  googleWatermark: {
+    color: AgroColors.textInverse,
+    fontSize: 11,
+    fontWeight: '700',
+    opacity: 0.9,
+  },
+  scalePill: {
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  scaleText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: AgroColors.textPrimary,
+  },
+  quickCardsRow: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
+  areaDashedIcon: {
+    width: 16,
+    height: 16,
+    borderWidth: 1.8,
+    borderStyle: 'dashed',
+    borderColor: AgroColors.primary,
+    borderRadius: 3,
+  },
+  greenIconText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: AgroColors.primary,
+  },
+  toolDetailBox: {
+    gap: 2,
+  },
+  toolDetailTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#475569',
-  },
-  chipTextActive: {
     color: AgroColors.primaryDark,
-    fontWeight: '800',
+  },
+  toolDetailSub: {
+    fontSize: 12,
+    color: AgroColors.textSecondary,
   },
 });
