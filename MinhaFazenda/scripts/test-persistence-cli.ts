@@ -1,4 +1,4 @@
-import { runPersistenceTest } from '../src/database';
+import { runPersistenceTest } from '../src/tests/persistenceTest';
 
 async function runCliTest() {
   console.log('=========================================================');

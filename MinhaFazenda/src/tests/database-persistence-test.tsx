@@ -7,8 +7,8 @@ import {
   View,
 } from 'react-native';
 
-import { ThemedText } from './themed-text';
-import { ThemedView } from './themed-view';
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import {
@@ -18,9 +18,11 @@ import {
   ordenhaRepository,
   talhaoRepository,
   tratamentoRepository,
+} from '@/database';
+import {
   runPersistenceTest,
   PersistenceTestResult,
-} from '@/database';
+} from './persistenceTest';
 
 interface DatabaseCounts {
   talhoes: number;

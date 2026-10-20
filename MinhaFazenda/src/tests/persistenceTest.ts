@@ -5,7 +5,7 @@ import {
   ordenhaRepository,
   talhaoRepository,
   tratamentoRepository,
-} from '../repositories';
+} from '../database/repositories';
 
 export interface PersistenceTestResult {
   success: boolean;

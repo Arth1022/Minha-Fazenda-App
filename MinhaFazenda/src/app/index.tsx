@@ -4,7 +4,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
 import { AgroHeader } from '@/components/agro-header';
-import { DatabasePersistenceTest } from '@/components/database-persistence-test';
 import { ThemedView } from '@/components/themed-view';
 import { AgroColors, BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 
@@ -73,11 +72,6 @@ export default function HomeScreen() {
               <Text style={styles.moduleSub}>Frota e Produção</Text>
             </Pressable>
           </View>
-
-          {/* Painel de Validação e Persistência Local WatermelonDB */}
-          <View style={styles.fullWidth}>
-            <DatabasePersistenceTest />
-          </View>
         </ScrollView>
       </SafeAreaView>
     </ThemedView>
@@ -104,10 +98,6 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
     paddingTop: Spacing.three,
     paddingBottom: BottomTabInset + Spacing.four,
-  },
-  fullWidth: {
-    width: '100%',
-    alignItems: 'center',
   },
   primaryHeroBanner: {
     backgroundColor: AgroColors.primary,
