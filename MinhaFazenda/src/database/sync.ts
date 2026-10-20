@@ -14,7 +14,17 @@ export interface SyncOptions {
  * 2. Push: Envia criações/edições/deleções locais para o backend (POST /api/v1/sync/push)
  */
 export async function syncDatabase(options?: SyncOptions): Promise<void> {
-  const { apiBaseUrl = 'http://localhost:8080/api/v1/sync', authToken, onProgress } = options || {};
+  const {
+    apiBaseUrl = process.env.EXPO_PUBLIC_API_URL,
+    authToken,
+    onProgress,
+  } = options || {};
+
+  if (!apiBaseUrl) {
+    throw new Error(
+      'URL da API em nuvem não configurada. Defina EXPO_PUBLIC_API_URL apontando para o ambiente de homologação/produção.'
+    );
+  }
 
   await synchronize({
     database,
