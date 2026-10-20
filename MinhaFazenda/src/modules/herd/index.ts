@@ -1,1 +1,0 @@
-export { animalRepository } from '@/database';
