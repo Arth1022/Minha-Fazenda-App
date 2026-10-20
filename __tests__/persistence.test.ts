@@ -106,6 +106,17 @@ async function runPersistenceTest() {
     throw new Error(`Saldo incorreto após baixa: esperado 170, obtido ${estoqueAtualizado.quantidade}`);
   }
 
+  // Validação da regra de negócio: não zerar em silêncio e lançar erro
+  let erroEstoqueLancado = false;
+  try {
+    await estoqueRepository.adjustQuantity(estoque.id, -200);
+  } catch {
+    erroEstoqueLancado = true;
+  }
+  if (!erroEstoqueLancado) {
+    throw new Error('Falha de regra de negócio: adjustQuantity deveria rejeitar saída maior que o saldo em estoque');
+  }
+
   const maquina = await maquinaRepository.createMaquina({
     nome: `Trator ${tag}`,
     statusPercentual: 100,

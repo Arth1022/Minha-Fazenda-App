@@ -7,9 +7,13 @@ import { maquinaRepository } from '@/features/maquinas/MaquinaRepository';
 
 /**
  * Seed opcional de desenvolvimento para popular dados de demonstração.
- * NUNCA é executado automaticamente na inicialização de produção.
+ * Executa exclusivamente em ambiente de desenvolvimento (__DEV__).
  */
 export async function runDevSeed(): Promise<void> {
+  if (typeof __DEV__ !== 'undefined' && !__DEV__) {
+    return;
+  }
+
   const existingTalhoes = await talhaoRepository.count();
   if (existingTalhoes > 0) {
     return;

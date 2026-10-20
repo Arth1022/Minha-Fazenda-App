@@ -46,7 +46,13 @@ export class EstoqueRepository extends BaseRepository<EstoqueItem> {
 
   async adjustQuantity(id: string, delta: number): Promise<EstoqueItem> {
     return await this.update(id, (item) => {
-      item.quantidade = Math.max(0, (item.quantidade || 0) + delta);
+      const novaQuantidade = (item.quantidade || 0) + delta;
+      if (novaQuantidade < 0) {
+        throw new Error(
+          `Estoque insuficiente: saldo atual (${item.quantidade} ${item.unidade}) não permite saída de ${Math.abs(delta)} ${item.unidade}.`
+        );
+      }
+      item.quantidade = novaQuantidade;
     });
   }
 

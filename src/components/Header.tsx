@@ -1,19 +1,30 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useDatabase } from '@nozbe/watermelondb/react';
 import { AgroColors, Spacing } from '@/constants/theme';
+
+export type HeaderOfflineStatus = 'loading' | 'ready' | 'error';
 
 interface HeaderProps {
   title: string;
   subtitle?: string;
   showBack?: boolean;
+  status?: HeaderOfflineStatus;
 }
 
-export function Header({ title, subtitle, showBack = false }: HeaderProps) {
+export function Header({
+  title,
+  subtitle,
+  showBack = false,
+  status = 'ready',
+}: HeaderProps) {
   const router = useRouter();
-  const db = useDatabase();
-  const isReady = Boolean(db);
+
+  const statusConfig = {
+    ready: { color: '#4ADE80', label: '100% Offline' },
+    loading: { color: '#FACC15', label: 'Iniciando...' },
+    error: { color: '#F87171', label: 'Erro no Banco' },
+  }[status];
 
   return (
     <View style={styles.headerContainer}>
@@ -36,10 +47,10 @@ export function Header({ title, subtitle, showBack = false }: HeaderProps) {
           <View
             style={[
               styles.statusDot,
-              { backgroundColor: isReady ? '#4ADE80' : '#FACC15' },
+              { backgroundColor: statusConfig.color },
             ]}
           />
-          <Text style={styles.offlineText}>100% Offline</Text>
+          <Text style={styles.offlineText}>{statusConfig.label}</Text>
         </View>
       </View>
     </View>
