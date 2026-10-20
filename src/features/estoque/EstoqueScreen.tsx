@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -6,24 +6,10 @@ import { Header } from '@/components/Header';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { AgroColors, BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-import EstoqueItem from '@/entities/EstoqueItem';
-import { estoqueRepository } from './EstoqueRepository';
+import { useEstoque } from './useEstoque';
 
 export default function EstoqueScreen() {
-  const [itens, setItens] = useState<EstoqueItem[]>([]);
-
-  useEffect(() => {
-    const subscription = estoqueRepository.observeAll().subscribe(setItens);
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const handleAdjust = async (id: string, delta: number) => {
-    await estoqueRepository.adjustQuantity(id, delta);
-  };
-
-  const insumos = itens.filter((i) => i.categoria === 'insumo');
-  const medicamentos = itens.filter((i) => i.categoria === 'medicamento');
-  const pecas = itens.filter((i) => i.categoria === 'peca_maquina');
+  const { insumos, medicamentos, pecas, ajustarQuantidade: handleAdjust } = useEstoque();
 
   return (
     <ThemedView style={styles.container}>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
@@ -7,18 +7,11 @@ import { Header } from '@/components/Header';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import Animal from '@/entities/Animal';
-import { animalRepository } from './AnimalRepository';
+import { useAnimal } from './useRebanho';
 
 export default function AnimalDetalheScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const [animal, setAnimal] = useState<Animal | null>(null);
-
-  useEffect(() => {
-    if (id) {
-      animalRepository.findById(id).then(setAnimal);
-    }
-  }, [id]);
+  const animal = useAnimal(id);
 
   return (
     <ThemedView style={styles.container}>

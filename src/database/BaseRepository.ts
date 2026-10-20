@@ -55,6 +55,10 @@ export abstract class BaseRepository<T extends Model> {
     return await this.collection.find(id);
   }
 
+  observeById(id: string): Observable<T> {
+    return this.collection.findAndObserve(id);
+  }
+
   async query(...clauses: Q.Clause[]): Promise<T[]> {
     return await this.collection.query(...clauses).fetch();
   }

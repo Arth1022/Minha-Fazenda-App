@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -6,16 +6,10 @@ import { Header } from '@/components/Header';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { AgroColors, BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-import Maquina from '@/entities/Maquina';
-import { maquinaRepository } from './MaquinaRepository';
+import { useMaquinas } from './useMaquinas';
 
 export default function MaquinasScreen() {
-  const [maquinas, setMaquinas] = useState<Maquina[]>([]);
-
-  useEffect(() => {
-    const subscription = maquinaRepository.observeAll().subscribe(setMaquinas);
-    return () => subscription.unsubscribe();
-  }, []);
+  const { maquinas } = useMaquinas();
 
   return (
     <ThemedView style={styles.container}>
