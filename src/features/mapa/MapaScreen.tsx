@@ -17,6 +17,7 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { AgroColors, BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { formatHectares } from '@/utils/formatters';
+import Talhao from '@/entities/Talhao';
 import {
   calculateFenceMaterials,
   calculateSeedRequirementKg,
@@ -36,9 +37,9 @@ export default function MapaScreen() {
   const [novoTipo, setNovoTipo] = useState('Pastagem');
   const [novaAreaHa, setNovaAreaHa] = useState('');
 
-  const totalAreaHa = talhoes.reduce((acc, t) => acc + (t.areaHa || 0), 0);
+  const totalAreaHa = talhoes.reduce((acc: number, t: Talhao) => acc + (t.areaHa || 0), 0);
   const totalPerimeterM = talhoes.reduce(
-    (acc, t) => acc + estimatePerimeterFromHectares(t.areaHa || 0),
+    (acc: number, t: Talhao) => acc + estimatePerimeterFromHectares(t.areaHa || 0),
     0
   );
   const fenceEstimate = calculateFenceMaterials(totalPerimeterM, 2.5, 5);
@@ -88,7 +89,7 @@ export default function MapaScreen() {
                   Nenhum talhão cadastrado ainda. Toque em &quot;+ Novo Talhão&quot; para iniciar.
                 </Text>
               ) : (
-                talhoes.map((t) => {
+                talhoes.map((t: Talhao) => {
                   const isLavoura =
                     (t.tipo || '').toLowerCase().includes('lavoura') ||
                     (t.nome || '').toLowerCase().includes('lavoura');
@@ -126,7 +127,7 @@ export default function MapaScreen() {
                 Cadastre o primeiro talhão da sua propriedade para visualizar a área em hectares.
               </ThemedText>
             ) : (
-              talhoes.map((t) => <TalhaoCard key={t.id} talhao={t} />)
+              talhoes.map((t: Talhao) => <TalhaoCard key={t.id} talhao={t} />)
             )}
           </Card>
 

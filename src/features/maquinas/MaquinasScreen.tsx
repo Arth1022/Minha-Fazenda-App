@@ -6,6 +6,7 @@ import { Header } from '@/components/Header';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { AgroColors, BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import Maquina from '@/entities/Maquina';
 import { useMaquinas } from './useMaquinas';
 
 export default function MaquinasScreen() {
@@ -30,7 +31,7 @@ export default function MaquinasScreen() {
                 Nenhuma máquina cadastrada ainda no banco local.
               </ThemedText>
             ) : (
-              maquinas.map((m) => (
+              maquinas.map((m: Maquina) => (
                 <View key={m.id} style={styles.machineCard}>
                   <Text style={styles.machineEmoji}>🚜</Text>
                   <View style={{ flex: 1 }}>

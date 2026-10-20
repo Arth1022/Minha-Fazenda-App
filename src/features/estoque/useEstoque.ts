@@ -15,9 +15,9 @@ export function useEstoque() {
   };
 
   return {
-    insumos: itens.filter((i) => i.categoria === 'insumo'),
-    medicamentos: itens.filter((i) => i.categoria === 'medicamento'),
-    pecas: itens.filter((i) => i.categoria === 'peca_maquina'),
+    insumos: itens.filter((i: EstoqueItem) => i.categoria === 'insumo'),
+    medicamentos: itens.filter((i: EstoqueItem) => i.categoria === 'medicamento'),
+    pecas: itens.filter((i: EstoqueItem) => i.categoria === 'peca_maquina'),
     ajustarQuantidade,
   };
 }

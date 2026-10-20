@@ -7,6 +7,9 @@ import { Header } from '@/components/Header';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { AgroColors, BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import Animal from '@/entities/Animal';
+import Ordenha from '@/entities/Ordenha';
+import Tratamento from '@/entities/Tratamento';
 import { useRebanho } from './useRebanho';
 
 export default function RebanhoScreen() {
@@ -32,7 +35,7 @@ export default function RebanhoScreen() {
                 Nenhum animal cadastrado ainda no banco local.
               </ThemedText>
             ) : (
-              animais.map((animal) => (
+              animais.map((animal: Animal) => (
                 <Pressable
                   key={animal.id}
                   onPress={() => router.push(`/animal/${animal.id}` as RelativePathString)}
@@ -86,7 +89,7 @@ export default function RebanhoScreen() {
                 Nenhum tratamento sanitário ativo no momento.
               </ThemedText>
             ) : (
-              tratamentos.map((trat) => (
+              tratamentos.map((trat: Tratamento) => (
                 <View key={trat.id} style={styles.treatmentCard}>
                   <View style={styles.treatmentTop}>
                     <Text style={styles.medName}>{trat.medicamento}</Text>
@@ -101,7 +104,7 @@ export default function RebanhoScreen() {
 
           <ThemedView type="backgroundElement" style={styles.sectionCard}>
             <ThemedText type="subtitle">🥛 Controle de Ordenha ({ordenhas.length})</ThemedText>
-            {ordenhas.map((o) => (
+            {ordenhas.map((o: Ordenha) => (
               <View key={o.id} style={styles.ordenhaRow}>
                 <View>
                   <Text style={styles.periodoTitle}>

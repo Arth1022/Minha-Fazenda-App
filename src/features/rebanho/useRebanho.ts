@@ -23,7 +23,10 @@ export function useRebanho() {
     };
   }, []);
 
-  const totalVolumeL = ordenhas.reduce((acc, o) => acc + (o.volumeLitros || 0), 0);
+  const totalVolumeL = ordenhas.reduce(
+    (acc: number, o: Ordenha) => acc + (o.volumeLitros || 0),
+    0
+  );
 
   return { animais, tratamentos, ordenhas, totalVolumeL };
 }

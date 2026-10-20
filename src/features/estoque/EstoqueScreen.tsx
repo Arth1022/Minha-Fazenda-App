@@ -6,6 +6,7 @@ import { Header } from '@/components/Header';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { AgroColors, BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import EstoqueItem from '@/entities/EstoqueItem';
 import { useEstoque } from './useEstoque';
 
 export default function EstoqueScreen() {
@@ -31,7 +32,7 @@ export default function EstoqueScreen() {
               </ThemedText>
             ) : (
               <View style={styles.gridRow}>
-                {insumos.map((item) => (
+                {insumos.map((item: EstoqueItem) => (
                   <View key={item.id} style={styles.insumoCard}>
                     <Text style={styles.insumoTitle}>{item.nome}</Text>
                     <Text style={styles.insumoQty}>
@@ -62,7 +63,7 @@ export default function EstoqueScreen() {
                 Nenhum medicamento registrado no estoque local.
               </ThemedText>
             ) : (
-              medicamentos.map((item) => (
+              medicamentos.map((item: EstoqueItem) => (
                 <View key={item.id} style={styles.listRow}>
                   <View>
                     <ThemedText style={styles.itemName}>{item.nome}</ThemedText>
@@ -85,7 +86,7 @@ export default function EstoqueScreen() {
                 Nenhuma peça de máquina registrada no estoque local.
               </ThemedText>
             ) : (
-              pecas.map((item) => {
+              pecas.map((item: EstoqueItem) => {
                 const isLow = item.quantidade <= (item.estoqueMinimo || 0);
                 return (
                   <View
