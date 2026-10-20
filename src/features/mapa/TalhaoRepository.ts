@@ -1,10 +1,10 @@
 import { Database, Q } from '@nozbe/watermelondb';
 import { BaseRepository } from '@/database/BaseRepository';
-import Talhao from '@/entities/Talhao';
+import Talhao, { TipoTalhao } from '@/entities/Talhao';
 
 export interface CreateTalhaoDTO {
   nome: string;
-  tipo?: string;
+  tipo?: TipoTalhao;
   areaHa?: number;
   poligonoGeoJson?: string;
   possuiCerca?: boolean;
@@ -12,7 +12,7 @@ export interface CreateTalhaoDTO {
 
 export interface UpdateTalhaoDTO {
   nome?: string;
-  tipo?: string;
+  tipo?: TipoTalhao;
   areaHa?: number;
   poligonoGeoJson?: string;
   possuiCerca?: boolean;

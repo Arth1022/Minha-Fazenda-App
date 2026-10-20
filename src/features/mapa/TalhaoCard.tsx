@@ -11,9 +11,17 @@ interface TalhaoCardProps {
 }
 
 export function TalhaoCard({ talhao }: TalhaoCardProps) {
-  const isLavoura =
-    (talhao.tipo || '').toLowerCase().includes('lavoura') ||
-    (talhao.nome || '').toLowerCase().includes('lavoura');
+  const isLavoura = talhao.tipo === 'lavoura';
+  const displayTipo =
+    talhao.tipo === 'pastagem'
+      ? 'Pastagem'
+      : talhao.tipo === 'lavoura'
+      ? 'Lavoura'
+      : talhao.tipo === 'reserva'
+      ? 'Reserva'
+      : talhao.tipo === 'outro'
+      ? 'Outro'
+      : 'Área Rural';
 
   return (
     <View style={styles.talhaoRow}>
@@ -31,7 +39,7 @@ export function TalhaoCard({ talhao }: TalhaoCardProps) {
         <View>
           <ThemedText style={styles.talhaoName}>{talhao.nome}</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            {talhao.tipo || 'Área Rural'} • {talhao.possuiCerca ? 'Com cerca' : 'Sem cerca'}
+            {displayTipo} • {talhao.possuiCerca ? 'Com cerca' : 'Sem cerca'}
           </ThemedText>
         </View>
       </View>

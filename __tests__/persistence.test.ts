@@ -43,7 +43,7 @@ async function runPersistenceTest() {
   // 1. Criar Talhão e validar created_at / updated_at automáticos do WatermelonDB
   const talhao = await talhaoRepository.createTalhao({
     nome: `Talhão ${tag}`,
-    tipo: 'Pastagem',
+    tipo: 'pastagem',
     areaHa: 14.5,
     possuiCerca: true,
   });
@@ -78,8 +78,13 @@ async function runPersistenceTest() {
     animalId: animal.id,
     medicamento: 'Vacina Aftosa',
     dataInicio: new Date(),
+    diasConfirmados: [1, 2, 3],
     notificacaoAtiva: true,
   });
+
+  if (!Array.isArray(tratamento.diasConfirmados) || tratamento.diasConfirmados.length !== 3) {
+    throw new Error('Falha no decorator @json: diasConfirmados não foi parseado/sanitizado como array');
+  }
 
   const ordenha = await ordenhaRepository.createOrdenha({
     periodo: 'manha',
@@ -109,13 +114,38 @@ async function runPersistenceTest() {
 
   console.log('✅ Estoque, Tratamento, Ordenha e Máquina validados com sucesso.');
 
-  // 4. Limpeza dos registros de teste
-  await tratamentoRepository.destroyPermanently(tratamento.id);
-  await ordenhaRepository.destroyPermanently(ordenha.id);
-  await estoqueRepository.destroyPermanently(estoque.id);
-  await maquinaRepository.destroyPermanently(maquina.id);
-  await animalRepository.destroyPermanently(animal.id);
-  await talhaoRepository.destroyPermanently(talhao.id);
+  // 4. Teste de Exclusão em Cascata (@writer deleteCascade)
+  const cascadeTalhao = await talhaoRepository.createTalhao({
+    nome: `Talhão Cascade ${tag}`,
+    tipo: 'pastagem',
+    areaHa: 10,
+  });
+  const cascadeAnimal = await animalRepository.createAnimal({
+    brinco: `CAS-${tag}`,
+    talhaoId: cascadeTalhao.id,
+  });
+  await tratamentoRepository.createTratamento({
+    animalId: cascadeAnimal.id,
+    medicamento: 'Medicamento Cascata',
+    dataInicio: new Date(),
+  });
+
+  // Apagar animal em cascata deve marcar os tratamentos filhos também
+  await cascadeAnimal.deleteCascade();
+  const tratamentosRestantes = await tratamentoRepository.getByAnimal(cascadeAnimal.id);
+  if (tratamentosRestantes.length > 0) {
+    throw new Error('Falha no deleteCascade: tratamentos filhos não foram apagados em cascata');
+  }
+  await cascadeTalhao.deleteCascade();
+  console.log('✅ Exclusão em cascata (@writer deleteCascade) validada com sucesso.');
+
+  // 5. Exclusão dos registros de teste via delete (soft-delete compatível com sync)
+  await tratamentoRepository.delete(tratamento.id);
+  await ordenhaRepository.delete(ordenha.id);
+  await estoqueRepository.delete(estoque.id);
+  await maquinaRepository.delete(maquina.id);
+  await animalRepository.delete(animal.id);
+  await talhaoRepository.delete(talhao.id);
 
   console.log('\n🎉 TODOS OS TESTES PASSARAM COM 100% DE SUCESSO!\n');
 }

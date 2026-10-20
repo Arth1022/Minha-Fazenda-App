@@ -18,7 +18,7 @@ import { ThemedView } from '@/components/ThemedView';
 import { APP_NAME } from '@/constants/app';
 import { AgroColors, BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { formatHectares } from '@/utils/formatters';
-import Talhao from '@/entities/Talhao';
+import Talhao, { TipoTalhao } from '@/entities/Talhao';
 import {
   calculateFenceMaterials,
   calculatePerimeterFromTalhao,
@@ -35,7 +35,7 @@ export default function MapaScreen() {
   const [modalVisible, setModalVisible] = useState(false);
 
   const [novoNome, setNovoNome] = useState('');
-  const [novoTipo, setNovoTipo] = useState('Pastagem');
+  const [novoTipo, setNovoTipo] = useState<TipoTalhao>('pastagem');
   const [novaAreaHa, setNovaAreaHa] = useState('');
 
   const totalAreaHa = talhoes.reduce((acc: number, t: Talhao) => acc + (t.areaHa || 0), 0);
@@ -55,12 +55,13 @@ export default function MapaScreen() {
 
     await createTalhao({
       nome: novoNome.trim(),
-      tipo: novoTipo.trim() || 'Pastagem',
+      tipo: novoTipo,
       areaHa: areaNumber,
       possuiCerca: true,
     });
 
     setNovoNome('');
+    setNovoTipo('pastagem');
     setNovaAreaHa('');
     setModalVisible(false);
   };
@@ -92,9 +93,7 @@ export default function MapaScreen() {
                 </Text>
               ) : (
                 talhoes.map((t: Talhao) => {
-                  const isLavoura =
-                    (t.tipo || '').toLowerCase().includes('lavoura') ||
-                    (t.nome || '').toLowerCase().includes('lavoura');
+                  const isLavoura = t.tipo === 'lavoura';
                   return (
                     <View
                       key={t.id}
@@ -234,13 +233,31 @@ export default function MapaScreen() {
               />
 
               <Text style={styles.inputLabel}>Tipo de Uso</Text>
-              <TextInput
-                value={novoTipo}
-                onChangeText={setNovoTipo}
-                placeholder="Pastagem ou Lavoura"
-                placeholderTextColor="#7A8C7D"
-                style={styles.input}
-              />
+              <View style={styles.chipRow}>
+                {(['pastagem', 'lavoura', 'reserva', 'outro'] as const).map((tipo) => (
+                  <Pressable
+                    key={tipo}
+                    onPress={() => setNovoTipo(tipo)}
+                    style={[
+                      styles.chipBtn,
+                      novoTipo === tipo && styles.chipBtnActive,
+                    ]}>
+                    <Text
+                      style={[
+                        styles.chipText,
+                        novoTipo === tipo && styles.chipTextActive,
+                      ]}>
+                      {tipo === 'pastagem'
+                        ? 'Pastagem'
+                        : tipo === 'lavoura'
+                        ? 'Lavoura'
+                        : tipo === 'reserva'
+                        ? 'Reserva'
+                        : 'Outro'}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
 
               <Text style={styles.inputLabel}>Área (Hectares)</Text>
               <TextInput
@@ -474,5 +491,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing.two,
     marginTop: Spacing.three,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginVertical: 4,
+  },
+  chipBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: Spacing.two,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+  },
+  chipBtnActive: {
+    backgroundColor: AgroColors.mintBg,
+    borderColor: AgroColors.primaryDark,
+  },
+  chipText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  chipTextActive: {
+    color: AgroColors.primaryDark,
+    fontWeight: '800',
   },
 });

@@ -1,5 +1,5 @@
 import { Model, Query, Relation } from '@nozbe/watermelondb';
-import { field, date, readonly, relation, children } from '@nozbe/watermelondb/decorators';
+import { field, date, readonly, relation, children, writer } from '@nozbe/watermelondb/decorators';
 import type Talhao from './Talhao';
 import type Tratamento from './Tratamento';
 
@@ -25,4 +25,9 @@ export default class Animal extends Model {
 
   @readonly @date('created_at') createdAt!: Date;
   @readonly @date('updated_at') updatedAt!: Date;
+
+  @writer async deleteCascade(): Promise<void> {
+    await this.tratamentos.markAllAsDeleted();
+    await this.markAsDeleted();
+  }
 }

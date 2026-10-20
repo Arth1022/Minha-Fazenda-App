@@ -77,27 +77,13 @@ export abstract class BaseRepository<T extends Model> {
   }
 
   async delete(id: string): Promise<void> {
-    await this.db.write(async () => {
-      const record = await this.collection.find(id);
-      await record.markAsDeleted();
-    });
-  }
-
-  async destroyPermanently(id: string): Promise<void> {
-    await this.db.write(async () => {
-      const record = await this.collection.find(id);
-      await record.destroyPermanently();
-    });
-  }
-
-  async deleteAll(): Promise<void> {
-    await this.db.write(async () => {
-      const allRecords = await this.collection.query().fetch();
-      if (allRecords.length === 0) return;
-      const preparedDeletions = allRecords.map((record) =>
-        record.prepareDestroyPermanently()
-      );
-      await this.db.batch(...preparedDeletions);
-    });
+    const record = await this.collection.find(id);
+    if ('deleteCascade' in record && typeof (record as { deleteCascade?: () => Promise<void> }).deleteCascade === 'function') {
+      await (record as { deleteCascade: () => Promise<void> }).deleteCascade();
+    } else {
+      await this.db.write(async () => {
+        await record.markAsDeleted();
+      });
+    }
   }
 }

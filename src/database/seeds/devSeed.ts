@@ -17,14 +17,14 @@ export async function runDevSeed(): Promise<void> {
 
   const pasto1 = await talhaoRepository.createTalhao({
     nome: 'Pasto 1',
-    tipo: 'Pastagem',
+    tipo: 'pastagem',
     areaHa: 15.2,
     possuiCerca: true,
   });
 
   await talhaoRepository.createTalhao({
     nome: 'Lavoura 2',
-    tipo: 'Lavoura - Milho',
+    tipo: 'lavoura',
     areaHa: 28.0,
     possuiCerca: true,
   });
@@ -55,7 +55,7 @@ export async function runDevSeed(): Promise<void> {
     animalId: bessie.id,
     medicamento: 'Antibiótico X',
     dataInicio: new Date(),
-    diasConfirmados: JSON.stringify([1, 2, 3, 4, 5, 6, 7]),
+    diasConfirmados: [1, 2, 3, 4, 5, 6, 7],
     notificacaoAtiva: true,
   });
 

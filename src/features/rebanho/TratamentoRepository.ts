@@ -8,7 +8,7 @@ export interface CreateTratamentoDTO {
   medicamento: string;
   dataInicio: Date;
   dataFim?: Date;
-  diasConfirmados?: string;
+  diasConfirmados?: number[];
   proximaDoseEm?: Date;
   notificacaoAtiva?: boolean;
 }
@@ -17,7 +17,7 @@ export interface UpdateTratamentoDTO {
   medicamento?: string;
   dataInicio?: Date;
   dataFim?: Date;
-  diasConfirmados?: string;
+  diasConfirmados?: number[];
   proximaDoseEm?: Date;
   notificacaoAtiva?: boolean;
 }
@@ -33,7 +33,7 @@ export class TratamentoRepository extends BaseRepository<Tratamento> {
       tratamento.medicamento = dto.medicamento;
       tratamento.dataInicio = dto.dataInicio;
       tratamento.dataFim = dto.dataFim;
-      tratamento.diasConfirmados = dto.diasConfirmados ?? '[]';
+      tratamento.diasConfirmados = dto.diasConfirmados ?? [];
       tratamento.proximaDoseEm = dto.proximaDoseEm;
       tratamento.notificacaoAtiva = dto.notificacaoAtiva ?? true;
     });

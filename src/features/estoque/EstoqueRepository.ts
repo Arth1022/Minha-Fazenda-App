@@ -1,10 +1,10 @@
 import { Database, Q } from '@nozbe/watermelondb';
 import { Observable } from 'rxjs';
 import { BaseRepository } from '@/database/BaseRepository';
-import EstoqueItem from '@/entities/EstoqueItem';
+import EstoqueItem, { CategoriaEstoque } from '@/entities/EstoqueItem';
 
 export interface CreateEstoqueItemDTO {
-  categoria: string;
+  categoria: CategoriaEstoque;
   nome: string;
   quantidade: number;
   unidade: string;
@@ -12,7 +12,7 @@ export interface CreateEstoqueItemDTO {
 }
 
 export interface UpdateEstoqueItemDTO {
-  categoria?: string;
+  categoria?: CategoriaEstoque;
   nome?: string;
   quantidade?: number;
   unidade?: string;
@@ -50,11 +50,11 @@ export class EstoqueRepository extends BaseRepository<EstoqueItem> {
     });
   }
 
-  async getByCategory(categoria: string): Promise<EstoqueItem[]> {
+  async getByCategory(categoria: CategoriaEstoque): Promise<EstoqueItem[]> {
     return await this.collection.query(Q.where('categoria', categoria)).fetch();
   }
 
-  observeByCategory(categoria: string): Observable<EstoqueItem[]> {
+  observeByCategory(categoria: CategoriaEstoque): Observable<EstoqueItem[]> {
     return this.collection.query(Q.where('categoria', categoria)).observe();
   }
 
