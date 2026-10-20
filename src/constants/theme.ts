@@ -1,5 +1,5 @@
 /**
- * Tema visual do Minha Fazenda App (AgroFazenda)
+ * Tema visual do Minha Fazenda App
  * Projetado com alto contraste para legibilidade no campo sob luz solar intensa,
  * seguindo a identidade visual do protótipo oficial.
  */
@@ -9,7 +9,7 @@ import '@/global.css';
 import { Platform } from 'react-native';
 
 export const AgroColors = {
-  primaryDark: '#1B5E20',     // Verde cabeçalho principal (AgroFazenda)
+  primaryDark: '#1B5E20',     // Verde cabeçalho principal
   primary: '#2E7D32',         // Verde folha principal (botões, destaques)
   primaryLight: '#4CAF50',    // Verde vibrante (indicadores de sucesso/online/offline ativo)
   mintBg: '#E8F5E9',          // Fundo verde suave para cards de ação (Calcular Área, Cercas, etc.)

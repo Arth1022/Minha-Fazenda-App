@@ -15,6 +15,7 @@ import { Card } from '@/components/Card';
 import { Header } from '@/components/Header';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import { APP_NAME } from '@/constants/app';
 import { AgroColors, BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { formatHectares } from '@/utils/formatters';
 import Talhao from '@/entities/Talhao';
@@ -72,7 +73,7 @@ export default function MapaScreen() {
           showsVerticalScrollIndicator={false}>
           <Header
             title="Mapeamento & Áreas"
-            subtitle="Minha Fazenda • Operação Offline"
+            subtitle={`${APP_NAME} • Operação Offline`}
           />
 
           <View style={styles.mapPreviewCard}>

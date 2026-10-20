@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 
 import { Header } from '@/components/Header';
 import { ThemedView } from '@/components/ThemedView';
+import { APP_NAME } from '@/constants/app';
 import { AgroColors, BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 
 export default function HomeScreen() {
@@ -18,7 +19,7 @@ export default function HomeScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}>
           <Header
-            title="Minha Fazenda"
+            title={APP_NAME}
             subtitle="Gestão Rural Local-First • Operação sem Internet"
           />
 
