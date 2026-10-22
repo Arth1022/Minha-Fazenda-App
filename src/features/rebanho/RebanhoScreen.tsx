@@ -1,77 +1,62 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { RelativePathString, useRouter } from 'expo-router';
+import { RelativePathString, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { AnimalCard, NovoAnimalForm } from "@/components/rebanhoComponents";
 import {
-  ChipSelector,
-  type ChipOption,
-  CustomInput,
-  FormModal,
-} from '@/components/forms';
+    Card,
+    Header,
+    ScreenContainer,
+    SegmentedTabs,
+    type SegmentedTabItem,
+} from "@/components/ui";
 import {
-  Card,
-  Header,
-  ScreenContainer,
-  SegmentedTabs,
-  type SegmentedTabItem,
-} from '@/components/ui';
-import { AgroColors, Spacing } from '@/constants/theme';
-import Animal from '@/entities/Animal';
-import { useQuickAction } from '@/providers/QuickActionContext';
-import { AnimalCard } from './AnimalCard';
-import { useRebanho } from './useRebanho';
+    AgroColors,
+    Radius,
+    Shadows,
+    Spacing,
+    Typography,
+} from "@/constants/theme";
+import Animal from "@/entities/Animal";
+import { useQuickAction } from "@/providers/QuickActionContext";
+import {
+    categoriaService,
+    type CategoriaAnimal,
+} from "./rebanhoService/CategoriaService";
+import { useRebanho } from "./useRebanho";
 
-type RebanhoTabKey = 'rebanho' | 'pasto';
-
-const TABS: SegmentedTabItem<RebanhoTabKey>[] = [
-  { key: 'rebanho', label: 'Rebanho' },
-  { key: 'pasto', label: 'Pasto' },
+const TABS: SegmentedTabItem<CategoriaAnimal>[] = [
+  { key: "vaca", label: "Vacas" },
+  { key: "novilha", label: "Novilhas" },
+  { key: "bezerro", label: "Bezerros" },
 ];
 
-const RACA_OPTIONS: ChipOption<string>[] = [
-  { label: 'Holandesa', value: 'Holandesa', icon: '🐄' },
-  { label: 'Nelore', value: 'Nelore', icon: '🐂' },
-  { label: 'Girolando', value: 'Girolando', icon: '🐮' },
-  { label: 'Jersey', value: 'Jersey', icon: '🥛' },
-];
+// Quantidade de cards visíveis na lista antes de precisar rolar
+const VISIBLE_ANIMALS = 3;
 
 export default function RebanhoScreen() {
   const router = useRouter();
-  const { animais, createAnimal } = useRebanho();
+  const { animais } = useRebanho();
   const { registerQuickAction } = useQuickAction();
 
-  const [activeTab, setActiveTab] = useState<RebanhoTabKey>('rebanho');
+  const [activeTab, setActiveTab] = useState<CategoriaAnimal>("vaca");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [onlyHighMilkFilter, setOnlyHighMilkFilter] = useState(false);
-
-  // Estado do formulário modular para Novo Animal
+  const [cardHeight, setCardHeight] = useState(0);
   const [modalVisible, setModalVisible] = useState(false);
-  const [brinco, setBrinco] = useState('');
-  const [nome, setNome] = useState('');
-  const [raca, setRaca] = useState('Holandesa');
-  const [pesoKg, setPesoKg] = useState('');
-  const [producaoLeiteL, setProducaoLeiteL] = useState('');
-  const [crias, setCrias] = useState('1');
-  const [racaoKgDia, setRacaoKgDia] = useState('6.5');
-  const [errors, setErrors] = useState<{ brinco?: string; peso?: string }>({});
-  const [saving, setSaving] = useState(false);
 
-  const openModal = useCallback(() => {
-    setErrors({});
-    setModalVisible(true);
-  }, []);
+  const openModal = useCallback(() => setModalVisible(true), []);
 
   useEffect(() => {
-    return registerQuickAction('rebanho', openModal);
+    return registerQuickAction("rebanho", openModal);
   }, [registerQuickAction, openModal]);
 
   const filteredAnimais = useMemo(() => {
-    let list = animais;
+    let list = animais.filter(
+      (a) => categoriaService.getCategoriaAnimal(a) === activeTab,
+    );
     if (onlyHighMilkFilter) {
       list = list.filter((a) => (a.producaoLeiteL ?? 0) >= 20);
-    }
-    if (activeTab === 'pasto') {
-      list = list.filter((a) => Boolean(a.talhaoId) || true);
     }
     return list;
   }, [animais, onlyHighMilkFilter, activeTab]);
@@ -93,46 +78,10 @@ export default function RebanhoScreen() {
     }
   };
 
-  const handleAddAnimal = async () => {
-    const nextErrors: { brinco?: string; peso?: string } = {};
-    if (!brinco.trim()) {
-      nextErrors.brinco = 'Informe o número do brinco (ex: #104).';
-    }
-    const pesoNumber = parseFloat(pesoKg.replace(',', '.'));
-    if (!pesoKg.trim() || isNaN(pesoNumber) || pesoNumber <= 0) {
-      nextErrors.peso = 'Informe um peso válido em kg.';
-    }
-
-    if (Object.keys(nextErrors).length > 0) {
-      setErrors(nextErrors);
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const formattedBrinco = brinco.trim().startsWith('#')
-        ? brinco.trim()
-        : `#${brinco.trim()}`;
-
-      const created = await createAnimal({
-        brinco: formattedBrinco,
-        nome: nome.trim() || `Brinco ${formattedBrinco}`,
-        raca,
-        pesoKg: pesoNumber,
-        producaoLeiteL: parseFloat(producaoLeiteL.replace(',', '.')) || 0,
-        crias: parseInt(crias, 10) || 0,
-        racaoKgDia: parseFloat(racaoKgDia.replace(',', '.')) || 0,
-      });
-
-      setSelectedId(created.id);
-      setBrinco('');
-      setNome('');
-      setPesoKg('');
-      setProducaoLeiteL('');
-      setModalVisible(false);
-    } finally {
-      setSaving(false);
-    }
+  const handleAnimalCreated = (animal: Animal) => {
+    setActiveTab(categoriaService.getCategoriaAnimal(animal));
+    setSelectedId(animal.id);
+    setModalVisible(false);
   };
 
   return (
@@ -144,8 +93,9 @@ export default function RebanhoScreen() {
           showMore
           onRightPress={openModal}
         />
-      }>
-      {/* Abas Rebanho / Pasto + Ícone de Filtro (Fiel ao Figma) */}
+      }
+    >
+      {/* Abas Vacas / Novilhas / Bezerros + Ícone de Filtro */}
       <SegmentedTabs
         tabs={TABS}
         activeTab={activeTab}
@@ -155,17 +105,45 @@ export default function RebanhoScreen() {
         onFilterPress={() => setOnlyHighMilkFilter((prev) => !prev)}
       />
 
-      {/* Lista de Animais */}
-      <View style={styles.listColumn}>
-        {filteredAnimais.map((animal: Animal) => (
-          <AnimalCard
+      <Pressable
+        onPress={openModal}
+        style={({ pressed }) => [
+          styles.newAnimalBtn,
+          pressed && styles.pressed,
+        ]}
+        accessibilityRole="button"
+      >
+        <Text style={styles.newAnimalText}>NOVO ANIMAL</Text>
+      </Pressable>
+
+      {/* Lista de Animais: área limitada a VISIBLE_ANIMALS cards, com rolagem interna */}
+      <ScrollView
+        style={
+          cardHeight > 0 && {
+            maxHeight:
+              cardHeight * VISIBLE_ANIMALS + Spacing.sm * (VISIBLE_ANIMALS - 1),
+          }
+        }
+        contentContainerStyle={styles.listColumn}
+        nestedScrollEnabled
+      >
+        {filteredAnimais.map((animal: Animal, index: number) => (
+          <View
             key={animal.id}
-            animal={animal}
-            selected={selectedAnimal?.id === animal.id}
-            onPress={() => handleAnimalPress(animal)}
-          />
+            onLayout={
+              index === 0
+                ? (e) => setCardHeight(e.nativeEvent.layout.height)
+                : undefined
+            }
+          >
+            <AnimalCard
+              animal={animal}
+              selected={selectedAnimal?.id === animal.id}
+              onPress={() => handleAnimalPress(animal)}
+            />
+          </View>
         ))}
-      </View>
+      </ScrollView>
 
       {/* Card Inferior de Métricas Detalhadas do Animal Selecionado (Fiel à Tela 2 do Figma) */}
       {selectedAnimal && (
@@ -199,107 +177,14 @@ export default function RebanhoScreen() {
               </Text>
             </View>
           </View>
-
-          <Pressable
-            onPress={() =>
-              router.push(`/animal/${selectedAnimal.id}` as RelativePathString)
-            }
-            style={({ pressed }) => [
-              styles.treatmentLinkRow,
-              pressed && styles.pressed,
-            ]}>
-            <Text style={styles.treatmentLinkText}>
-              Abrir Tratamento Animal ({selectedAnimal.brinco}) →
-            </Text>
-          </Pressable>
         </Card>
       )}
 
-      {/* Modal de Formulário Modular para Cadastro de Animal */}
-      <FormModal
+      <NovoAnimalForm
         visible={modalVisible}
-        title="Novo Animal"
-        subtitle="Cadastre um novo animal no rebanho local"
         onClose={() => setModalVisible(false)}
-        onSubmit={handleAddAnimal}
-        submitLabel="Salvar Animal"
-        loading={saving}>
-        <CustomInput
-          label="Identificação (Brinco)"
-          required
-          value={brinco}
-          onChangeText={(t) => {
-            setBrinco(t);
-            if (errors.brinco)
-              setErrors((prev) => ({ ...prev, brinco: undefined }));
-          }}
-          placeholder="Ex: #104"
-          error={errors.brinco}
-        />
-
-        <CustomInput
-          label="Nome do Animal (Opcional)"
-          value={nome}
-          onChangeText={setNome}
-          placeholder="Ex: Mimosa"
-        />
-
-        <ChipSelector
-          label="Raça"
-          options={RACA_OPTIONS}
-          value={raca}
-          onChange={setRaca}
-        />
-
-        <View style={styles.twoColInputs}>
-          <CustomInput
-            containerStyle={{ flex: 1 }}
-            label="Peso"
-            required
-            value={pesoKg}
-            onChangeText={(t) => {
-              setPesoKg(t);
-              if (errors.peso)
-                setErrors((prev) => ({ ...prev, peso: undefined }));
-            }}
-            placeholder="512"
-            keyboardType="numeric"
-            suffix="kg"
-            error={errors.peso}
-          />
-
-          <CustomInput
-            containerStyle={{ flex: 1 }}
-            label="Produção de Leite"
-            value={producaoLeiteL}
-            onChangeText={setProducaoLeiteL}
-            placeholder="22.1"
-            keyboardType="numeric"
-            suffix="L"
-          />
-        </View>
-
-        <View style={styles.twoColInputs}>
-          <CustomInput
-            containerStyle={{ flex: 1 }}
-            label="Crias"
-            value={crias}
-            onChangeText={setCrias}
-            placeholder="3"
-            keyboardType="numeric"
-          />
-
-          <CustomInput
-            containerStyle={{ flex: 1 }}
-            label="Ração Concentrado"
-            value={racaoKgDia}
-            onChangeText={setRacaoKgDia}
-            placeholder="6.5"
-            keyboardType="numeric"
-            suffix="kg/dia"
-          />
-        </View>
-      </FormModal>
+        onCreated={handleAnimalCreated}
+      />
     </ScreenContainer>
   );
 }
@@ -312,42 +197,39 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   summaryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   summaryLabel: {
     fontSize: 13,
-    fontWeight: '400',
+    fontWeight: "400",
     color: AgroColors.textSecondary,
   },
   summaryValue: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: "700",
     color: AgroColors.textPrimary,
   },
   summaryValueBlue: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: "700",
     color: AgroColors.waterBlue,
   },
-  treatmentLinkRow: {
-    marginTop: 6,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: AgroColors.divider,
-    alignItems: 'flex-end',
+  newAnimalBtn: {
+    backgroundColor: AgroColors.primaryLight,
+    borderRadius: Radius.md,
+    paddingVertical: Spacing.md,
+    alignItems: "center",
+    justifyContent: "center",
+    ...Shadows.sm,
   },
-  treatmentLinkText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: AgroColors.primary,
+  newAnimalText: {
+    ...Typography.button,
+    color: AgroColors.textInverse,
+    letterSpacing: 0.5,
   },
   pressed: {
     opacity: 0.75,
-  },
-  twoColInputs: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
   },
 });

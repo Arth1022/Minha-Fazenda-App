@@ -12,6 +12,9 @@ export interface CreateAnimalDTO {
   crias?: number;
   racaoKgDia?: number;
   talhaoId?: string;
+  paiBrinco?: string;
+  maeBrinco?: string;
+  dataNascimento?: Date;
 }
 
 export interface UpdateAnimalDTO {
@@ -23,6 +26,9 @@ export interface UpdateAnimalDTO {
   crias?: number;
   racaoKgDia?: number;
   talhaoId?: string;
+  paiBrinco?: string;
+  maeBrinco?: string;
+  dataNascimento?: Date;
 }
 
 export class AnimalRepository extends BaseRepository<Animal> {
@@ -40,6 +46,9 @@ export class AnimalRepository extends BaseRepository<Animal> {
       animal.crias = dto.crias ?? 0;
       animal.racaoKgDia = dto.racaoKgDia;
       animal.talhaoId = dto.talhaoId;
+      animal.paiBrinco = dto.paiBrinco;
+      animal.maeBrinco = dto.maeBrinco;
+      animal.dataNascimento = dto.dataNascimento;
     });
   }
 
@@ -53,6 +62,9 @@ export class AnimalRepository extends BaseRepository<Animal> {
       if (dto.crias !== undefined) animal.crias = dto.crias;
       if (dto.racaoKgDia !== undefined) animal.racaoKgDia = dto.racaoKgDia;
       if (dto.talhaoId !== undefined) animal.talhaoId = dto.talhaoId;
+      if (dto.paiBrinco !== undefined) animal.paiBrinco = dto.paiBrinco;
+      if (dto.maeBrinco !== undefined) animal.maeBrinco = dto.maeBrinco;
+      if (dto.dataNascimento !== undefined) animal.dataNascimento = dto.dataNascimento;
     });
   }
 

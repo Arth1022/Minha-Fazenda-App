@@ -1,7 +1,7 @@
 import { appSchema, tableSchema } from '@nozbe/watermelondb';
 
 export const schema = appSchema({
-  version: 1,
+  version: 2,
   tables: [
     tableSchema({
       name: 'talhoes',
@@ -27,6 +27,21 @@ export const schema = appSchema({
         { name: 'crias', type: 'number', isOptional: true },
         { name: 'racao_kg_dia', type: 'number', isOptional: true },
         { name: 'talhao_id', type: 'string', isOptional: true, isIndexed: true },
+        { name: 'pai_brinco', type: 'string', isOptional: true },
+        { name: 'mae_brinco', type: 'string', isOptional: true },
+        { name: 'data_nascimento', type: 'number', isOptional: true },
+        { name: 'created_at', type: 'number' },
+        { name: 'updated_at', type: 'number' },
+      ],
+    }),
+
+    tableSchema({
+      name: 'coberturas',
+      columns: [
+        { name: 'animal_id', type: 'string', isIndexed: true },
+        { name: 'data', type: 'number' },
+        { name: 'tipo', type: 'string' },
+        { name: 'touro_semen', type: 'string', isOptional: true },
         { name: 'created_at', type: 'number' },
         { name: 'updated_at', type: 'number' },
       ],
