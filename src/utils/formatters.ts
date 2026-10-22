@@ -15,6 +15,12 @@ export function formatWeightKg(pesoKg?: number | null): string {
   return `${Number(pesoKg.toFixed(1))} kg`;
 }
 
+/** Garante o prefixo "#" no número do brinco (ex.: "104" → "#104"). */
+export function formatBrinco(brinco: string): string {
+  const trimmed = brinco.trim();
+  return trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
+}
+
 export function formatLiters(liters?: number | null): string {
   if (liters === undefined || liters === null) return '0 L';
   return `${Number(liters.toFixed(1))} L`;
