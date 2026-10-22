@@ -5,7 +5,6 @@ import { Tabs } from 'expo-router';
 
 import { FloatingActionButton } from '@/components/ui/FloatingActionButton';
 import { AgroColors, MaxContentWidth, Shadows } from '@/constants/theme';
-import { useQuickAction } from '@/providers/QuickActionContext';
 
 interface TabConfig {
   name: string;
@@ -14,7 +13,7 @@ interface TabConfig {
 }
 
 const LEFT_TABS: TabConfig[] = [
-  { name: 'index', label: 'Início', icon: '⌂' },
+  { name: 'mapa', label: 'Mapa', icon: '🗺️' },
   { name: 'rebanho', label: 'Rebanho', icon: '🐮' },
 ];
 
@@ -24,8 +23,6 @@ const RIGHT_TABS: TabConfig[] = [
 ];
 
 export default function TabsLayout() {
-  const { triggerQuickAction } = useQuickAction();
-
   return (
     <Tabs
       screenOptions={{
@@ -33,31 +30,31 @@ export default function TabsLayout() {
       }}
       tabBar={({ state, navigation }) => {
         const currentRouteName = state.routes[state.index]?.name ?? 'index';
-        const activeNormalized =
-          currentRouteName === 'mapa' ? 'index' : currentRouteName;
+        const isHomeActive = currentRouteName === 'index';
+
+        const navigateToTab = (tabName: string) => {
+          const targetRoute = state.routes.find((r) => r.name === tabName);
+          if (!targetRoute) return;
+
+          const isFocused = currentRouteName === tabName;
+          const event = navigation.emit({
+            type: 'tabPress',
+            target: targetRoute.key,
+            canPreventDefault: true,
+          });
+
+          if (!isFocused && !event.defaultPrevented) {
+            navigation.navigate(tabName);
+          }
+        };
 
         const renderTabButton = (tab: TabConfig) => {
-          const isFocused = activeNormalized === tab.name;
-
-          const onPress = () => {
-            const targetRoute = state.routes.find((r) => r.name === tab.name);
-            if (!targetRoute) return;
-
-            const event = navigation.emit({
-              type: 'tabPress',
-              target: targetRoute.key,
-              canPreventDefault: true,
-            });
-
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(tab.name);
-            }
-          };
+          const isFocused = currentRouteName === tab.name;
 
           return (
             <Pressable
               key={tab.name}
-              onPress={onPress}
+              onPress={() => navigateToTab(tab.name)}
               accessibilityRole="tab"
               accessibilityState={{ selected: isFocused }}
               style={styles.tabItem}>
@@ -88,11 +85,23 @@ export default function TabsLayout() {
                   {LEFT_TABS.map(renderTabButton)}
                 </View>
 
+                {/* Posição Central: Ícone da Home com espaço reservado para futura Logo */}
                 <View style={styles.fabCenterSlot}>
                   <FloatingActionButton
-                    onPress={() => triggerQuickAction(activeNormalized)}
-                    accessibilityLabel="Adicionar novo registro"
+                    isActive={isHomeActive}
+                    onPress={() => navigateToTab('index')}
+                    accessibilityLabel="Ir para o Início (Home)"
                   />
+                  <Text
+                    style={[
+                      styles.tabLabel,
+                      styles.centerHomeLabel,
+                      isHomeActive
+                        ? styles.tabLabelActive
+                        : styles.tabLabelInactive,
+                    ]}>
+                    Início
+                  </Text>
                 </View>
 
                 <View style={styles.tabGroup}>
@@ -104,7 +113,7 @@ export default function TabsLayout() {
         );
       }}>
       <Tabs.Screen name="index" options={{ title: 'Início' }} />
-      <Tabs.Screen name="mapa" options={{ title: 'Mapa', href: null }} />
+      <Tabs.Screen name="mapa" options={{ title: 'Mapa' }} />
       <Tabs.Screen name="rebanho" options={{ title: 'Rebanho' }} />
       <Tabs.Screen name="estoque" options={{ title: 'Estoque' }} />
       <Tabs.Screen name="maquinas" options={{ title: 'Máquinas' }} />
@@ -140,10 +149,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
   },
   fabCenterSlot: {
-    width: 68,
+    width: 74,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -28,
+    marginTop: -24,
+    gap: 2,
+  },
+  centerHomeLabel: {
+    marginTop: 1,
   },
   tabItem: {
     flex: 1,
