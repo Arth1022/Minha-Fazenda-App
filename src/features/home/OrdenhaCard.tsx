@@ -2,8 +2,8 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/ThemedText';
-import { Badge, Button, Card, SectionHeader } from '@/components/ui';
-import { AgroColors, Radius, Spacing } from '@/constants/theme';
+import { Button, Card, SectionHeader } from '@/components/ui';
+import { AgroColors, Spacing } from '@/constants/theme';
 import { PeriodoOrdenha } from '@/entities/Ordenha';
 
 export interface OrdenhaCardProps {
@@ -11,43 +11,25 @@ export interface OrdenhaCardProps {
   manhaNotificacao: string;
   tardeHorario: string;
   tardeNotificacao: string;
-  totalVolumeL: number;
-  notificationFeedback: string | null;
   onSchedulePress: (periodo?: PeriodoOrdenha) => void;
-  onTestPress?: () => void;
-  onDismissFeedback?: () => void;
+  onViewSchedulesPress: () => void;
 }
 
 /**
  * Componente de apresentação da seção de Ordenha na tela Home.
- * Reutiliza exclusivamente os componentes do Design System (Card, SectionHeader, Badge, Button, ThemedText).
  */
 export function OrdenhaCard({
   manhaHorario,
   manhaNotificacao,
   tardeHorario,
   tardeNotificacao,
-  totalVolumeL,
-  notificationFeedback,
   onSchedulePress,
-  onTestPress,
-  onDismissFeedback,
+  onViewSchedulesPress,
 }: OrdenhaCardProps) {
   return (
     <View style={styles.sectionWrapper}>
-      <SectionHeader
-        title="Ordenha"
-        size="md"
-        rightElement={
-          <Badge
-            label="15m antes + No horário"
-            variant="info"
-            icon="🔔"
-          />
-        }
-      />
+      <SectionHeader title="Ordenha" size="md" />
 
-      {/* Card Principal de Ordenha (Fiel ao Figma + Agendamento Direto) */}
       <Card variant="default" padding="three" style={styles.mainCard}>
         <View style={styles.headerRow}>
           <View style={styles.iconCircle}>
@@ -55,83 +37,64 @@ export function OrdenhaCard({
           </View>
 
           <View style={styles.summaryColumn}>
-            <ThemedText type="smallBold">Cronograma de Ordenha</ThemedText>
+            <ThemedText type="smallBold">Cronograma Diário</ThemedText>
             <ThemedText type="small" themeColor="textSecondary">
-              Toque em um turno para agendar o horário e os 2 alertas automáticos.
+              2 turnos agendados
             </ThemedText>
-          </View>
-
-          <View style={styles.volumeBox}>
-            <ThemedText style={styles.volumeLabel}>Volume</ThemedText>
-            <ThemedText style={styles.volumeValue}>{totalVolumeL}L/d</ThemedText>
           </View>
         </View>
 
-        {/* Sub-cards clicáveis de Manhã e Tarde reutilizando Card */}
-        <View style={styles.periodsGrid}>
+        <View style={styles.periodsRow}>
           <Card
             variant="mint"
             padding="two"
             onPress={() => onSchedulePress('manha')}
-            style={styles.periodCard}>
-            <View style={styles.periodTopRow}>
-              <ThemedText type="smallBold">☀️ Manhã</ThemedText>
-              <Badge label={manhaHorario} variant="success" />
+            style={styles.periodCol}>
+            <View style={styles.periodHeader}>
+              <ThemedText type="smallBold" style={styles.periodLabel}>
+                ☀️ Manhã
+              </ThemedText>
+              <ThemedText type="small" style={styles.bellText}>
+                🔔 {manhaNotificacao}
+              </ThemedText>
             </View>
-            <ThemedText type="small" style={styles.alertCaption}>
-              🔔 Alertas: {manhaNotificacao} (15m antes) e {manhaHorario} (no horário)
-            </ThemedText>
+            <ThemedText style={styles.timeDisplay}>{manhaHorario}</ThemedText>
           </Card>
 
           <Card
             variant="mint"
             padding="two"
             onPress={() => onSchedulePress('tarde')}
-            style={styles.periodCard}>
-            <View style={styles.periodTopRow}>
-              <ThemedText type="smallBold">🌅 Tarde</ThemedText>
-              <Badge label={tardeHorario} variant="success" />
+            style={styles.periodCol}>
+            <View style={styles.periodHeader}>
+              <ThemedText type="smallBold" style={styles.periodLabel}>
+                🌅 Tarde
+              </ThemedText>
+              <ThemedText type="small" style={styles.bellText}>
+                🔔 {tardeNotificacao}
+              </ThemedText>
             </View>
-            <ThemedText type="small" style={styles.alertCaption}>
-              🔔 Alertas: {tardeNotificacao} (15m antes) e {tardeHorario} (no horário)
-            </ThemedText>
+            <ThemedText style={styles.timeDisplay}>{tardeHorario}</ThemedText>
           </Card>
         </View>
 
-        <View style={styles.actionsRow}>
+        <View style={styles.buttonsRow}>
           <Button
-            label="Agendar Horário de Ordenha"
-            variant="outline"
+            label="+ Adicionar Notificação"
+            variant="primary"
             size="sm"
-            fullWidth
+            style={styles.flexBtn}
             onPress={() => onSchedulePress('manha')}
           />
-          {onTestPress ? (
-            <Button
-              label="🔔 Simular Disparo dos 2 Alertas Agora"
-              variant="secondary"
-              size="sm"
-              fullWidth
-              onPress={onTestPress}
-            />
-          ) : null}
+          <Button
+            label="Horários Agendados"
+            variant="outline"
+            size="sm"
+            style={styles.flexBtn}
+            onPress={onViewSchedulesPress}
+          />
         </View>
       </Card>
-
-      {notificationFeedback ? (
-        <Card
-          variant="selected"
-          padding="two"
-          onPress={onDismissFeedback}
-          style={styles.feedbackCard}>
-          <View style={styles.feedbackRow}>
-            <Badge label="Ativo" variant="success" dot />
-            <ThemedText type="small" style={styles.feedbackText}>
-              {notificationFeedback}
-            </ThemedText>
-          </View>
-        </Card>
-      ) : null}
     </View>
   );
 }
@@ -149,9 +112,9 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   iconCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: AgroColors.mintBg,
     borderWidth: 1,
     borderColor: AgroColors.mintBorder,
@@ -165,54 +128,41 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
-  volumeBox: {
-    backgroundColor: AgroColors.mintBg,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: AgroColors.mintBorder,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 74,
-  },
-  volumeLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: AgroColors.textSecondary,
-  },
-  volumeValue: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: AgroColors.primaryDark,
-  },
-  periodsGrid: {
+  periodsRow: {
+    flexDirection: 'row',
     gap: Spacing.two,
   },
-  periodCard: {
+  periodCol: {
+    flex: 1,
     gap: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
   },
-  periodTopRow: {
+  periodHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  alertCaption: {
+  periodLabel: {
+    fontSize: 13,
+    color: AgroColors.textPrimary,
+  },
+  bellText: {
+    fontSize: 11,
     color: AgroColors.primaryDark,
+    fontWeight: '600',
   },
-  actionsRow: {
-    gap: Spacing.two,
+  timeDisplay: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: AgroColors.primaryDark,
+    marginTop: 2,
   },
-  feedbackCard: {
-    paddingVertical: Spacing.two,
-  },
-  feedbackRow: {
+  buttonsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     gap: Spacing.two,
   },
-  feedbackText: {
+  flexBtn: {
     flex: 1,
-    color: AgroColors.primaryDark,
   },
 });

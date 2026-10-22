@@ -5,18 +5,19 @@ import { useRouter } from 'expo-router';
 import {
   ChipOption,
   ChipSelector,
-  CustomInput,
   FormModal,
+  TimeWheelPicker,
 } from '@/components/forms';
 import { ThemedText } from '@/components/ThemedText';
 import {
   Badge,
+  Button,
   Card,
   Header,
   ScreenContainer,
   SectionHeader,
 } from '@/components/ui';
-import { Spacing } from '@/constants/theme';
+import { AgroColors, Spacing } from '@/constants/theme';
 import { PeriodoOrdenha } from '@/entities/Ordenha';
 import { useQuickAction } from '@/providers/QuickActionContext';
 
@@ -37,23 +38,18 @@ export default function HomeScreen() {
     manhaNotificacao,
     tardeHorario,
     tardeNotificacao,
-    totalVolumeL,
     modalVisible,
+    schedulesModalVisible,
     periodo,
     horarioPrevisto,
-    previewHorarioNotificacao,
-    volumeLitros,
-    errors,
     saving,
-    notificationFeedback,
     setHorarioPrevisto,
-    setVolumeLitros,
     selectPeriodoInForm,
     openOrdenhaModal,
     closeOrdenhaModal,
+    openSchedulesModal,
+    closeSchedulesModal,
     handleSaveOrdenha,
-    handleTestNotifications,
-    dismissFeedback,
   } = useHomeOrdenha();
 
   useEffect(() => {
@@ -69,20 +65,15 @@ export default function HomeScreen() {
         rightElement={<Badge label="Fazenda Recanto Verde" variant="success" dot />}
       />
 
-      {/* Seção de Ordenha com Cards e Agendamento Direto */}
       <OrdenhaCard
         manhaHorario={manhaHorario}
         manhaNotificacao={manhaNotificacao}
         tardeHorario={tardeHorario}
         tardeNotificacao={tardeNotificacao}
-        totalVolumeL={totalVolumeL}
-        notificationFeedback={notificationFeedback}
         onSchedulePress={openOrdenhaModal}
-        onTestPress={handleTestNotifications}
-        onDismissFeedback={dismissFeedback}
+        onViewSchedulesPress={openSchedulesModal}
       />
 
-      {/* Acesso Rápido ao Mapeamento & Áreas (Mantendo estrutura base simples para expansão futura) */}
       <View style={styles.sectionBlock}>
         <SectionHeader
           title="Mapeamento & Áreas"
@@ -108,38 +99,99 @@ export default function HomeScreen() {
         </Card>
       </View>
 
-      {/* Modal Reutilizável para Agendamento de Ordenha e Notificação (15 min antes) */}
+      {/* Modal de Agendamento com Seletor de Horário Nativo */}
       <FormModal
         visible={modalVisible}
         title="Agendar Ordenha"
-        submitLabel="Salvar e Agendar Alerta"
+        submitLabel="Salvar"
         loading={saving}
         onClose={closeOrdenhaModal}
         onSubmit={handleSaveOrdenha}>
         <ChipSelector
-          label="Período da Ordenha"
+          label="Turno"
           options={PERIODO_OPTIONS}
           value={periodo}
           onChange={selectPeriodoInForm}
         />
 
-        <CustomInput
-          label="Horário Agendado (HH:MM)"
-          placeholder="Ex.: 05:30 ou 17:00"
+        <TimeWheelPicker
           value={horarioPrevisto}
-          onChangeText={setHorarioPrevisto}
-          error={errors.horarioPrevisto}
-          helperText={`🔔 Serão disparados 2 alertas: às ${previewHorarioNotificacao} (15 min antes) e às ${horarioPrevisto.trim() || '--:--'} (no horário exato).`}
+          onChange={setHorarioPrevisto}
         />
+      </FormModal>
 
-        <CustomInput
-          label="Volume Estimado / Produzido (Litros)"
-          placeholder="Ex.: 225"
-          keyboardType="numeric"
-          value={volumeLitros}
-          onChangeText={setVolumeLitros}
-          error={errors.volumeLitros}
-        />
+      {/* Modal de Horários Agendados */}
+      <FormModal
+        visible={schedulesModalVisible}
+        title="Horários Agendados"
+        submitLabel="Adicionar / Editar"
+        cancelLabel="Fechar"
+        onClose={closeSchedulesModal}
+        onSubmit={() => {
+          closeSchedulesModal();
+          openOrdenhaModal('manha');
+        }}>
+        <View style={styles.schedulesList}>
+          <Card
+            variant="mint"
+            padding="three"
+            onPress={() => {
+              closeSchedulesModal();
+              openOrdenhaModal('manha');
+            }}>
+            <View style={styles.scheduleItemHeader}>
+              <View style={styles.scheduleTitleGroup}>
+                <ThemedText type="smallBold">☀️ Manhã</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  Alerta prévio às {manhaNotificacao}
+                </ThemedText>
+              </View>
+              <ThemedText style={styles.scheduleBigTime}>
+                {manhaHorario}
+              </ThemedText>
+            </View>
+            <Button
+              label="Editar"
+              variant="outline"
+              size="sm"
+              fullWidth
+              onPress={() => {
+                closeSchedulesModal();
+                openOrdenhaModal('manha');
+              }}
+            />
+          </Card>
+
+          <Card
+            variant="mint"
+            padding="three"
+            onPress={() => {
+              closeSchedulesModal();
+              openOrdenhaModal('tarde');
+            }}>
+            <View style={styles.scheduleItemHeader}>
+              <View style={styles.scheduleTitleGroup}>
+                <ThemedText type="smallBold">🌅 Tarde</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  Alerta prévio às {tardeNotificacao}
+                </ThemedText>
+              </View>
+              <ThemedText style={styles.scheduleBigTime}>
+                {tardeHorario}
+              </ThemedText>
+            </View>
+            <Button
+              label="Editar"
+              variant="outline"
+              size="sm"
+              fullWidth
+              onPress={() => {
+                closeSchedulesModal();
+                openOrdenhaModal('tarde');
+              }}
+            />
+          </Card>
+        </View>
       </FormModal>
     </ScreenContainer>
   );
@@ -158,5 +210,21 @@ const styles = StyleSheet.create({
   mapShortcutInfo: {
     flex: 1,
     gap: 2,
+  },
+  schedulesList: {
+    gap: Spacing.md,
+  },
+  scheduleItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  scheduleTitleGroup: {
+    gap: 2,
+  },
+  scheduleBigTime: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: AgroColors.primaryDark,
   },
 });
