@@ -3,6 +3,7 @@ import Animal from '@/entities/Animal';
 import Ordenha from '@/entities/Ordenha';
 import Tratamento from '@/entities/Tratamento';
 import { animalRepository, CreateAnimalDTO } from './AnimalRepository';
+import { coberturaRepository, CreateCoberturaDTO } from './CoberturaRepository';
 import { CreateOrdenhaDTO, ordenhaRepository } from './OrdenhaRepository';
 import { CreateTratamentoDTO, tratamentoRepository } from './TratamentoRepository';
 
@@ -30,6 +31,10 @@ export function useRebanho() {
 
   const createAnimal = async (dto: CreateAnimalDTO) => {
     return await animalRepository.createAnimal(dto);
+  };
+
+  const createCobertura = async (dto: CreateCoberturaDTO) => {
+    return await coberturaRepository.createCobertura(dto);
   };
 
   const createTratamento = async (dto: CreateTratamentoDTO) => {
@@ -60,6 +65,7 @@ export function useRebanho() {
     ordenhas,
     totalVolumeL,
     createAnimal,
+    createCobertura,
     createTratamento,
     createOrdenha,
     toggleDiaTratamento,

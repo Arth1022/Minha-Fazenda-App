@@ -21,12 +21,8 @@ export function AnimalCard({
   selected = false,
   onPress,
 }: AnimalCardProps) {
-  const displayTitle =
-    animal.nome && !animal.nome.startsWith('Brinco') && animal.brinco === '#103'
-      ? animal.nome
-      : animal.brinco.startsWith('Brinco')
-      ? animal.brinco
-      : `Brinco ${animal.brinco}`;
+  // Sem nome informado, o cadastro já grava "Brinco #xxx" como nome
+  const displayTitle = animal.nome || `Brinco ${animal.brinco}`;
 
   return (
     <Card
