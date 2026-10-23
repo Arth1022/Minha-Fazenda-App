@@ -1,22 +1,24 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import {
   ChipOption,
   ChipSelector,
-  CustomInput,
   FormModal,
+  TimeWheelPicker,
 } from '@/components/forms';
 import { ThemedText } from '@/components/ThemedText';
 import {
+  AppIcon,
   Badge,
+  Button,
   Card,
   Header,
   ScreenContainer,
   SectionHeader,
 } from '@/components/ui';
-import { Spacing } from '@/constants/theme';
+import { Radius, Shadows, Spacing } from '@/constants/theme';
 import { PeriodoOrdenha } from '@/entities/Ordenha';
 import { useQuickAction } from '@/providers/QuickActionContext';
 
@@ -24,8 +26,39 @@ import { OrdenhaCard } from './OrdenhaCard';
 import { useHomeOrdenha } from './useHomeOrdenha';
 
 const PERIODO_OPTIONS: ChipOption<PeriodoOrdenha>[] = [
-  { value: 'manha', label: 'Manhã', icon: '☀️' },
-  { value: 'tarde', label: 'Tarde', icon: '🌅' },
+  {
+    value: 'manha',
+    label: 'Manhã',
+    renderIcon: (selected) => (
+      <AppIcon
+        name="sun"
+        size={16}
+        color={selected ? '#15803D' : '#D97706'}
+      />
+    ),
+  },
+  {
+    value: 'tarde',
+    label: 'Tarde',
+    renderIcon: (selected) => (
+      <AppIcon
+        name="sunset"
+        size={16}
+        color={selected ? '#15803D' : '#EA580C'}
+      />
+    ),
+  },
+  {
+    value: 'noite',
+    label: 'Noite',
+    renderIcon: (selected) => (
+      <AppIcon
+        name="moon"
+        size={16}
+        color={selected ? '#15803D' : '#6366F1'}
+      />
+    ),
+  },
 ];
 
 export default function HomeScreen() {
@@ -37,23 +70,20 @@ export default function HomeScreen() {
     manhaNotificacao,
     tardeHorario,
     tardeNotificacao,
-    totalVolumeL,
+    noiteHorario,
+    noiteNotificacao,
     modalVisible,
+    schedulesModalVisible,
     periodo,
     horarioPrevisto,
-    previewHorarioNotificacao,
-    volumeLitros,
-    errors,
     saving,
-    notificationFeedback,
     setHorarioPrevisto,
-    setVolumeLitros,
     selectPeriodoInForm,
     openOrdenhaModal,
     closeOrdenhaModal,
+    openSchedulesModal,
+    closeSchedulesModal,
     handleSaveOrdenha,
-    handleTestNotifications,
-    dismissFeedback,
   } = useHomeOrdenha();
 
   useEffect(() => {
@@ -69,20 +99,19 @@ export default function HomeScreen() {
         rightElement={<Badge label="Fazenda Recanto Verde" variant="success" dot />}
       />
 
-      {/* Seção de Ordenha com Cards e Agendamento Direto */}
+      {/* Card de Ordenha Pixel Perfect (Manhã, Tarde, Noite - Estilo Figma) */}
       <OrdenhaCard
         manhaHorario={manhaHorario}
         manhaNotificacao={manhaNotificacao}
         tardeHorario={tardeHorario}
         tardeNotificacao={tardeNotificacao}
-        totalVolumeL={totalVolumeL}
-        notificationFeedback={notificationFeedback}
+        noiteHorario={noiteHorario}
+        noiteNotificacao={noiteNotificacao}
         onSchedulePress={openOrdenhaModal}
-        onTestPress={handleTestNotifications}
-        onDismissFeedback={dismissFeedback}
+        onViewSchedulesPress={openSchedulesModal}
       />
 
-      {/* Acesso Rápido ao Mapeamento & Áreas (Mantendo estrutura base simples para expansão futura) */}
+      {/* Acesso Rápido ao Mapeamento & Áreas */}
       <View style={styles.sectionBlock}>
         <SectionHeader
           title="Mapeamento & Áreas"
@@ -108,38 +137,134 @@ export default function HomeScreen() {
         </Card>
       </View>
 
-      {/* Modal Reutilizável para Agendamento de Ordenha e Notificação (15 min antes) */}
+      {/* Modal 1: Agendar Horário de Ordenha (Estilo Figma) */}
       <FormModal
         visible={modalVisible}
-        title="Agendar Ordenha"
-        submitLabel="Salvar e Agendar Alerta"
+        title="Agendar Horário de Ordenha"
+        subtitle="Defina o horário do turno selecionado"
+        submitLabel="Salvar Horário"
         loading={saving}
         onClose={closeOrdenhaModal}
         onSubmit={handleSaveOrdenha}>
         <ChipSelector
-          label="Período da Ordenha"
+          label="Turno da Ordenha"
           options={PERIODO_OPTIONS}
           value={periodo}
           onChange={selectPeriodoInForm}
         />
 
-        <CustomInput
-          label="Horário Agendado (HH:MM)"
-          placeholder="Ex.: 05:30 ou 17:00"
+        <TimeWheelPicker
           value={horarioPrevisto}
-          onChangeText={setHorarioPrevisto}
-          error={errors.horarioPrevisto}
-          helperText={`🔔 Serão disparados 2 alertas: às ${previewHorarioNotificacao} (15 min antes) e às ${horarioPrevisto.trim() || '--:--'} (no horário exato).`}
+          onChange={setHorarioPrevisto}
         />
+      </FormModal>
 
-        <CustomInput
-          label="Volume Estimado / Produzido (Litros)"
-          placeholder="Ex.: 225"
-          keyboardType="numeric"
-          value={volumeLitros}
-          onChangeText={setVolumeLitros}
-          error={errors.volumeLitros}
-        />
+      {/* Modal 2: Visualização dos Horários Agendados (Padronizado ao Estilo Figma) */}
+      <FormModal
+        visible={schedulesModalVisible}
+        title="Horários de Ordenha"
+        subtitle="Turnos agendados e alertas ativos"
+        submitLabel="+ Novo / Editar Horário"
+        cancelLabel="Fechar"
+        onClose={closeSchedulesModal}
+        onSubmit={() => {
+          closeSchedulesModal();
+          openOrdenhaModal('manha');
+        }}>
+        <View style={styles.figmaSchedulesCard}>
+          <Text style={styles.figmaCardHeader}>Turnos Configurados</Text>
+
+          {/* Turno Manhã */}
+          <View style={styles.scheduleRow}>
+            <View style={styles.scheduleRowLeft}>
+              <View style={styles.iconBox}>
+                <AppIcon name="sun" size={20} color="#D97706" />
+              </View>
+              <View style={styles.periodCol}>
+                <Text style={styles.periodLabel}>Manhã</Text>
+                <Text style={styles.timeValue}>{manhaHorario}</Text>
+              </View>
+            </View>
+
+            <View style={styles.scheduleRowRight}>
+              <View style={styles.notifCol}>
+                <Text style={styles.notifLabel}>Notificação</Text>
+                <Text style={styles.notifTime}>{manhaNotificacao}</Text>
+              </View>
+              <Button
+                label="Editar"
+                variant="outline"
+                size="sm"
+                onPress={() => {
+                  closeSchedulesModal();
+                  openOrdenhaModal('manha');
+                }}
+              />
+            </View>
+          </View>
+
+          <View style={styles.divider} />
+
+          {/* Turno Tarde */}
+          <View style={styles.scheduleRow}>
+            <View style={styles.scheduleRowLeft}>
+              <View style={styles.iconBox}>
+                <AppIcon name="sunset" size={20} color="#EA580C" />
+              </View>
+              <View style={styles.periodCol}>
+                <Text style={styles.periodLabel}>Tarde</Text>
+                <Text style={styles.timeValue}>{tardeHorario}</Text>
+              </View>
+            </View>
+
+            <View style={styles.scheduleRowRight}>
+              <View style={styles.notifCol}>
+                <Text style={styles.notifLabel}>Notificação</Text>
+                <Text style={styles.notifTime}>{tardeNotificacao}</Text>
+              </View>
+              <Button
+                label="Editar"
+                variant="outline"
+                size="sm"
+                onPress={() => {
+                  closeSchedulesModal();
+                  openOrdenhaModal('tarde');
+                }}
+              />
+            </View>
+          </View>
+
+          <View style={styles.divider} />
+
+          {/* Turno Noite */}
+          <View style={styles.scheduleRow}>
+            <View style={styles.scheduleRowLeft}>
+              <View style={styles.iconBox}>
+                <AppIcon name="moon" size={20} color="#6366F1" />
+              </View>
+              <View style={styles.periodCol}>
+                <Text style={styles.periodLabel}>Noite</Text>
+                <Text style={styles.timeValue}>{noiteHorario}</Text>
+              </View>
+            </View>
+
+            <View style={styles.scheduleRowRight}>
+              <View style={styles.notifCol}>
+                <Text style={styles.notifLabel}>Notificação</Text>
+                <Text style={styles.notifTime}>{noiteNotificacao}</Text>
+              </View>
+              <Button
+                label="Editar"
+                variant="outline"
+                size="sm"
+                onPress={() => {
+                  closeSchedulesModal();
+                  openOrdenhaModal('noite');
+                }}
+              />
+            </View>
+          </View>
+        </View>
       </FormModal>
     </ScreenContainer>
   );
@@ -158,5 +283,74 @@ const styles = StyleSheet.create({
   mapShortcutInfo: {
     flex: 1,
     gap: 2,
+  },
+  figmaSchedulesCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 14,
+    ...Shadows.sm,
+  },
+  figmaCardHeader: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#475569',
+    marginBottom: 10,
+  },
+  scheduleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+  },
+  scheduleRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  iconBox: {
+    width: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  periodCol: {
+    gap: 1,
+  },
+  periodLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#64748B',
+  },
+  timeValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  scheduleRowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  notifCol: {
+    alignItems: 'flex-end',
+    gap: 1,
+  },
+  notifLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#64748B',
+  },
+  notifTime: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 2,
   },
 });

@@ -8,29 +8,20 @@ import {
   configureOrdenhaNotifications,
   isValidTimeFormat,
   scheduleOrdenhaReminder,
-  triggerTestOrdenhaNotifications,
 } from './ordenhaNotificationService';
 
-export interface OrdenhaFormErrors {
-  horarioPrevisto?: string;
-  volumeLitros?: string;
-}
-
 const DEFAULT_HORARIO_MANHA = '05:30';
-const DEFAULT_HORARIO_TARDE = '17:00';
+const DEFAULT_HORARIO_TARDE = '13:30';
+const DEFAULT_HORARIO_NOITE = '21:00';
 
 export function useHomeOrdenha() {
   const [ordenhas, setOrdenhas] = useState<Ordenha[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
+  const [schedulesModalVisible, setSchedulesModalVisible] = useState(false);
 
   const [periodo, setPeriodo] = useState<PeriodoOrdenha>('manha');
   const [horarioPrevisto, setHorarioPrevisto] = useState(DEFAULT_HORARIO_MANHA);
-  const [volumeLitros, setVolumeLitros] = useState('');
-  const [errors, setErrors] = useState<OrdenhaFormErrors>({});
   const [saving, setSaving] = useState(false);
-  const [notificationFeedback, setNotificationFeedback] = useState<string | null>(
-    null
-  );
 
   useEffect(() => {
     configureOrdenhaNotifications();
@@ -45,6 +36,11 @@ export function useHomeOrdenha() {
 
   const ordenhaTarde = useMemo(() => {
     const list = ordenhas.filter((o) => o.periodo === 'tarde');
+    return list[list.length - 1] ?? null;
+  }, [ordenhas]);
+
+  const ordenhaNoite = useMemo(() => {
+    const list = ordenhas.filter((o) => o.periodo === 'noite');
     return list[list.length - 1] ?? null;
   }, [ordenhas]);
 
@@ -64,42 +60,39 @@ export function useHomeOrdenha() {
       return ordenhaTarde.horarioNotificacao;
     }
     return (
-      calculateNotificationTime(tardeHorario)?.horarioNotificacao ?? '16:45'
+      calculateNotificationTime(tardeHorario)?.horarioNotificacao ?? '13:15'
     );
   }, [ordenhaTarde, tardeHorario]);
 
-  const totalVolumeL = useMemo(() => {
-    if (ordenhas.length === 0) return 450;
-    const sum = ordenhas.reduce((acc, o) => acc + (o.volumeLitros || 0), 0);
-    return sum > 0 ? sum : 450;
-  }, [ordenhas]);
-
-  const previewHorarioNotificacao = useMemo(() => {
+  const noiteHorario = ordenhaNoite?.horarioPrevisto || DEFAULT_HORARIO_NOITE;
+  const noiteNotificacao = useMemo(() => {
+    if (ordenhaNoite?.horarioNotificacao) {
+      return ordenhaNoite.horarioNotificacao;
+    }
     return (
-      calculateNotificationTime(horarioPrevisto)?.horarioNotificacao ?? '--:--'
+      calculateNotificationTime(noiteHorario)?.horarioNotificacao ?? '20:45'
     );
-  }, [horarioPrevisto]);
+  }, [ordenhaNoite, noiteHorario]);
 
   const selectPeriodoInForm = useCallback(
     (targetPeriodo: PeriodoOrdenha) => {
       setPeriodo(targetPeriodo);
-      setErrors({});
 
       if (targetPeriodo === 'manha') {
-        const current = ordenhaManha?.horarioPrevisto || DEFAULT_HORARIO_MANHA;
-        setHorarioPrevisto(current);
-        setVolumeLitros(
-          ordenhaManha?.volumeLitros ? String(ordenhaManha.volumeLitros) : ''
+        setHorarioPrevisto(
+          ordenhaManha?.horarioPrevisto || DEFAULT_HORARIO_MANHA
+        );
+      } else if (targetPeriodo === 'tarde') {
+        setHorarioPrevisto(
+          ordenhaTarde?.horarioPrevisto || DEFAULT_HORARIO_TARDE
         );
       } else {
-        const current = ordenhaTarde?.horarioPrevisto || DEFAULT_HORARIO_TARDE;
-        setHorarioPrevisto(current);
-        setVolumeLitros(
-          ordenhaTarde?.volumeLitros ? String(ordenhaTarde.volumeLitros) : ''
+        setHorarioPrevisto(
+          ordenhaNoite?.horarioPrevisto || DEFAULT_HORARIO_NOITE
         );
       }
     },
-    [ordenhaManha, ordenhaTarde]
+    [ordenhaManha, ordenhaTarde, ordenhaNoite]
   );
 
   const openOrdenhaModal = useCallback(
@@ -112,27 +105,11 @@ export function useHomeOrdenha() {
 
   const closeOrdenhaModal = useCallback(() => {
     setModalVisible(false);
-    setErrors({});
   }, []);
 
   const handleSaveOrdenha = useCallback(async () => {
-    const newErrors: OrdenhaFormErrors = {};
     const trimmedTime = horarioPrevisto.trim();
-
     if (!isValidTimeFormat(trimmedTime)) {
-      newErrors.horarioPrevisto =
-        'Informe um horário válido no formato HH:MM (ex.: 05:30 ou 17:00).';
-    }
-
-    const parsedVolume = volumeLitros.trim()
-      ? Number(volumeLitros.replace(',', '.'))
-      : 0;
-    if (Number.isNaN(parsedVolume) || parsedVolume < 0) {
-      newErrors.volumeLitros = 'Informe um volume válido em litros.';
-    }
-
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
       return;
     }
 
@@ -141,15 +118,18 @@ export function useHomeOrdenha() {
 
     setSaving(true);
     try {
-      const existing = periodo === 'manha' ? ordenhaManha : ordenhaTarde;
+      const existing =
+        periodo === 'manha'
+          ? ordenhaManha
+          : periodo === 'tarde'
+          ? ordenhaTarde
+          : ordenhaNoite;
 
       if (existing) {
         await ordenhaRepository.updateOrdenha(existing.id, {
           periodo,
           horarioPrevisto: trimmedTime,
           horarioNotificacao: calculatedAlertTime,
-          volumeLitros:
-            parsedVolume > 0 ? parsedVolume : existing.volumeLitros ?? 0,
           dataRegistro: new Date(),
         });
       } else {
@@ -157,86 +137,39 @@ export function useHomeOrdenha() {
           periodo,
           horarioPrevisto: trimmedTime,
           horarioNotificacao: calculatedAlertTime,
-          volumeLitros: parsedVolume,
           dataRegistro: new Date(),
         });
       }
 
-      const scheduleResult = await scheduleOrdenhaReminder(
-        periodo,
-        trimmedTime
-      );
-
-      const periodoLabel = periodo === 'manha' ? 'Manhã' : 'Tarde';
-      if (scheduleResult.scheduled) {
-        setNotificationFeedback(
-          `Alertas da ${periodoLabel} agendados: às ${scheduleResult.horarioNotificacao} (15 min antes) e às ${trimmedTime} (horário exato).`
-        );
-      } else {
-        setNotificationFeedback(
-          `Horário da ${periodoLabel} salvo: alertas configurados para ${scheduleResult.horarioNotificacao} (15m antes) e ${trimmedTime} (no horário).`
-        );
-      }
-
+      await scheduleOrdenhaReminder(periodo, trimmedTime);
       setModalVisible(false);
     } finally {
       setSaving(false);
     }
-  }, [
-    horarioPrevisto,
-    volumeLitros,
-    periodo,
-    ordenhaManha,
-    ordenhaTarde,
-  ]);
-
-  const handleTestNotifications = useCallback(async () => {
-    const sent = await triggerTestOrdenhaNotifications('manha', manhaHorario);
-    if (sent) {
-      setNotificationFeedback(
-        `Disparo de teste iniciado! Você receberá o 1º alerta (15m antes) em 2s e o 2º alerta (horário exato) em 6s.`
-      );
-    } else {
-      setNotificationFeedback(
-        `Verifique se a permissão de notificações está ativa no emulador/dispositivo para testar os alertas.`
-      );
-    }
-  }, [manhaHorario]);
+  }, [horarioPrevisto, periodo, ordenhaManha, ordenhaTarde, ordenhaNoite]);
 
   return {
     ordenhas,
     ordenhaManha,
     ordenhaTarde,
+    ordenhaNoite,
     manhaHorario,
     manhaNotificacao,
     tardeHorario,
     tardeNotificacao,
-    totalVolumeL,
+    noiteHorario,
+    noiteNotificacao,
     modalVisible,
+    schedulesModalVisible,
     periodo,
     horarioPrevisto,
-    previewHorarioNotificacao,
-    volumeLitros,
-    errors,
     saving,
-    notificationFeedback,
-    setHorarioPrevisto: (value: string) => {
-      setHorarioPrevisto(value);
-      if (errors.horarioPrevisto) {
-        setErrors((prev) => ({ ...prev, horarioPrevisto: undefined }));
-      }
-    },
-    setVolumeLitros: (value: string) => {
-      setVolumeLitros(value);
-      if (errors.volumeLitros) {
-        setErrors((prev) => ({ ...prev, volumeLitros: undefined }));
-      }
-    },
+    setHorarioPrevisto,
     selectPeriodoInForm,
     openOrdenhaModal,
     closeOrdenhaModal,
+    openSchedulesModal: () => setSchedulesModalVisible(true),
+    closeSchedulesModal: () => setSchedulesModalVisible(false),
     handleSaveOrdenha,
-    handleTestNotifications,
-    dismissFeedback: () => setNotificationFeedback(null),
   };
 }

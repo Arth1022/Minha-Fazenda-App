@@ -1,9 +1,8 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { ThemedText } from '@/components/ThemedText';
-import { Badge, Button, Card, SectionHeader } from '@/components/ui';
-import { AgroColors, Radius, Spacing } from '@/constants/theme';
+import { AppIcon, Button } from '@/components/ui';
+import { Radius, Shadows } from '@/constants/theme';
 import { PeriodoOrdenha } from '@/entities/Ordenha';
 
 export interface OrdenhaCardProps {
@@ -11,208 +10,204 @@ export interface OrdenhaCardProps {
   manhaNotificacao: string;
   tardeHorario: string;
   tardeNotificacao: string;
-  totalVolumeL: number;
-  notificationFeedback: string | null;
+  noiteHorario: string;
+  noiteNotificacao: string;
   onSchedulePress: (periodo?: PeriodoOrdenha) => void;
-  onTestPress?: () => void;
-  onDismissFeedback?: () => void;
+  onViewSchedulesPress: () => void;
 }
 
 /**
- * Componente de apresentação da seção de Ordenha na tela Home.
- * Reutiliza exclusivamente os componentes do Design System (Card, SectionHeader, Badge, Button, ThemedText).
+ * Card de Ordenha Pixel Perfect padronizado com o Figma e AppIcon (Feather SVG).
+ * Exibe os turnos Manhã, Tarde e Noite com seus respectivos horários e alertas em verde.
  */
 export function OrdenhaCard({
   manhaHorario,
   manhaNotificacao,
   tardeHorario,
   tardeNotificacao,
-  totalVolumeL,
-  notificationFeedback,
+  noiteHorario,
+  noiteNotificacao,
   onSchedulePress,
-  onTestPress,
-  onDismissFeedback,
+  onViewSchedulesPress,
 }: OrdenhaCardProps) {
   return (
-    <View style={styles.sectionWrapper}>
-      <SectionHeader
-        title="Ordenha"
-        size="md"
-        rightElement={
-          <Badge
-            label="15m antes + No horário"
-            variant="info"
-            icon="🔔"
-          />
-        }
-      />
+    <View style={styles.container}>
+      {/* Título da Seção */}
+      <Text style={styles.sectionTitle}>Ordenha</Text>
 
-      {/* Card Principal de Ordenha (Fiel ao Figma + Agendamento Direto) */}
-      <Card variant="default" padding="three" style={styles.mainCard}>
-        <View style={styles.headerRow}>
-          <View style={styles.iconCircle}>
-            <ThemedText style={styles.cowEmoji}>🐄</ThemedText>
-          </View>
+      {/* Card Principal Idêntico ao Figma */}
+      <View style={styles.card}>
+        <Text style={styles.cardHeaderTitle}>Horários de Ordenha</Text>
 
-          <View style={styles.summaryColumn}>
-            <ThemedText type="smallBold">Cronograma de Ordenha</ThemedText>
-            <ThemedText type="small" themeColor="textSecondary">
-              Toque em um turno para agendar o horário e os 2 alertas automáticos.
-            </ThemedText>
-          </View>
-
-          <View style={styles.volumeBox}>
-            <ThemedText style={styles.volumeLabel}>Volume</ThemedText>
-            <ThemedText style={styles.volumeValue}>{totalVolumeL}L/d</ThemedText>
-          </View>
-        </View>
-
-        {/* Sub-cards clicáveis de Manhã e Tarde reutilizando Card */}
-        <View style={styles.periodsGrid}>
-          <Card
-            variant="mint"
-            padding="two"
-            onPress={() => onSchedulePress('manha')}
-            style={styles.periodCard}>
-            <View style={styles.periodTopRow}>
-              <ThemedText type="smallBold">☀️ Manhã</ThemedText>
-              <Badge label={manhaHorario} variant="success" />
+        {/* Linha 1: Manhã */}
+        <Pressable
+          onPress={() => onSchedulePress('manha')}
+          style={({ pressed }) => [styles.rowItem, pressed && styles.rowPressed]}>
+          <View style={styles.leftGroup}>
+            <View style={styles.iconContainer}>
+              <AppIcon name="sun" size={20} color="#D97706" />
             </View>
-            <ThemedText type="small" style={styles.alertCaption}>
-              🔔 Alertas: {manhaNotificacao} (15m antes) e {manhaHorario} (no horário)
-            </ThemedText>
-          </Card>
-
-          <Card
-            variant="mint"
-            padding="two"
-            onPress={() => onSchedulePress('tarde')}
-            style={styles.periodCard}>
-            <View style={styles.periodTopRow}>
-              <ThemedText type="smallBold">🌅 Tarde</ThemedText>
-              <Badge label={tardeHorario} variant="success" />
+            <View style={styles.periodCol}>
+              <Text style={styles.periodLabel}>Manhã</Text>
+              <Text style={styles.timeValue}>{manhaHorario}</Text>
             </View>
-            <ThemedText type="small" style={styles.alertCaption}>
-              🔔 Alertas: {tardeNotificacao} (15m antes) e {tardeHorario} (no horário)
-            </ThemedText>
-          </Card>
-        </View>
-
-        <View style={styles.actionsRow}>
-          <Button
-            label="Agendar Horário de Ordenha"
-            variant="outline"
-            size="sm"
-            fullWidth
-            onPress={() => onSchedulePress('manha')}
-          />
-          {onTestPress ? (
-            <Button
-              label="🔔 Simular Disparo dos 2 Alertas Agora"
-              variant="secondary"
-              size="sm"
-              fullWidth
-              onPress={onTestPress}
-            />
-          ) : null}
-        </View>
-      </Card>
-
-      {notificationFeedback ? (
-        <Card
-          variant="selected"
-          padding="two"
-          onPress={onDismissFeedback}
-          style={styles.feedbackCard}>
-          <View style={styles.feedbackRow}>
-            <Badge label="Ativo" variant="success" dot />
-            <ThemedText type="small" style={styles.feedbackText}>
-              {notificationFeedback}
-            </ThemedText>
           </View>
-        </Card>
-      ) : null}
+
+          <View style={styles.rightGroup}>
+            <Text style={styles.notifLabel}>Notificação</Text>
+            <Text style={styles.notifTime}>{manhaNotificacao}</Text>
+          </View>
+        </Pressable>
+
+        <View style={styles.divider} />
+
+        {/* Linha 2: Tarde */}
+        <Pressable
+          onPress={() => onSchedulePress('tarde')}
+          style={({ pressed }) => [styles.rowItem, pressed && styles.rowPressed]}>
+          <View style={styles.leftGroup}>
+            <View style={styles.iconContainer}>
+              <AppIcon name="sunset" size={20} color="#EA580C" />
+            </View>
+            <View style={styles.periodCol}>
+              <Text style={styles.periodLabel}>Tarde</Text>
+              <Text style={styles.timeValue}>{tardeHorario}</Text>
+            </View>
+          </View>
+
+          <View style={styles.rightGroup}>
+            <Text style={styles.notifLabel}>Notificação</Text>
+            <Text style={styles.notifTime}>{tardeNotificacao}</Text>
+          </View>
+        </Pressable>
+
+        <View style={styles.divider} />
+
+        {/* Linha 3: Noite */}
+        <Pressable
+          onPress={() => onSchedulePress('noite')}
+          style={({ pressed }) => [styles.rowItem, pressed && styles.rowPressed]}>
+          <View style={styles.leftGroup}>
+            <View style={styles.iconContainer}>
+              <AppIcon name="moon" size={20} color="#6366F1" />
+            </View>
+            <View style={styles.periodCol}>
+              <Text style={styles.periodLabel}>Noite</Text>
+              <Text style={styles.timeValue}>{noiteHorario}</Text>
+            </View>
+          </View>
+
+          <View style={styles.rightGroup}>
+            <Text style={styles.notifLabel}>Notificação</Text>
+            <Text style={styles.notifTime}>{noiteNotificacao}</Text>
+          </View>
+        </Pressable>
+      </View>
+
+      {/* Ações de Agendamento e Consulta no Design System do Figma */}
+      <View style={styles.actionsRow}>
+        <Button
+          label="+ Agendar Notificação"
+          variant="primary"
+          size="sm"
+          style={styles.actionBtn}
+          onPress={() => onSchedulePress('manha')}
+        />
+        <Button
+          label="Ver Horários Agendados"
+          variant="secondary"
+          size="sm"
+          style={styles.actionBtn}
+          onPress={onViewSchedulesPress}
+        />
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  sectionWrapper: {
-    gap: Spacing.two,
+  container: {
+    gap: 12,
   },
-  mainCard: {
-    gap: Spacing.md,
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F172A',
+    letterSpacing: -0.2,
   },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-  },
-  iconCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: AgroColors.mintBg,
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: AgroColors.mintBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 16,
+    ...Shadows.sm,
   },
-  cowEmoji: {
-    fontSize: 22,
-  },
-  summaryColumn: {
-    flex: 1,
-    gap: 2,
-  },
-  volumeBox: {
-    backgroundColor: AgroColors.mintBg,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: AgroColors.mintBorder,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 74,
-  },
-  volumeLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: AgroColors.textSecondary,
-  },
-  volumeValue: {
+  cardHeaderTitle: {
     fontSize: 15,
-    fontWeight: '800',
-    color: AgroColors.primaryDark,
+    fontWeight: '600',
+    color: '#475569',
+    marginBottom: 12,
   },
-  periodsGrid: {
-    gap: Spacing.two,
-  },
-  periodCard: {
-    gap: 4,
-  },
-  periodTopRow: {
+  rowItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingVertical: 10,
   },
-  alertCaption: {
-    color: AgroColors.primaryDark,
+  rowPressed: {
+    opacity: 0.75,
   },
-  actionsRow: {
-    gap: Spacing.two,
-  },
-  feedbackCard: {
-    paddingVertical: Spacing.two,
-  },
-  feedbackRow: {
+  leftGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.two,
+    gap: 14,
   },
-  feedbackText: {
+  iconContainer: {
+    width: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  periodCol: {
+    gap: 1,
+  },
+  periodLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#64748B',
+  },
+  timeValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  rightGroup: {
+    alignItems: 'flex-end',
+    gap: 2,
+  },
+  notifLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#64748B',
+  },
+  notifTime: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 2,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 2,
+  },
+  actionBtn: {
     flex: 1,
-    color: AgroColors.primaryDark,
   },
 });

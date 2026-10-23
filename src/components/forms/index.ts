@@ -9,3 +9,4 @@ export {
   AutocompleteInput,
   type AutocompleteInputProps,
 } from './AutocompleteInput';
+export { TimeWheelPicker, type TimeWheelPickerProps } from './TimeWheelPicker';

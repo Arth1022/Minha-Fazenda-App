@@ -1,7 +1,7 @@
 import { Model } from '@nozbe/watermelondb';
 import { field, date, readonly } from '@nozbe/watermelondb/decorators';
 
-export type PeriodoOrdenha = 'manha' | 'tarde';
+export type PeriodoOrdenha = 'manha' | 'tarde' | 'noite';
 
 export default class Ordenha extends Model {
   static table = 'ordenhas';
