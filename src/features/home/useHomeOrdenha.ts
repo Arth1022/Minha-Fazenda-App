@@ -11,7 +11,8 @@ import {
 } from './ordenhaNotificationService';
 
 const DEFAULT_HORARIO_MANHA = '05:30';
-const DEFAULT_HORARIO_TARDE = '17:00';
+const DEFAULT_HORARIO_TARDE = '13:30';
+const DEFAULT_HORARIO_NOITE = '21:00';
 
 export function useHomeOrdenha() {
   const [ordenhas, setOrdenhas] = useState<Ordenha[]>([]);
@@ -21,9 +22,6 @@ export function useHomeOrdenha() {
   const [periodo, setPeriodo] = useState<PeriodoOrdenha>('manha');
   const [horarioPrevisto, setHorarioPrevisto] = useState(DEFAULT_HORARIO_MANHA);
   const [saving, setSaving] = useState(false);
-  const [notificationFeedback, setNotificationFeedback] = useState<string | null>(
-    null
-  );
 
   useEffect(() => {
     configureOrdenhaNotifications();
@@ -38,6 +36,11 @@ export function useHomeOrdenha() {
 
   const ordenhaTarde = useMemo(() => {
     const list = ordenhas.filter((o) => o.periodo === 'tarde');
+    return list[list.length - 1] ?? null;
+  }, [ordenhas]);
+
+  const ordenhaNoite = useMemo(() => {
+    const list = ordenhas.filter((o) => o.periodo === 'noite');
     return list[list.length - 1] ?? null;
   }, [ordenhas]);
 
@@ -57,15 +60,19 @@ export function useHomeOrdenha() {
       return ordenhaTarde.horarioNotificacao;
     }
     return (
-      calculateNotificationTime(tardeHorario)?.horarioNotificacao ?? '16:45'
+      calculateNotificationTime(tardeHorario)?.horarioNotificacao ?? '13:15'
     );
   }, [ordenhaTarde, tardeHorario]);
 
-  const previewHorarioNotificacao = useMemo(() => {
+  const noiteHorario = ordenhaNoite?.horarioPrevisto || DEFAULT_HORARIO_NOITE;
+  const noiteNotificacao = useMemo(() => {
+    if (ordenhaNoite?.horarioNotificacao) {
+      return ordenhaNoite.horarioNotificacao;
+    }
     return (
-      calculateNotificationTime(horarioPrevisto)?.horarioNotificacao ?? '--:--'
+      calculateNotificationTime(noiteHorario)?.horarioNotificacao ?? '20:45'
     );
-  }, [horarioPrevisto]);
+  }, [ordenhaNoite, noiteHorario]);
 
   const selectPeriodoInForm = useCallback(
     (targetPeriodo: PeriodoOrdenha) => {
@@ -75,13 +82,17 @@ export function useHomeOrdenha() {
         setHorarioPrevisto(
           ordenhaManha?.horarioPrevisto || DEFAULT_HORARIO_MANHA
         );
-      } else {
+      } else if (targetPeriodo === 'tarde') {
         setHorarioPrevisto(
           ordenhaTarde?.horarioPrevisto || DEFAULT_HORARIO_TARDE
         );
+      } else {
+        setHorarioPrevisto(
+          ordenhaNoite?.horarioPrevisto || DEFAULT_HORARIO_NOITE
+        );
       }
     },
-    [ordenhaManha, ordenhaTarde]
+    [ordenhaManha, ordenhaTarde, ordenhaNoite]
   );
 
   const openOrdenhaModal = useCallback(
@@ -107,7 +118,12 @@ export function useHomeOrdenha() {
 
     setSaving(true);
     try {
-      const existing = periodo === 'manha' ? ordenhaManha : ordenhaTarde;
+      const existing =
+        periodo === 'manha'
+          ? ordenhaManha
+          : periodo === 'tarde'
+          ? ordenhaTarde
+          : ordenhaNoite;
 
       if (existing) {
         await ordenhaRepository.updateOrdenha(existing.id, {
@@ -126,34 +142,28 @@ export function useHomeOrdenha() {
       }
 
       await scheduleOrdenhaReminder(periodo, trimmedTime);
-
-      const periodoLabel = periodo === 'manha' ? 'Manhã' : 'Tarde';
-      setNotificationFeedback(
-        `Alarme da ${periodoLabel} salvo para ${trimmedTime} (alerta às ${calculatedAlertTime}).`
-      );
-      setTimeout(() => setNotificationFeedback(null), 3500);
-
       setModalVisible(false);
     } finally {
       setSaving(false);
     }
-  }, [horarioPrevisto, periodo, ordenhaManha, ordenhaTarde]);
+  }, [horarioPrevisto, periodo, ordenhaManha, ordenhaTarde, ordenhaNoite]);
 
   return {
     ordenhas,
     ordenhaManha,
     ordenhaTarde,
+    ordenhaNoite,
     manhaHorario,
     manhaNotificacao,
     tardeHorario,
     tardeNotificacao,
+    noiteHorario,
+    noiteNotificacao,
     modalVisible,
     schedulesModalVisible,
     periodo,
     horarioPrevisto,
-    previewHorarioNotificacao,
     saving,
-    notificationFeedback,
     setHorarioPrevisto,
     selectPeriodoInForm,
     openOrdenhaModal,
@@ -161,6 +171,5 @@ export function useHomeOrdenha() {
     openSchedulesModal: () => setSchedulesModalVisible(true),
     closeSchedulesModal: () => setSchedulesModalVisible(false),
     handleSaveOrdenha,
-    dismissFeedback: () => setNotificationFeedback(null),
   };
 }

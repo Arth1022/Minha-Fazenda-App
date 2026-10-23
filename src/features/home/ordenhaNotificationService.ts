@@ -54,6 +54,7 @@ let cachedLocalNotificationsApi: LocalNotificationsApi | null | undefined;
 const fallbackTimers: Record<string, ReturnType<typeof setTimeout>[]> = {
   manha: [],
   tarde: [],
+  noite: [],
   teste: [],
 };
 
@@ -298,7 +299,8 @@ export async function scheduleOrdenhaReminder(
     };
   }
 
-  const periodoLabel = periodo === 'manha' ? 'Manhã' : 'Tarde';
+  const periodoLabel =
+    periodo === 'manha' ? 'Manhã' : periodo === 'tarde' ? 'Tarde' : 'Noite';
   const preTitle = `⏰ Ordenha da ${periodoLabel} em 15 minutos`;
   const preBody = `A ordenha das ${trimmedTime} começará em 15 minutos (alerta das ${calculation.horarioNotificacao}). Prepare os equipamentos!`;
   const exactTitle = `🐄 Hora da Ordenha da ${periodoLabel}!`;
@@ -403,7 +405,8 @@ export async function triggerTestOrdenhaNotifications(
   const trimmedTime = horarioPrevisto.trim();
   const calculation = calculateNotificationTime(trimmedTime);
   const alertTime = calculation?.horarioNotificacao ?? '05:15';
-  const periodoLabel = periodo === 'manha' ? 'Manhã' : 'Tarde';
+  const periodoLabel =
+    periodo === 'manha' ? 'Manhã' : periodo === 'tarde' ? 'Tarde' : 'Noite';
 
   const preTitle = `⏰ [Teste] Ordenha da ${periodoLabel} em 15 minutos`;
   const preBody = `Alerta prévio (${alertTime}): a ordenha das ${trimmedTime} começará em 15 minutos. Prepare os equipamentos!`;

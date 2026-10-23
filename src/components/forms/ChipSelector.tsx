@@ -12,7 +12,8 @@ import { AgroColors, Radius, Spacing, Typography } from '@/constants/theme';
 export interface ChipOption<T extends string> {
   label: string;
   value: T;
-  icon?: string;
+  icon?: React.ReactNode;
+  renderIcon?: (isSelected: boolean) => React.ReactNode;
 }
 
 export interface ChipSelectorProps<T extends string> {
@@ -56,8 +57,14 @@ export function ChipSelector<T extends string>({
                 disabled && styles.chipDisabled,
                 pressed && !disabled && styles.chipPressed,
               ]}>
-              {option.icon ? (
-                <Text style={styles.chipIcon}>{option.icon}</Text>
+              {option.renderIcon ? (
+                option.renderIcon(isSelected)
+              ) : option.icon ? (
+                typeof option.icon === 'string' ? (
+                  <Text style={styles.chipIcon}>{option.icon}</Text>
+                ) : (
+                  option.icon
+                )
               ) : null}
               <Text
                 style={[
