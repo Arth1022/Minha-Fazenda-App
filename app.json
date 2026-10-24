@@ -19,6 +19,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
+      "permissions": ["android.permission.SCHEDULE_EXACT_ALARM"],
       "package": "com.minhafazenda.app"
     },
     "web": {
@@ -42,7 +43,13 @@
       "expo-image",
       "expo-status-bar",
       "expo-web-browser",
-      "expo-sqlite"
+      "expo-sqlite",
+      [
+        "expo-notifications",
+        {
+          "color": "#1B5E20"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

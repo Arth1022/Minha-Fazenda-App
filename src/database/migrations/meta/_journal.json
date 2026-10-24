@@ -29,6 +29,13 @@
       "when": 1792811905648,
       "tag": "0003_rebanho_completo",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1792813268948,
+      "tag": "0004_notificacoes_agendadas",
+      "breakpoints": true
     }
   ]
 }

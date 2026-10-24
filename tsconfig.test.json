@@ -3,6 +3,7 @@
   "compilerOptions": {
     "paths": {
       "@/database": ["./__tests__/support/database.ts"],
+      "expo-notifications": ["./__tests__/support/expo-notifications.ts"],
       "@/*": ["./src/*"],
       "@/assets/*": ["./assets/*"]
     }
