@@ -921,3 +921,18 @@ diasConfirmadosDoAnimal(animalId)      // query: { tratamentoId, dia }[]
 confirmarDia(tratamentoId, dia: Date): Promise<void>
 desfazerDia(tratamentoId, dia: Date): Promise<void>
 ```
+
+### Correção B2: tratamento sem `dataFim` é contínuo
+
+> **Commit:** "fix(doses): tratamento sem dataFim é contínuo"
+
+O `ace033a` tratava `dataFim` null como dose única, o que contradiz o combinado. Agora é assim:
+
+- **`dataFim` null = sem fim:** o tratamento é contínuo até ser encerrado.
+  - `diasComDose` vai até hoje.
+  - `proximasDoses` e `proximaDosePendente` seguem adiante; para não haver laço infinito, o teto é de 366 dias.
+  - `tratamentosAtivos` mantém o tratamento ativo.
+  - `ultimoDia` devolve `Date | null`.
+- **Dose única = `dataFim` igual a `dataInicio`.**
+- **Implementação:** as funções usam um gerador interno (`diasDeDose(agenda, de, ate)`), que percorre só a janela pedida. O `ehDiaDeDose` deixou de montar a lista inteira.
+- **Testes:** `test:doses` foi de 34 para 40 checks. Os novos cobrem dose única, contínuo até hoje, dia de dose no futuro, pendente e próximas sem fim, e ativo sem fim.

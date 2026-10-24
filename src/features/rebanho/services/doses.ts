@@ -11,6 +11,8 @@ import { adicionarDias, diasEntre, inicioDoDia } from '@/utils/date';
 export const TODOS_OS_DIAS = [1, 2, 3, 4, 5, 6, 7];
 
 const MINUTOS_NO_DIA = 24 * 60;
+/** Teto de dias percorridos num tratamento sem fim (evita laço infinito com agenda inválida). */
+const MAX_DIAS_SEM_FIM = 366;
 
 type Periodo = Pick<AgendaDoTratamento, 'dataInicio' | 'dataFim'>;
 type Calendario = Pick<AgendaDoTratamento, 'dataInicio' | 'dataFim' | 'diasSemana'>;
@@ -21,9 +23,31 @@ export function diaDaSemana(data: Date): number {
   return data.getDay() + 1;
 }
 
-/** Último dia do tratamento: `dataFim`, ou o próprio início quando é dose única. */
-export function ultimoDia(agenda: Periodo): Date {
-  return inicioDoDia(agenda.dataFim ?? agenda.dataInicio);
+/**
+ * Último dia do tratamento, ou null quando não tem fim (contínuo até ser
+ * encerrado). Dose única é `dataFim` igual a `dataInicio`.
+ */
+export function ultimoDia(agenda: Periodo): Date | null {
+  return agenda.dataFim ? inicioDoDia(agenda.dataFim) : null;
+}
+
+/**
+ * Dias com dose de `de` em diante (a partir do início do tratamento), até o
+ * último dia do tratamento ou até `ate`, o que vier antes. Sem fim e sem `ate`,
+ * para em MAX_DIAS_SEM_FIM dias.
+ */
+function* diasDeDose(agenda: Calendario, de: Date | null, ate: Date | null): Generator<DiaDeDose> {
+  const inicio = inicioDoDia(agenda.dataInicio);
+  const fim = ultimoDia(agenda);
+  const limite = [fim, ate && inicioDoDia(ate)].filter((d): d is Date => d !== null);
+  const ultimo = limite.length > 0 ? Math.min(...limite.map((d) => d.getTime())) : null;
+  const primeiro = de ? Math.max(0, diasEntre(inicio, de)) : 0;
+  const teto = ultimo === null ? primeiro + MAX_DIAS_SEM_FIM : diasEntre(inicio, new Date(ultimo));
+
+  for (let i = primeiro; i <= teto; i++) {
+    const dia = adicionarDias(inicio, i);
+    if (agenda.diasSemana.includes(diaDaSemana(dia))) yield { indice: i + 1, dia };
+  }
 }
 
 /** Problemas da agenda, em texto para o formulário. Lista vazia = agenda válida. */
@@ -54,31 +78,24 @@ export function errosDaAgenda(agenda: AgendaDoTratamento): string[] {
   }
   if (dataFim && inicioDoDia(dataFim).getTime() < inicioDoDia(dataInicio).getTime()) {
     erros.push('O fim do tratamento é antes do início');
-  } else if (erros.length === 0 && diasComDose(agenda).length === 0) {
+  } else if (erros.length === 0 && diasDeDose(agenda, null, null).next().done) {
     erros.push('Nenhum dia de dose no período escolhido');
   }
   return erros;
 }
 
 /**
- * Dias com dose no período, na ordem. O índice é o "dia N" em dias corridos:
- * seg/qua/sex começando numa segunda → 1, 3, 5, 8, 10, 12.
+ * Dias com dose, na ordem. O índice é o "dia N" em dias corridos: seg/qua/sex
+ * começando numa segunda → 1, 3, 5, 8, 10, 12. Com fim, vai até o último dia;
+ * sem fim (contínuo), vai até `hoje`.
  */
-export function diasComDose(agenda: Calendario): DiaDeDose[] {
-  const inicio = inicioDoDia(agenda.dataInicio);
-  const total = diasEntre(inicio, ultimoDia(agenda));
-  const dias: DiaDeDose[] = [];
-  for (let i = 0; i <= total; i++) {
-    const dia = adicionarDias(inicio, i);
-    if (agenda.diasSemana.includes(diaDaSemana(dia))) dias.push({ indice: i + 1, dia });
-  }
-  return dias;
+export function diasComDose(agenda: Calendario, hoje = new Date()): DiaDeDose[] {
+  return [...diasDeDose(agenda, null, agenda.dataFim ? null : hoje)];
 }
 
 /** O dia é um dia de dose do tratamento? */
 export function ehDiaDeDose(agenda: Calendario, data: Date): boolean {
-  const dia = inicioDoDia(data).getTime();
-  return diasComDose(agenda).some((d) => d.dia.getTime() === dia);
+  return !diasDeDose(agenda, data, data).next().done;
 }
 
 /**
@@ -104,25 +121,25 @@ export function horariosDoDia(agenda: Horarios, dia: Date): Date[] {
 }
 
 /**
- * As próximas `n` doses a partir de `desde`, confirmadas ou não. Dose sem horário
- * vale pelo dia inteiro: a de hoje continua na lista depois da meia-noite.
+ * As próximas `n` doses a partir de `desde`, confirmadas ou não (sem fim, segue
+ * adiante até juntar `n`). Dose sem horário vale pelo dia inteiro: a de hoje
+ * continua na lista depois da meia-noite.
  */
 export function proximasDoses(agenda: AgendaDoTratamento, desde: Date, n: number): DoseAgendada[] {
   const doses: DoseAgendada[] = [];
-  const hoje = inicioDoDia(desde).getTime();
-  for (const { indice, dia } of diasComDose(agenda)) {
-    if (doses.length >= n) break;
-    if (dia.getTime() < hoje) continue;
+  if (n <= 0) return doses;
+  for (const { indice, dia } of diasDeDose(agenda, desde, null)) {
     const horarios = horariosDoDia(agenda, dia);
     if (horarios.length === 0) {
       doses.push({ indice, dia, momento: dia, semHorario: true });
-      continue;
-    }
-    for (const momento of horarios) {
-      if (momento.getTime() >= desde.getTime() && doses.length < n) {
-        doses.push({ indice, dia, momento, semHorario: false });
+    } else {
+      for (const momento of horarios) {
+        if (momento.getTime() >= desde.getTime() && doses.length < n) {
+          doses.push({ indice, dia, momento, semHorario: false });
+        }
       }
     }
+    if (doses.length >= n) break;
   }
   return doses;
 }
@@ -137,18 +154,19 @@ export function proximaDosePendente(
   agora = new Date()
 ): DosePendente | null {
   const confirmados = new Set(diasConfirmados.map((d) => inicioDoDia(d).getTime()));
-  const hoje = inicioDoDia(agora).getTime();
-  const pendente = diasComDose(agenda).find(
-    ({ dia }) => dia.getTime() >= hoje && !confirmados.has(dia.getTime())
-  );
-  if (!pendente) return null;
-  return { ...pendente, horarios: horariosDoDia(agenda, pendente.dia) };
+  for (const pendente of diasDeDose(agenda, agora, null)) {
+    if (!confirmados.has(pendente.dia.getTime())) {
+      return { ...pendente, horarios: horariosDoDia(agenda, pendente.dia) };
+    }
+  }
+  return null;
 }
 
-/** Tratamentos em andamento hoje (entre o início e o último dia, inclusive). */
+/** Tratamentos em andamento hoje: já começaram e não terminaram (sem fim = continua ativo). */
 export function tratamentosAtivos<T extends Periodo>(tratamentos: T[], hoje = new Date()): T[] {
   const dia = inicioDoDia(hoje).getTime();
-  return tratamentos.filter(
-    (t) => inicioDoDia(t.dataInicio).getTime() <= dia && dia <= ultimoDia(t).getTime()
-  );
+  return tratamentos.filter((t) => {
+    const fim = ultimoDia(t);
+    return inicioDoDia(t.dataInicio).getTime() <= dia && (fim === null || dia <= fim.getTime());
+  });
 }

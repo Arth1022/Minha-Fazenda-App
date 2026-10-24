@@ -9,6 +9,7 @@ import {
 import { createTratamento } from '@/features/rebanho/data/tratamentos';
 import {
   diasComDose,
+  ehDiaDeDose,
   errosDaAgenda,
   minutosDasDoses,
   proximaDosePendente,
@@ -61,7 +62,13 @@ async function runDosesTest() {
     'seg/qua/sex começando na segunda: dias 1, 3, 5, 8, 10, 12'
   );
   check(datas(diasComDose(segQuaSex)) === '19,21,23,26,28,30', 'e as datas são 19, 21, 23, 26, 28 e 30/10');
-  check(diasComDose(agenda({})).length === 1, 'sem data de fim é dose única no dia do início');
+  check(datas(diasComDose(agenda({ dataFim: dia(19) }))) === '19', 'dose única: fim igual ao início');
+  check(datas(diasComDose(agenda({}), dia(22, 10, 15))) === '19,20,21,22', 'sem fim é contínuo: os dias vão até hoje');
+  check(
+    ehDiaDeDose(agenda({ diasSemana: SEG_QUA_SEX }), dia(30, 11)) && !ehDiaDeDose(agenda({ diasSemana: SEG_QUA_SEX }), dia(1, 12)),
+    'sem fim: segunda 30/11 é dia de dose, terça 1/12 não'
+  );
+  check(!ehDiaDeDose(agenda({}), dia(18)), 'antes do início não é dia de dose');
   check(datas(diasComDose(agenda({ dataFim: dia(21) }))) === '19,20,21', 'todos os dias: um por dia, fim incluído');
   check(
     diasComDose(agenda({ dataInicio: dia(20), dataFim: dia(26), diasSemana: [2] })).map((d) => d.indice).join() === '7',
@@ -82,7 +89,8 @@ async function runDosesTest() {
   check(errosDaAgenda(agenda({ diasSemana: [] })).length === 1, 'sem dias da semana é recusado');
   check(errosDaAgenda(agenda({ horario: '25:00' })).length === 1, 'horário inválido é recusado');
   check(errosDaAgenda(agenda({ dataFim: dia(18) })).length === 1, 'fim antes do início é recusado');
-  check(errosDaAgenda(agenda({ diasSemana: [3] })).length === 1, 'período sem nenhum dia de dose é recusado');
+  check(errosDaAgenda(agenda({ diasSemana: [3], dataFim: dia(19) })).length === 1, 'período sem nenhum dia de dose é recusado');
+  check(errosDaAgenda(agenda({ diasSemana: [3] })).length === 0, 'sem fim sempre tem dia de dose pela frente');
 
   const dozeEmDoze = agenda({ dataFim: dia(21), horario: '06:00', intervaloHoras: 12 });
   const proximas = proximasDoses(dozeEmDoze, dia(19, 10, 10), 3);
@@ -108,9 +116,20 @@ async function runDosesTest() {
     'pendente traz os horários do dia'
   );
   check(proximaDosePendente(segQuaSex, [], dia(31)) === null, 'depois do fim não há dose pendente');
+  const continuo = proximaDosePendente(agenda({}), [dia(10, 12)], dia(10, 12, 9));
+  check(continuo?.dia.getDate() === 11 && continuo.indice === 54, 'sem fim: hoje confirmado → amanhã (dia 54)');
+  const proximasSemFim = proximasDoses(agenda({ diasSemana: SEG_QUA_SEX }), dia(1, 12), 3);
+  check(datas(proximasSemFim) === '2,4,7', 'sem fim: próximas doses seguem adiante (2, 4 e 7/12)');
 
-  const ativos = tratamentosAtivos([segQuaSex, agenda({ dataInicio: dia(1), dataFim: dia(5) })], dia(24, 10, 12));
-  check(ativos.length === 1 && ativos[0] === segQuaSex, 'tratamentosAtivos: só os que estão entre início e fim hoje');
+  const semFim = agenda({ dataInicio: dia(1) });
+  const ativos = tratamentosAtivos(
+    [segQuaSex, agenda({ dataInicio: dia(1), dataFim: dia(5) }), semFim, agenda({ dataInicio: dia(25) })],
+    dia(24, 10, 12)
+  );
+  check(
+    ativos.length === 2 && ativos[0] === segQuaSex && ativos[1] === semFim,
+    'tratamentosAtivos: entre início e fim; sem fim continua ativo; o que não começou fica de fora'
+  );
 
   // ---------- banco ----------
   await initTestDatabase();
