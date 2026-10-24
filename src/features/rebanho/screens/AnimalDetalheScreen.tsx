@@ -11,7 +11,9 @@ import {
   type TipoRegistro,
 } from '../components/OutrosRegistrosMenu';
 import { RegistroForm } from '../components/registros/RegistroForm';
+import { ReproducaoCard } from '../components/ReproducaoCard';
 import { TratamentoAtivoCard } from '../components/TratamentoAtivoCard';
+import { confirmarPrenhez } from '../data/reproducoes';
 import { useFichaAnimal } from '../hooks/useFichaAnimal';
 import { useRebanho } from '../hooks/useRebanho';
 
@@ -78,7 +80,16 @@ export default function AnimalDetalheScreen() {
         <EmptyState message="Nenhum tratamento em andamento para este animal." />
       )}
 
-      {/* C. F4 ReproducaoCard (só se ficha.podeReproduzir) */}
+      {/* C. Reprodução: só novilha e vaca */}
+      {ficha?.podeReproduzir ? (
+        <ReproducaoCard
+          reproducao={ficha.reproducao}
+          ultimoParto={ficha.ultimoParto}
+          touros={touros}
+          onConfirmarPrenhez={confirmarPrenhez}
+        />
+      ) : null}
+
       {/* D. F5 ProximosCard + aviso do limite de notificações (contagemNotificacoes) */}
       {/* E. F5 LinhaDoTempo (Histórico): opcional, sai primeiro se o prazo apertar */}
 
