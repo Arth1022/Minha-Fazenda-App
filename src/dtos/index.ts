@@ -5,6 +5,7 @@
  */
 export * from './animal.dto';
 export * from './fazenda.dto';
+export * from './ficha.dto';
 export * from './notificacoes.dto';
 export * from './ordenha.dto';
 export * from './pesagem.dto';
