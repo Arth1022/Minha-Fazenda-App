@@ -856,3 +856,40 @@ paiDescricao: values.pai.descricao,
 **Pendente (B5):** o **peso atual** já está no formulário, mas só vai ser gravado quando o back-end entregar o `cadastrarAnimal` (animal + 1ª pesagem na mesma transação). O Líder Técnico pediu para não chamar `createPesagem` depois do `createAnimal`, porque se der erro no meio fica animal sem pesagem. Está marcado com `TODO(B5)` no hook; a troca é uma linha.
 
 **Validação:** `tsc` isolado OK.
+
+**Commit:** `295df9c`
+
+## F4 · `ReproducaoCard`
+
+`src/features/rebanho/components/ReproducaoCard.tsx` (novo)
+
+```tsx
+export interface ReproducaoCardProps {
+  reproducao: ReproducaoFicha;        // coberturaAberta + previsaoParto (useFichaAnimal)
+  ultimoParto: Date | null;
+  touros: Animal[];                    // para mostrar o nome do touro da fazenda
+  onConfirmarPrenhez: (coberturaId: string, prenhe: boolean) => void;
+}
+
+/** "12/12/2026 (em 40 dias)", "Hoje" ou "(há 3 dias)" se já passou. */
+function textoDaPrevisao(previsao: Date): string { … }
+
+{coberturaAberta.prenhezConfirmada == null ? (
+  <Button label="Está prenhe" variant="outline" … onPress={() => onConfirmarPrenhez(id, true)} />
+  <Button label="Não pegou" variant="ghost" … onPress={() => onConfirmarPrenhez(id, false)} />
+) : null}
+```
+
+**O que mostra:** Monta natural/Inseminação + data, Touro, Previsão de parto (com "em N dias"), Prenhez (Confirmada / A confirmar) e Último parto. Sem cobertura em aberto, mostra "Nenhuma cobertura em aberto.".
+
+**Por quê**
+- **Só exibe, igual ao `FichaResumo`:** quem grava a confirmação é a ficha, via `onConfirmarPrenhez` → `confirmarPrenhez(id, prenhe)` de `data/reproducoes`. O componente não importa nada de `data/`.
+- **"Está prenhe" / "Não pegou":** palavras do produtor no lugar de "positivo/negativo". Os botões só aparecem enquanto a prenhez não foi respondida. Com "Não pegou", a cobertura deixa de estar "em aberto" (regra do `useFichaAnimal`) e o card volta para "Nenhuma cobertura em aberto.".
+- **"em N dias" na previsão:** o produtor quer saber quanto falta, não só a data. Se passou, mostra "há N dias", um sinal de parto atrasado ou de parto não registrado.
+- **Touro:** mostra o nome/brinco quando é da fazenda (`touroId` procurado em `touros`), senão o texto de fora/sêmen (`touroDescricao`).
+- **Reaproveita `ResumoLinha`**, então tem o mesmo visual do card de resumo.
+
+**Para a ficha (full-stack):** placeholder "C. F4". Renderizar só se `ficha.podeReproduzir`:
+`<ReproducaoCard reproducao={ficha.reproducao} ultimoParto={ficha.ultimoParto} touros={machos} onConfirmarPrenhez={confirmarPrenhez} />`
+
+**Validação:** `tsc` isolado OK.
