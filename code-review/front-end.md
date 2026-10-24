@@ -195,6 +195,8 @@ O projeto inteiro passa no type-check, sem erros.
 
 ## Sprint 1 · Correção: tela do Rebanho volta à identidade
 
+**Commit:** `5b85a29` "Rebanho: volta à identidade visual anterior"
+
 **Pedido (usuário, via Líder Técnico):** a tela do Rebanho tinha perdido a identidade com a reescrita do commit `5688a37`. O pedido foi voltar ao visual do `df309c5`, mantendo a camada de dados nova (`useRebanho`, `calcularFase`, pesagens, crias). Não usei checkout do arquivo antigo: copiei o layout e liguei nos dados atuais.
 
 ### Antes × depois
@@ -372,3 +374,150 @@ exit code: 0
 ```
 
 Obs.: `npx eslint` quebra dentro do `eslint-plugin-import` (stack em `exportMap/builder.js`), antes de analisar as regras. É um problema da ferramenta, não destes arquivos.
+
+---
+
+## Sprint 1 · Para onde foram os campos do cadastro (Novo Animal)
+
+**Pergunta do usuário:** "Aonde foi parar todos aqueles campos para serem preenchidos com informações da vaca? O primeiro modal de registro (Novo Animal) foi resumido, mas aonde incrementamos mais dados?"
+
+**Resposta curta:** no commit `5688a37`, os campos saíram do modal e foram para tabelas próprias (pesagens, reproduções) ou viraram valores calculados (crias). Só que **nenhuma tela foi criada para preencher esses dados**: hoje o produtor não consegue informar peso, leite, ração, mãe, coberturas, "já pariu" nem sexo, nem no cadastro nem depois. A ficha do animal só tem tratamentos.
+
+> Este documento só registra a situação: nada foi implementado. A recomendação no fim está **PENDENTE DE DECISÃO DO USUÁRIO (P5/P6)**.
+
+### 1. Antes × hoje
+
+| # | Campo no `df309c5` | Obrigatório | Hoje no modal |
+|---|---|---|---|
+| 1 | Identificação (Brinco) | sim | ✅ mantido |
+| 2 | Nome | não | ✅ mantido |
+| 3 | Idade (anos + meses) | não | ✅ mantido (grava `nascimento_aproximado = true`) |
+| 4 | Raça (autocomplete) | não | ✅ mantido |
+| 5 | Peso (kg) | **sim** | ❌ removido |
+| 6 | Produção de Leite (L) | não | ❌ removido |
+| 7 | Crias | não | ❌ removido |
+| 8 | Ração Concentrado (kg/dia) | não | ❌ removido |
+| 9 | Brinco do Pai | não | ❌ removido |
+| 10 | Brinco da Mãe | não | ❌ removido |
+| 11 | Histórico de Coberturas / Inseminações (data, tipo, touro/sêmen) | não | ❌ removido (`CoberturasField.tsx` apagado) |
+
+São **11 campos no `df309c5`** (12 se idade em anos e idade em meses contarem separado), contra **4 hoje**. `sexo` e `já pariu` nunca estiveram no modal, mas existem no banco e também entram na tabela abaixo.
+
+### 2. Destino de cada campo removido
+
+| Campo | Onde está hoje no banco | Função em `data/` | Tela para preencher |
+|---|---|---|---|
+| **Peso** | Tabela `pesagens` (`animal_id`, `data`, `peso_kg`): virou histórico, com uma linha por pesagem | `createPesagem` (escrita), `pesosAtuais` / `pesagensDoAnimal` (leitura) | **Nenhuma** |
+| **Produção de leite** | Coluna `animais.producao_leite_l` (removida na 0002, recriada na 0006 como leite estimado) | Só via `createAnimal`; não existe `updateAnimal` | **Nenhuma** (a tela do Rebanho mostra "—") |
+| **Crias** | Não é mais coluna: é **calculado** pela contagem de animais com `mae_id` = id da vaca | `criasPorMae` / `criasDe` (leitura); entra via `registrarParto` | **Nenhuma**: sem registro de parto, fica sempre 0 |
+| **Ração** | Coluna `animais.racao_kg_dia` (removida na 0002, recriada na 0006) | Só via `createAnimal` | **Nenhuma** (mostra "—") |
+| **Pai** | **Sumiu**: não há coluna `pai` nem `pai_brinco` | — | Nenhuma |
+| **Mãe** | Coluna `animais.mae_id` (FK para `animais.id`; antes era texto `mae_brinco`) | Preenchida só pelo `registrarParto` | **Nenhuma**: um animal comprado não tem como receber a mãe |
+| **Coberturas** | Tabela `reproducoes` (`tipo` = `cobertura` \| `inseminacao`, `data`, `prenhez_confirmada`, `previsao_parto`, `data_parto`, `cria_id`) | `createReproducao`, `confirmarPrenhez`, `reproducoesDoAnimal` | **Nenhuma** |
+| ↳ **Touro / sêmen** | **Sumiu**: `reproducoes` não tem coluna para o reprodutor | — | Nenhuma |
+| **Já pariu** | Coluna `animais.ja_pariu` (migration 0005), padrão `false` | Só via `createAnimal` | **Nenhuma**: a vaca comprada adulta fica como "novilha" |
+| **Sexo** | Coluna `animais.sexo` (`'F'` \| `'M'`), padrão `'F'` | Só via `createAnimal` | **Nenhuma**: ver o bug no item 4 |
+
+### 3. Trechos de código
+
+#### `CoberturasField.tsx` (removido no `5688a37`): resumo
+
+Componente de cerca de 270 linhas, embutido no fim do modal Novo Animal:
+
+```tsx
+/**
+ * Seção "Histórico de Coberturas / Inseminações" do cadastro de animal:
+ * exibe os registros em linha do tempo e um mini-formulário, aberto sob
+ * demanda, para incluir novos.
+ */
+export function CoberturasField({ coberturas, onAdd, onRemove }: CoberturasFieldProps) {
+  const [tipo, setTipo] = useState<TipoCobertura>('inseminacao'); // chips: Inseminação | Monta Natural
+  const [data, setData] = useState('');                            // DD/MM/AAAA com máscara
+  const [touroSemen, setTouroSemen] = useState('');                // "Touro" na monta, "Sêmen" na inseminação
+  // ...linha do tempo com badge de contagem, botão remover e mini-formulário
+}
+```
+
+No hook antigo, as coberturas iam num `useFieldArray` e eram gravadas junto com o animal (`createAnimal(dados, coberturas)`). Bezerros ignoravam a lista.
+
+#### Funções que já existem, mas nenhuma tela chama
+
+```ts
+// data/pesagens.ts
+export async function createPesagem(input: NovaPesagem): Promise<void>
+
+// data/reproducoes.ts
+/** Registra a cobertura/inseminação já com a previsão de parto calculada. */
+export async function createReproducao(
+  input: Omit<NovaReproducao, 'previsaoParto'>
+): Promise<Reproducao>
+
+export async function confirmarPrenhez(id: string, confirmada: boolean): Promise<void>
+
+// data/animais.ts
+/**
+ * Registra o parto: cria o bezerro já ligado à mãe (origem "nascido", nascimento
+ * na data do parto) e fecha a cobertura em aberto mais recente da vaca, se houver.
+ */
+export async function registrarParto(
+  maeId: string,
+  { data, sexo, brinco }: DadosParto
+): Promise<Animal>
+
+/** Saída do rebanho: só muda o status, o registro nunca é apagado. */
+export async function registrarSaida(
+  animalId: string,
+  saida: { status: StatusSaida; data: Date; motivo?: string }
+): Promise<void>
+```
+
+Não existe `updateAnimal`. Editar dados do animal está no plano da Sprint 2 (B5).
+
+### 4. Bug: todo animal entra como fêmea
+
+```ts
+// schema.ts
+sexo: text('sexo', { enum: SEXOS }).notNull().default('F'),
+
+// useNovoAnimalForm.ts: o createAnimal não envia sexo
+const created = await createAnimal({
+  brinco,
+  nome: values.nome || undefined,
+  raca: values.raca || undefined,
+  dataNascimento: …,
+  nascimentoAproximado: idadeMesesTotal !== null,
+});
+```
+
+O modal não pergunta o sexo, então todo animal cadastrado vira `'F'`. Efeitos:
+- um touro cadastrado aparece como **novilha**;
+- a aba **Machos** nunca aparece para animais criados pelo app (só para os do seed);
+- um bezerro macho é contado como **bezerra**, e no futuro entraria em "registrar cobertura".
+
+### 5. Recomendação: PENDENTE DE DECISÃO DO USUÁRIO (P5/P6)
+
+O modal continua curto: só o que define **quem é** o animal. Dados opcionais ficam recolhidos, e **eventos com data** (pesagem, cobertura, parto) vão para a ficha.
+
+**Modal: sempre visível**
+- Brinco*, nome, idade, raça (como hoje);
+- **Sexo** (chips F / M): corrige o bug do item 4;
+- **Já pariu?** (switch): só aparece para fêmea com 12 meses ou mais. Resolve a vaca comprada adulta.
+
+**"Mais detalhes": recolhido, tudo opcional**
+- **Peso atual** (kg) → vira a 1ª linha em `pesagens`;
+- **Produção de leite** (L/dia) → `producao_leite_l`;
+- **Ração concentrado** (kg/dia) → `racao_kg_dia`;
+- **Mãe** (autocomplete pelos brincos já cadastrados) → `mae_id`.
+
+**Ficha do animal: ações**
+- **Nova pesagem**: `createPesagem`;
+- **Registrar cobertura** / confirmar prenhez: `createReproducao`, `confirmarPrenhez`;
+- **Registrar parto**: `registrarParto` (cria a cria, liga `mae_id`, conta crias e vira "vaca");
+- **Editar dados**: precisa do `updateAnimal` (B5 da Sprint 2);
+- **Saída** (venda/morte): `registrarSaida`.
+
+**O que não voltaria**
+- **Coberturas dentro do cadastro:** era o pedaço mais pesado do modal antigo. Cobertura é um evento com data e acompanhamento (prenhez, previsão de parto), então o lugar natural é a ação na ficha.
+- **Pai e touro/sêmen:** só se o usuário quiser de volta. Exige colunas novas (back-end).
+
+**Prioridade sugerida:** (a) sexo + já pariu no modal → (b) "Mais detalhes" com peso, leite e ração, senão a tela do Rebanho fica só com "—" → (c) "Nova pesagem" e "Registrar parto" na ficha → (d) "Editar dados" (B5).
