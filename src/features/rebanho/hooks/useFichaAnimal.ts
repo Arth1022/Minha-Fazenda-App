@@ -1,9 +1,17 @@
 import { useMemo } from 'react';
 
 import { useLiveQuery } from '@/database';
-import type { FichaAnimal, Reproducao } from '@/dtos';
+import type {
+  DoseConfirmada,
+  FichaAnimal,
+  Reproducao,
+  Tratamento,
+  TratamentoAtivo,
+} from '@/dtos';
 import { useFazenda } from '@/providers/FazendaProvider';
+import { inicioDoDia } from '@/utils/date';
 import { animalPorId, criasDe } from '../data/animais';
+import { diasConfirmadosDoAnimal } from '../data/doses';
 import { pesagensDoAnimal } from '../data/pesagens';
 import { reproducoesDoAnimal } from '../data/reproducoes';
 import { tratamentosDoAnimal } from '../data/tratamentos';
@@ -13,6 +21,7 @@ import {
   emIdadeReprodutiva,
   formatarIdade,
 } from '../services/fase';
+import { diasComDose, proximaDosePendente, tratamentosAtivos } from '../services/doses';
 import { calcularPesoAtual, calcularPrevisaoParto } from '../services/indicadores';
 
 /** Cobertura mais recente que ainda espera o parto (a lista vem da mais recente). */
@@ -20,12 +29,41 @@ function coberturaEmAberto(reproducoes: Reproducao[]): Reproducao | null {
   return reproducoes.find((r) => !r.dataParto && r.prenhezConfirmada !== false) ?? null;
 }
 
+/** Trilha de dias com dose do tratamento, cruzada com os dias já confirmados. */
+function montarTratamentoAtivo(
+  tratamento: Tratamento,
+  confirmados: Date[],
+  agora: Date
+): TratamentoAtivo {
+  const dias = new Set(confirmados.map((d) => d.getTime()));
+  const hoje = inicioDoDia(agora).getTime();
+  const trilha = diasComDose(tratamento).map((d) => ({
+    ...d,
+    confirmado: dias.has(d.dia.getTime()),
+    futuro: d.dia.getTime() > hoje,
+  }));
+  return {
+    tratamento,
+    trilha,
+    hoje: trilha.find((d) => d.dia.getTime() === hoje) ?? null,
+    proximaDose: proximaDosePendente(tratamento, confirmados, agora),
+  };
+}
+
+/** Dias confirmados agrupados por tratamento. */
+function confirmadosPorTratamento(doses: DoseConfirmada[]): Map<string, Date[]> {
+  const mapa = new Map<string, Date[]>();
+  for (const { tratamentoId, dia } of doses) {
+    mapa.set(tratamentoId, [...(mapa.get(tratamentoId) ?? []), dia]);
+  }
+  return mapa;
+}
+
 /**
  * Dados da Ficha Animal, reativos ao banco. Null enquanto carrega ou se o animal
  * não existe.
  *
- * TODO(back-end): ligar quando forem entregues — tratamentosAtivos e proximaDose
- * (tratamento em andamento), diasComDose (trilha de dias), alertaPrincipal,
+ * TODO(back-end): ligar quando forem entregues — alertaPrincipal,
  * montarLinhaDoTempo, calcularLembretes e contagemNotificacoes.
  */
 export function useFichaAnimal(id?: string): FichaAnimal | null {
@@ -36,6 +74,7 @@ export function useFichaAnimal(id?: string): FichaAnimal | null {
   const { data: pesagens } = useLiveQuery(pesagensDoAnimal(animalId), [animalId]);
   const { data: reproducoes } = useLiveQuery(reproducoesDoAnimal(animalId), [animalId]);
   const { data: tratamentos } = useLiveQuery(tratamentosDoAnimal(animalId), [animalId]);
+  const { data: doses } = useLiveQuery(diasConfirmadosDoAnimal(animalId), [animalId]);
 
   return useMemo(() => {
     if (!animal) return null;
@@ -49,6 +88,8 @@ export function useFichaAnimal(id?: string): FichaAnimal | null {
       jaPariu: animal.jaPariu,
     });
     const coberturaAberta = coberturaEmAberto(reproducoes);
+    const agora = new Date();
+    const confirmados = confirmadosPorTratamento(doses);
 
     return {
       animal,
@@ -66,6 +107,9 @@ export function useFichaAnimal(id?: string): FichaAnimal | null {
       },
       reproducoes,
       tratamentos,
+      tratamentosAtivos: tratamentosAtivos(tratamentos, agora).map((t) =>
+        montarTratamentoAtivo(t, confirmados.get(t.id) ?? [], agora)
+      ),
     };
-  }, [animal, crias, pesagens, reproducoes, tratamentos, produzLeite]);
+  }, [animal, crias, pesagens, reproducoes, tratamentos, doses, produzLeite]);
 }

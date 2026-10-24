@@ -1,7 +1,26 @@
 import type { Animal, Fase, SituacaoLeite } from './animal.dto';
 import type { Pesagem, PesoAtual } from './pesagem.dto';
 import type { Reproducao } from './reproducao.dto';
-import type { Tratamento } from './tratamento.dto';
+import type { DiaDeDose, DosePendente, Tratamento } from './tratamento.dto';
+
+/** Um dia da trilha do tratamento, com a confirmação da dose. */
+export interface DiaDaTrilha extends DiaDeDose {
+  /** "Dei a dose" registrado neste dia */
+  confirmado: boolean;
+  /** Dia depois de hoje: ainda não dá para confirmar */
+  futuro: boolean;
+}
+
+/** Tratamento em andamento hoje, pronto para o TratamentoAtivoCard. */
+export interface TratamentoAtivo {
+  tratamento: Tratamento;
+  /** Dias com dose, do primeiro ao último */
+  trilha: DiaDaTrilha[];
+  /** O dia de hoje na trilha; null se hoje não tem dose */
+  hoje: DiaDaTrilha | null;
+  /** Próximo dia com dose ainda não confirmada (null se acabou) */
+  proximaDose: DosePendente | null;
+}
 
 /** Reprodução da fêmea na ficha: a cobertura que ainda espera o parto. */
 export interface ReproducaoFicha {
@@ -34,4 +53,6 @@ export interface FichaAnimal {
   reproducoes: Reproducao[];
   /** Tratamentos, do início mais recente para o mais antigo */
   tratamentos: Tratamento[];
+  /** Tratamentos em andamento hoje, com a trilha de doses */
+  tratamentosAtivos: TratamentoAtivo[];
 }
