@@ -18,7 +18,8 @@ export interface FormModalProps {
   title: string;
   subtitle?: string;
   onClose: () => void;
-  onSubmit: () => void;
+  /** Sem onSubmit, o modal não mostra o rodapé (ex.: menu de opções) */
+  onSubmit?: () => void;
   submitLabel?: string;
   cancelLabel?: string;
   loading?: boolean;
@@ -76,22 +77,24 @@ export function FormModal({
             {children}
           </ScrollView>
 
-          <View style={styles.footer}>
-            <Button
-              label={cancelLabel}
-              variant="secondary"
-              onPress={onClose}
-              disabled={loading}
-              style={{ flex: 1 }}
-            />
-            <Button
-              label={submitLabel}
-              variant="primary"
-              onPress={onSubmit}
-              loading={loading}
-              style={{ flex: 1 }}
-            />
-          </View>
+          {onSubmit ? (
+            <View style={styles.footer}>
+              <Button
+                label={cancelLabel}
+                variant="secondary"
+                onPress={onClose}
+                disabled={loading}
+                style={{ flex: 1 }}
+              />
+              <Button
+                label={submitLabel}
+                variant="primary"
+                onPress={onSubmit}
+                loading={loading}
+                style={{ flex: 1 }}
+              />
+            </View>
+          ) : null}
         </View>
       </KeyboardAvoidingView>
     </Modal>

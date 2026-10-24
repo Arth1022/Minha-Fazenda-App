@@ -670,3 +670,46 @@ function textoDaData(data: Date): string {
 ### Validação
 
 `tsc` isolado (HEAD + só estes arquivos, com índice temporário): **OK**. O `tsc` do working tree inteiro acusa erros em `__tests__/` (trabalho em andamento do back-end), não nestes arquivos.
+
+**Commit:** `ad145b9`
+
+## F6 · Menu "Outros registros"
+
+`src/features/rebanho/components/OutrosRegistrosMenu.tsx` (novo)
+
+```tsx
+export type TipoRegistro = 'pesagem' | 'cobertura' | 'parto' | 'saida';
+
+const OPCOES: OpcaoRegistro[] = [
+  { tipo: 'pesagem', icone: '⚖', titulo: 'Pesagem', descricao: 'Registrar o peso do animal' },
+  { tipo: 'cobertura', icone: '🐂', titulo: 'Cobertura', descricao: 'Monta natural ou inseminação', reprodutiva: true },
+  { tipo: 'parto', icone: '🐄', titulo: 'Parto', descricao: 'Registrar o nascimento da cria', reprodutiva: true },
+  { tipo: 'saida', icone: '🚪', titulo: 'Saída', descricao: 'Venda, morte ou descarte' },
+];
+
+const opcoes = OPCOES.filter((opcao) => reprodutiva || !opcao.reprodutiva);
+
+<FormModal visible={visible} title="Outros registros" onClose={onClose}>
+  {opcoes.map((opcao) => <Pressable onPress={() => onSelect(opcao.tipo)}>…</Pressable>)}
+</FormModal>
+```
+
+**O que foi feito:** um modal com as quatro opções em cartões (ícone + título + descrição + ›). Ele só avisa qual foi escolhida (`onSelect(tipo)`); quem abre o mini-formulário é a ficha (F7).
+
+**Por quê**
+- **Cobertura e Parto só para novilha/vaca:** o menu recebe `reprodutiva: boolean`. A ficha calcula esse valor com `emIdadeReprodutiva(sexo, fase)`, que já existe em `services/fase`. O menu não conhece a regra de fase.
+- **As opções ficam numa lista de dados (`OPCOES`)**, não em quatro blocos de JSX repetidos. Para incluir um registro novo, basta uma linha.
+- **Descrição em cada opção:** "Saída" sozinho é ambíguo; "Venda, morte ou descarte" deixa claro.
+
+### `FormModal`: `onSubmit` opcional
+
+```tsx
+/** Sem onSubmit, o modal não mostra o rodapé (ex.: menu de opções) */
+onSubmit?: () => void;
+// ...
+{onSubmit ? <View style={styles.footer}>…Cancelar / Salvar…</View> : null}
+```
+
+**Por quê:** o menu precisa do mesmo modal (fundo escuro, cartão, título, ✕), mas sem os botões Salvar/Cancelar. Deixar `onSubmit` opcional reaproveita o modal inteiro em vez de copiar ~150 linhas de estilo. Quem já usa (Home, Novo Animal, Tratamento) passa `onSubmit` e não muda nada.
+
+**Validação:** `tsc` isolado OK.
