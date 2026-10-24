@@ -771,3 +771,93 @@ Os tipos saíram de onde estavam: `services/fase.ts`, `services/indicadores.ts`,
 
 1. **Regra para quem escreve contrato novo:** todo `interface`/`type` que a tela envia ou recebe nasce em `src/dtos/<domínio>.dto.ts` e é importado de `@/dtos`.
 2. **Tipos de props** continuam nos componentes, por decisão do Líder. Se um dia forem compartilhados entre features, vão para `src/dtos` também.
+
+---
+
+## Sprint 2 · B0: migrations (agenda, doses aplicadas, pai e touro)
+
+> **Commit:** "Sprint 2 B0: agenda do tratamento, doses_aplicadas, pai e touro (migrations 0007 e 0008)". O hash entra na próxima atualização.
+
+### O que foi feito
+
+**`tratamentos`: agenda da dose (migration 0007)**
+- `dias_semana`: JSON `number[]`, `NOT NULL DEFAULT '[1,2,3,4,5,6,7]'`. Segue o padrão do expo-notifications (`weekday`: 1 = domingo ... 7 = sábado), para os lembretes não precisarem converter.
+- `horario`: `"HH:mm"`, nullable (sem horário = aviso no horário padrão 07:00).
+- `intervalo_horas`: integer, nullable. Só vale com todos os dias e precisa dividir 24; a validação fica no service (B2).
+- `aviso_minutos_antes`: integer, `NOT NULL DEFAULT 0`.
+- `dias_confirmados` e `proxima_dose_em` ficam como legado. Saem num commit separado, quando a tela parar de usá-los.
+
+**`doses_aplicadas` (nova, migration 0007)**
+- `id`, `tratamento_id` (FK com `ON DELETE CASCADE`), `dia`, `criado_por`, `created_at`, `updated_at`.
+- `dia` guarda a **data** (epoch ms da meia-noite local), não o índice. O "dia N" é derivado em função pura no B2.
+- `UNIQUE(tratamento_id, dia)`: o próprio banco impede confirmar o mesmo dia duas vezes, e o índice também atende a busca por tratamento.
+
+**`animais.pai_id` / `pai_descricao`, `reproducoes.touro_id` / `touro_descricao` (migration 0007)**
+- As FKs apontam para `animais(id)` com `ON DELETE SET NULL` e têm índice.
+- `*_descricao` é texto livre para touro de fora ou sêmen (nome, código da palheta).
+- Relações do Drizzle: `animais.pai` / `animais.filhos`, `reproducoes.touro`, `tratamentos.doses`, `dosesAplicadas.tratamento`.
+
+**Cópia dos dias confirmados (migration 0008, `drizzle-kit generate --custom`)**
+
+```sql
+INSERT OR IGNORE INTO doses_aplicadas (id, tratamento_id, dia, criado_por, created_at, updated_at)
+SELECT <uuid v4>, t.id,
+       strftime('%s', t.data_inicio / 1000, 'unixepoch', 'localtime', 'start of day',
+                printf('%+d days', d.value - 1), 'utc') * 1000,
+       t.criado_por, t.updated_at, t.updated_at
+FROM tratamentos t, json_each(t.dias_confirmados) d
+WHERE d.type = 'integer' AND d.value >= 1;
+```
+
+### Por quê
+
+- **Ajuste manual na 0007:** no `ALTER TABLE ... ADD` com `REFERENCES`, o drizzle-kit 0.31 gerou a FK **sem** o `ON DELETE SET NULL` que está no schema e no snapshot. Completei a cláusula à mão. O SQLite aceita FK no `ADD COLUMN` desde que o default seja NULL (https://www.sqlite.org/lang_altertable.html#altertabaddcol). Como o snapshot já está certo, as próximas migrations geradas não vão divergir.
+- **Data local, não `+ (N-1) × 86.400.000`:** em dia de mudança de horário de verão o dia tem 23 ou 25 h, e a soma fixa erraria a meia-noite. O cálculo usa os modificadores `localtime` / `start of day` / `utc` do SQLite (https://www.sqlite.org/lang_datefunc.html#modifiers).
+- **`json_each`:** faz parte do SQLite desde a 3.38, já ligado por padrão (https://www.sqlite.org/json1.html#jeach). Funciona no SQLite do expo-sqlite e no sql.js dos testes.
+- **`INSERT OR IGNORE` + índice único:** a cópia é idempotente, e um índice repetido (`[2,2]`) vira uma linha só.
+- **UUID v4 em SQL:** usa a mesma forma do `newId()` do app (versão 4, variante 8–b), com `randomblob`.
+- **Dose copiada herda `criado_por` e `updated_at` do tratamento**, que é a melhor aproximação de quando o dia foi confirmado.
+
+### Arquivos
+
+- **Novos:**
+  - `src/database/migrations/0007_sprint2_agenda_doses_pai.sql` e `meta/0007_snapshot.json` (drizzle-kit, com o ajuste do `ON DELETE`);
+  - `src/database/migrations/0008_copia_dias_confirmados.sql` e `meta/0008_snapshot.json` (custom);
+  - `__tests__/migrations.test.ts`.
+- **Alterados:**
+  - `src/database/schema.ts`;
+  - `src/database/migrations/migrations.js` e `meta/_journal.json`;
+  - `src/dtos/tratamento.dto.ts` (`DoseAplicada`, `NovaDoseAplicada`);
+  - `__tests__/regras.test.ts` (fixture de `Tratamento` com os campos novos);
+  - `package.json` (`test:migrations`, incluído no `test`).
+
+### Testes (`npm run test:migrations`)
+
+O teste aplica as migrations até a 0007, grava tratamentos no formato antigo, roda a 0008 e confere o resultado. Ele roda no fuso `America/New_York`, onde 8/3/2026 tem 23 h, para exercitar a mudança de horário de verão.
+
+```
+✅ tratamento antigo ganha agenda padrão: todos os dias, sem horário, aviso na hora
+✅ dias 1 e 3 viram as datas de 20/10 e 22/10 (meia-noite local)
+✅ cópia atravessa o horário de verão sem errar a meia-noite (9/3 não vira 01:00)
+✅ índices inválidos (0, texto) são ignorados e repetidos viram uma linha só
+✅ tratamento sem dias confirmados não gera doses
+✅ id da dose copiada é UUID v4 (6eee71f2-6f09-423e-a543-d816195aa9fb)
+✅ dose copiada herda criado_por e a data da última alteração do tratamento
+✅ rodar a cópia de novo não duplica (índice único tratamento + dia)
+✅ o banco recusa confirmar o mesmo dia duas vezes
+✅ apagar o touro deixa a cria sem pai_id
+✅ apagar o touro deixa a cobertura sem touro_id
+✅ apagar o tratamento apaga as doses dele
+```
+
+`npm test` (exit 0): regras 38, banco 38, notificações 50 e migrations 12, total **138 checks**. `tsc` do app sem erros. `tsc -p tsconfig.test.json` sem erro em arquivo do back-end; os que restam são do `useLiveQuery` nos hooks de tela.
+
+### API (para o front)
+
+```ts
+// @/dtos
+type Tratamento = { ...; diasSemana: number[]; horario: string | null; intervaloHoras: number | null; avisoMinutosAntes: number }
+type DoseAplicada = { id: string; tratamentoId: string; dia: Date; criadoPor: string | null; createdAt: Date; updatedAt: Date }
+type Animal = { ...; paiId: string | null; paiDescricao: string | null }
+type Reproducao = { ...; touroId: string | null; touroDescricao: string | null }
+```

@@ -55,7 +55,8 @@
     "test:db": "tsx --tsconfig tsconfig.test.json __tests__/persistence.test.ts",
     "test:regras": "tsx --tsconfig tsconfig.test.json __tests__/regras.test.ts",
     "test:notificacoes": "tsx --tsconfig tsconfig.test.json __tests__/notificacoes.test.ts",
-    "test": "npm run test:regras && npm run test:db && npm run test:notificacoes"
+    "test:migrations": "tsx --tsconfig tsconfig.test.json __tests__/migrations.test.ts",
+    "test": "npm run test:regras && npm run test:db && npm run test:notificacoes && npm run test:migrations"
   },
   "private": true
 }

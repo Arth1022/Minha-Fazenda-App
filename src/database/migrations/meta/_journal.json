@@ -50,6 +50,20 @@
       "when": 1792815163180,
       "tag": "0006_animais_leite_racao",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1792820907164,
+      "tag": "0007_sprint2_agenda_doses_pai",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1792820914111,
+      "tag": "0008_copia_dias_confirmados",
+      "breakpoints": true
     }
   ]
 }

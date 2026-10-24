@@ -1,4 +1,4 @@
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import {
   type AnySQLiteColumn,
   index,
@@ -6,6 +6,7 @@ import {
   real,
   sqliteTable,
   text,
+  uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 
 import { newId } from './id';
@@ -91,6 +92,12 @@ export const animais = sqliteTable(
     maeId: text('mae_id').references((): AnySQLiteColumn => animais.id, {
       onDelete: 'set null',
     }),
+    /** Pai cadastrado no rebanho (touro da fazenda) */
+    paiId: text('pai_id').references((): AnySQLiteColumn => animais.id, {
+      onDelete: 'set null',
+    }),
+    /** Pai fora do rebanho (touro emprestado, sêmen de inseminação), em texto livre */
+    paiDescricao: text('pai_descricao'),
     origem: text('origem', { enum: ORIGENS }),
     dataEntrada: integer('data_entrada', { mode: 'timestamp_ms' }),
     status: text('status', { enum: STATUS_ANIMAL }).notNull().default('ativo'),
@@ -107,6 +114,7 @@ export const animais = sqliteTable(
   (table) => [
     index('animais_brinco_idx').on(table.brinco),
     index('animais_mae_id_idx').on(table.maeId),
+    index('animais_pai_id_idx').on(table.paiId),
     index('animais_lote_id_idx').on(table.loteId),
   ]
 );
@@ -139,10 +147,17 @@ export const reproducoes = sqliteTable(
     previsaoParto: integer('previsao_parto', { mode: 'timestamp_ms' }),
     dataParto: integer('data_parto', { mode: 'timestamp_ms' }),
     criaId: text('cria_id').references(() => animais.id, { onDelete: 'set null' }),
+    /** Touro do rebanho usado na cobertura */
+    touroId: text('touro_id').references(() => animais.id, { onDelete: 'set null' }),
+    /** Touro de fora ou sêmen (nome, código da palheta), em texto livre */
+    touroDescricao: text('touro_descricao'),
     criadoPor: criadoPor(),
     ...timestamps,
   },
-  (table) => [index('reproducoes_animal_id_idx').on(table.animalId)]
+  (table) => [
+    index('reproducoes_animal_id_idx').on(table.animalId),
+    index('reproducoes_touro_id_idx').on(table.touroId),
+  ]
 );
 
 export const tratamentos = sqliteTable(
@@ -156,11 +171,27 @@ export const tratamentos = sqliteTable(
     dose: text('dose'),
     dataInicio: integer('data_inicio', { mode: 'timestamp_ms' }).notNull(),
     dataFim: integer('data_fim', { mode: 'timestamp_ms' }),
+    /**
+     * Legado: índices (1 = primeiro dia) dos dias confirmados. Copiado para
+     * `doses_aplicadas` na migration 0008; sai quando a tela deixar de usar.
+     */
     diasConfirmados: text('dias_confirmados', { mode: 'json' })
       .$type<number[]>()
       .notNull()
       .$defaultFn(() => []),
+    /** Legado: substituído pela agenda (dias_semana, horario, intervalo_horas) */
     proximaDoseEm: integer('proxima_dose_em', { mode: 'timestamp_ms' }),
+    /** Dias da semana com dose, no padrão do expo-notifications: 1 = domingo ... 7 = sábado */
+    diasSemana: text('dias_semana', { mode: 'json' })
+      .$type<number[]>()
+      .notNull()
+      .default(sql`'[1,2,3,4,5,6,7]'`),
+    /** Horário da (primeira) dose do dia, "HH:mm"; null = sem horário */
+    horario: text('horario'),
+    /** De quantas em quantas horas repetir no dia (só com todos os dias; divisor de 24) */
+    intervaloHoras: integer('intervalo_horas'),
+    /** Antecedência do aviso, em minutos (0 = na hora da dose) */
+    avisoMinutosAntes: integer('aviso_minutos_antes').notNull().default(0),
     notificacaoAtiva: integer('notificacao_ativa', { mode: 'boolean' })
       .notNull()
       .default(true),
@@ -174,6 +205,28 @@ export const tratamentos = sqliteTable(
   (table) => [
     index('tratamentos_animal_id_idx').on(table.animalId),
     index('tratamentos_grupo_aplicacao_id_idx').on(table.grupoAplicacaoId),
+  ]
+);
+
+/**
+ * Uma linha por dia de dose dada ("Dei a dose de hoje"). Guarda a DATA do dia
+ * (epoch da meia-noite local), não o índice: o "dia N" é calculado a partir de
+ * data_inicio. O índice único impede confirmar o mesmo dia duas vezes.
+ */
+export const dosesAplicadas = sqliteTable(
+  'doses_aplicadas',
+  {
+    id: id(),
+    tratamentoId: text('tratamento_id')
+      .notNull()
+      .references(() => tratamentos.id, { onDelete: 'cascade' }),
+    /** Meia-noite local do dia da dose */
+    dia: integer('dia', { mode: 'timestamp_ms' }).notNull(),
+    criadoPor: criadoPor(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex('doses_aplicadas_tratamento_dia_idx').on(table.tratamentoId, table.dia),
   ]
 );
 
@@ -224,6 +277,12 @@ export const animaisRelations = relations(animais, ({ one, many }) => ({
     relationName: 'mae_crias',
   }),
   crias: many(animais, { relationName: 'mae_crias' }),
+  pai: one(animais, {
+    fields: [animais.paiId],
+    references: [animais.id],
+    relationName: 'pai_filhos',
+  }),
+  filhos: many(animais, { relationName: 'pai_filhos' }),
   lote: one(lotes, { fields: [animais.loteId], references: [lotes.id] }),
   pesagens: many(pesagens),
   reproducoes: many(reproducoes, { relationName: 'reproducoes_da_mae' }),
@@ -241,12 +300,21 @@ export const reproducoesRelations = relations(reproducoes, ({ one }) => ({
     relationName: 'reproducoes_da_mae',
   }),
   cria: one(animais, { fields: [reproducoes.criaId], references: [animais.id] }),
+  touro: one(animais, { fields: [reproducoes.touroId], references: [animais.id] }),
 }));
 
-export const tratamentosRelations = relations(tratamentos, ({ one }) => ({
+export const tratamentosRelations = relations(tratamentos, ({ one, many }) => ({
   animal: one(animais, {
     fields: [tratamentos.animalId],
     references: [animais.id],
+  }),
+  doses: many(dosesAplicadas),
+}));
+
+export const dosesAplicadasRelations = relations(dosesAplicadas, ({ one }) => ({
+  tratamento: one(tratamentos, {
+    fields: [dosesAplicadas.tratamentoId],
+    references: [tratamentos.id],
   }),
 }));
 
@@ -261,6 +329,8 @@ export type Reproducao = typeof reproducoes.$inferSelect;
 export type NovaReproducao = typeof reproducoes.$inferInsert;
 export type Tratamento = typeof tratamentos.$inferSelect;
 export type NovoTratamento = typeof tratamentos.$inferInsert;
+export type DoseAplicada = typeof dosesAplicadas.$inferSelect;
+export type NovaDoseAplicada = typeof dosesAplicadas.$inferInsert;
 export type Ordenha = typeof ordenhas.$inferSelect;
 export type NovaOrdenha = typeof ordenhas.$inferInsert;
 export type NotificacaoAgendadaRow = typeof notificacoesAgendadas.$inferSelect;
