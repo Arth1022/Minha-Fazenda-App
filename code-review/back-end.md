@@ -378,7 +378,7 @@ if (sexo === 'F') {
 
 ## Sprint 1 · Correção: volta do leite estimado
 
-> **Commit:** C, o próximo depois de `d51eda3` (o hash entra no commit seguinte, porque um commit não contém o próprio hash)
+> **Commit:** `6775a56`
 
 O usuário mandou voltar a tela do Rebanho para como era antes do `5688a37`, com o card de resumo e o leite estimado.
 
