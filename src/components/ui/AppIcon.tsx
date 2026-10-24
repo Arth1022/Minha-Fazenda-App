@@ -1,6 +1,8 @@
 import React from 'react';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 
+import { IconSize } from '@/constants/theme';
+
 export type AppIconName =
   | 'sun'
   | 'sunset'
@@ -21,7 +23,7 @@ export interface AppIconProps {
  * Ícones vetoriais padronizados no padrão Feather / Figma usando react-native-svg.
  * Não depende de arquivos de fontes ou módulos externos que falham no Metro bundler.
  */
-export function AppIcon({ name, size = 20, color = '#64748B' }: AppIconProps) {
+export function AppIcon({ name, size = IconSize.lg, color = '#64748B' }: AppIconProps) {
   switch (name) {
     case 'sun':
       return (

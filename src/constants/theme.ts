@@ -163,6 +163,13 @@ export const Spacing = {
   six: 64,
 } as const;
 
+/** Tamanhos padrão dos ícones vetoriais (AppIcon) */
+export const IconSize = {
+  sm: 12,
+  md: 16,
+  lg: 20,
+} as const;
+
 export const Radius = {
   xs: 6,
   sm: 8,

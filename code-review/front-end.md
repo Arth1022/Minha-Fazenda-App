@@ -521,3 +521,36 @@ O modal continua curto: só o que define **quem é** o animal. Dados opcionais f
 - **Pai e touro/sêmen:** só se o usuário quiser de volta. Exige colunas novas (back-end).
 
 **Prioridade sugerida:** (a) sexo + já pariu no modal → (b) "Mais detalhes" com peso, leite e ração, senão a tela do Rebanho fica só com "—" → (c) "Nova pesagem" e "Registrar parto" na ficha → (d) "Editar dados" (B5).
+
+> **Decisão do usuário (P5/P6):** aprovado. O cadastro novo entra na Sprint 2, com sexo, "Já pariu?" e "Mais detalhes" (peso, leite, ração, mãe e pai). Pai e touro/sêmen voltam com colunas novas.
+
+---
+
+# Sprint 2
+
+Escrito conforme cada item é entregue. Os tipos de dados vêm de `@/dtos`; os props continuam no próprio componente.
+
+## F10 · Token `IconSize`
+
+```ts
+// src/constants/theme.ts
+/** Tamanhos padrão dos ícones vetoriais (AppIcon) */
+export const IconSize = {
+  sm: 12,
+  md: 16,
+  lg: 20,
+} as const;
+
+// src/components/ui/AppIcon.tsx
+export function AppIcon({ name, size = IconSize.lg, color = '#64748B' }: AppIconProps) {
+
+// src/components/ui/MilkAmount.tsx
+<AppIcon name="milk" size={IconSize.sm} color={AgroColors.milk} />
+```
+
+**O que foi feito:** criei a escala de tamanho de ícone (decisão P4) e apliquei no padrão do `AppIcon` e no `MilkAmount`.
+
+**Por quê**
+- Fecha o ponto 2 do review da Sprint 1: o "12" solto do `MilkAmount` agora vem do tema.
+- **Os valores são os que já se usavam:** 12 no selo de leite, 20 como padrão do `AppIcon` e na Home, e 16 como meio-termo para chips e botões. Nenhum ícone muda de tamanho.
+- `HomeScreen.tsx` e `OrdenhaCard.tsx` também passam números fixos, mas estavam travados (o back-end está trocando imports para DTOs). Ficam para quando forem liberados.

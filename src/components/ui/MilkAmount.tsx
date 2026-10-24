@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { AgroColors, Radius, Spacing, Typography } from '@/constants/theme';
+import { AgroColors, IconSize, Radius, Spacing, Typography } from '@/constants/theme';
 import { formatMedida } from '@/utils/formatters';
 import { AppIcon } from './AppIcon';
 
@@ -16,7 +16,7 @@ export interface MilkAmountProps {
 export function MilkAmount({ liters }: MilkAmountProps) {
   return (
     <View style={styles.pill}>
-      <AppIcon name="milk" size={12} color={AgroColors.milk} />
+      <AppIcon name="milk" size={IconSize.sm} color={AgroColors.milk} />
       <Text style={styles.text}>{formatMedida(liters, 'L')}</Text>
     </View>
   );
