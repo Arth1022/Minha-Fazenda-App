@@ -7,6 +7,8 @@ Cada parte traz o código, o que foi feito e por que as escolhas foram tomadas.
 
 ## Sprint 1 · Ícone e selo de leite
 
+**Commit:** `823a65d` "Ícone e selo de leite"
+
 **Pedido:** a tela de rebanho mostrava a produção de leite com o emoji 💧 em azul (`waterBlue`). Isso parecia água, não leite. O pedido foi trocar por um ícone de leite, com uma cor que lembre leite.
 
 **Contexto:** durante a sprint, o usuário decidiu remover o leite por animal do modelo (migration `0002` remove `producao_leite_l`). O full-stack reescreveu `AnimalCard.tsx` e `RebanhoScreen.tsx` sem nenhuma métrica de leite. Por isso a entrega ficou como **peças reutilizáveis** (token de cor, ícone e componente), e nenhuma tela usa elas por enquanto.
@@ -188,3 +190,185 @@ exit code: 0
 ```
 
 O projeto inteiro passa no type-check, sem erros.
+
+---
+
+## Sprint 1 · Correção: tela do Rebanho volta à identidade
+
+**Pedido (usuário, via Líder Técnico):** a tela do Rebanho tinha perdido a identidade com a reescrita do commit `5688a37`. O pedido foi voltar ao visual do `df309c5`, mantendo a camada de dados nova (`useRebanho`, `calcularFase`, pesagens, crias). Não usei checkout do arquivo antigo: copiei o layout e liguei nos dados atuais.
+
+### Antes × depois
+
+| Parte | Em `5688a37` (antes da correção) | Agora |
+|---|---|---|
+| Card do animal | Título `nome · brinco` + `Badge` genérico de fase + alerta em badge | Avatar 🐮, título (`nome` ou `Brinco xxx`), raça, linha de métricas **⚖ peso** + **selo de leite**, alerta em uma linha pequena só quando existe |
+| Leite | Não existia | `MilkAmount` (garrafa + creme da Sprint 1) no lugar da 💧 azul do `df309c5` |
+| Toque no card | Abria a ficha direto | 1º toque seleciona, 2º toque no selecionado abre a ficha (como no `df309c5`) |
+| Lista | Todos os cards, sem limite | Altura de 3 cards, com rolagem interna |
+| Card de resumo | Removido | Volta: Peso, Produção de Leite, Crias, Ração Concentrado |
+| Filtro | Removido | Funil nas abas: só "alta produção" (≥ 20 L) |
+| Abas | Vacas / Novilhas / Bezerros / Machos (sempre) | Vacas / Novilhas / Bezerros; **Machos só aparece se houver garrote ou touro** |
+| Valor sem dado | — | "—" (nunca "0.0 L" inventado) |
+| Números | `toFixed` com ponto, `fontSize` solto | Vírgula decimal (`22,1 L`), fontes por `Typography` |
+
+### 1. Formatação: `src/utils/formatters.ts`
+
+```ts
+/** Exibido no lugar de um valor que ainda não foi informado. */
+export const SEM_VALOR = '—';
+
+/** Número com vírgula decimal (ex.: 22.1 → "22,1"). */
+export function formatDecimal(valor: number, casas = 1): string {
+  return valor.toFixed(casas).replace('.', ',');
+}
+
+/** Valor com unidade ("22,1 L"), ou "—" quando não há valor. */
+export function formatMedida(valor: number | null, unidade: string, casas = 1): string {
+  return valor === null ? SEM_VALOR : `${formatDecimal(valor, casas)} ${unidade}`;
+}
+```
+
+**Por quê:** atende o ponto 1 do review (vírgula pt-BR). Um lugar só resolve litros, kg e kg/dia, e também o "—" para valor ausente. Escolhi `replace('.', ',')` em vez de `toLocaleString('pt-BR')` porque é determinístico e não depende do suporte a `Intl` no Hermes. Os valores do rebanho não chegam a milhar, então o separador de milhar não faz falta aqui.
+
+### 2. `MilkAmount` aceita `null` e usa `Typography`
+
+```tsx
+export interface MilkAmountProps {
+  /** Litros de leite; null mostra "—" */
+  liters: number | null;
+}
+// ...
+<Text style={styles.text}>{formatMedida(liters, 'L')}</Text>
+// ...
+text: {
+  ...Typography.captionBold,
+  color: AgroColors.milk,
+},
+```
+
+**Por quê:** atende os pontos 1 e 2 do review. `producao_leite_l` é opcional, e a regra é não inventar "0,0 L". `captionBold` (12/700) é exatamente o tamanho que estava fixo, agora vindo do tema e com `lineHeight`. O tamanho do ícone (12) continua fixo porque o tema não tem uma escala de ícones (ver ponto 2 da Sprint 1).
+
+### 3. `AnimalCard`: layout do `df309c5` com dados novos
+
+```tsx
+const displayTitle = animal.nome || `Brinco ${animal.brinco}`;
+// ...
+<View style={styles.metricsInline}>
+  <View style={styles.metricBadge}>
+    <Text style={styles.scaleIcon}>⚖</Text>
+    <Text style={styles.weightText}>{formatMedida(animal.pesoKg, 'kg', 0)}</Text>
+  </View>
+  <MilkAmount liters={animal.producaoLeiteL} />
+</View>
+
+{animal.alerta ? (
+  <Text style={styles.alertText}>⚠ {animal.alerta}</Text>
+) : null}
+```
+
+**O que foi feito:** voltaram o avatar, o título, a raça e a linha de métricas. Saiu o `Badge` de fase, porque a aba já diz a fase. Fontes por `Typography` (`bodyBold`, `caption`, `captionBold`, `micro`) e espaçamentos por `Spacing`.
+
+**Por quê**
+- **O card recebe só `animal: AnimalComFase`:** peso, alerta e leite já vêm calculados pelo `useRebanho`, então o card é só apresentação, sem consultas próprias.
+- **Peso vem da pesagem mais recente** (`pesosAtuais()` no `useRebanho`), porque `peso_kg` saiu do animal. Ele é mostrado sem casas decimais no card (`450 kg`); o detalhe fica na ficha.
+- **Alerta mantido em uma linha `micro` laranja**, só quando existe. Cabe embaixo das métricas sem virar mais um badge e não aparece na maioria dos cards.
+- `fase` e `alerta` saíram das props: o card lê o alerta do próprio `animal`.
+
+### 4. `ResumoAnimalCard` (novo): card de baixo
+
+```tsx
+export function ResumoAnimalCard({ animal }: ResumoAnimalCardProps) {
+  return (
+    <Card padding="three">
+      <View style={styles.list}>
+        <ResumoLinha label="Peso">…{formatMedida(animal.pesoKg, 'kg', 0)}…</ResumoLinha>
+        <ResumoLinha label="Produção de Leite"><MilkAmount liters={animal.producaoLeiteL} /></ResumoLinha>
+        <ResumoLinha label="Crias">…{animal.crias}…</ResumoLinha>
+        <ResumoLinha label="Ração Concentrado">…{formatMedida(animal.racaoKgDia, 'kg/dia')}…</ResumoLinha>
+      </View>
+    </Card>
+  );
+}
+```
+
+**Por quê**
+- **Componente próprio:** no `df309c5`, as quatro linhas estavam soltas dentro da tela, com estilos repetidos. Agora a tela só faz `<ResumoAnimalCard animal={selectedAnimal} />`, e `ResumoLinha` evita repetir a mesma `View` + label quatro vezes.
+- **Crias** = `criasPorMae()` (filhos com `mae_id` igual ao do animal). **Peso** = `pesosAtuais()`. **Leite e ração** = colunas recriadas pelo back-end (migration 0006). Tudo chega pronto no `animal`.
+- **Fonte:** `Typography.body` / `bodyBold` (14). O `df309c5` usava 13 fixo, que não existe na escala do tema. Preferi seguir o tema (ponto 2 do review) a manter um número solto; a diferença visual é de 1px.
+
+### 5. `RebanhoScreen`: comportamento de antes
+
+```tsx
+// A aba "Machos" só aparece quando há garrote ou touro no rebanho
+const tabs = useMemo(
+  () => rebanho.some((animal) => GRUPO_DA_FASE[animal.fase] === 'machos')
+    ? [...TABS, TAB_MACHOS]
+    : TABS,
+  [rebanho]
+);
+
+// 1º toque seleciona o animal; 2º toque no selecionado abre a ficha
+const handleAnimalPress = (animal: Animal) => { … };
+```
+
+**O que foi feito:** voltaram a seleção em dois toques, a lista limitada a 3 cards com rolagem interna (`VISIBLE_ANIMALS`), o funil "alta produção ≥ 20 L" (`ALTA_PRODUCAO_LEITE_L`) e o card de resumo. As abas usam a fase do `calcularFase` (literatura Embrapa).
+
+**Por quê**
+- **Machos condicional:** o `df309c5` não tinha machos. Na fazenda de leite eles são exceção, então a aba só aparece quando existe garrote ou touro. Considerei **garrote + touro** (e não só touro) porque o bezerro macho já vai para "Bezerros" e o garrote não teria onde aparecer. *A confirmar com o usuário (Líder Técnico).*
+- **Filtro com leite `null`:** o animal sem produção informada fica fora da "alta produção". Não dá para afirmar que ele produz ≥ 20 L.
+- **`selectedAnimal` sem `useMemo`:** é um `find` numa lista já filtrada, então o memo não pagava a leitura extra.
+- **`handleAnimalCreated` passa `jaPariu`** ao `calcularFase` e seleciona o animal recém-criado.
+
+### 6. `useRebanho.ts`: peso atual, crias e `jaPariu`
+
+```ts
+const { data: crias } = useLiveQuery(criasPorMae());
+const { data: pesos } = useLiveQuery(pesosAtuais());
+
+return useMemo(() => {
+  const partoPorMae = new Map(partos.map((p) => [p.maeId, p.data]));
+  const criasPor = new Map(crias.map((c) => [c.maeId, c.total]));
+  const pesoPor = new Map(pesos.map((p) => [p.animalId, p.pesoKg]));
+  return lista.map((animal) => {
+    // ...
+    return {
+      ...animal,
+      // ...
+      pesoKg: pesoPor.get(animal.id) ?? null,
+      crias: criasPor.get(animal.id) ?? 0,
+      fase: calcularFase({
+        sexo: animal.sexo,
+        dataNascimento: animal.dataNascimento,
+        ultimoParto,
+        jaPariu: animal.jaPariu,
+      }),
+    };
+  });
+}, [lista, partos, comCarencia, crias, pesos, produzLeite]);
+```
+
+**Por quê**
+- **Sem N+1:** duas consultas agregadas do back-end (`criasPorMae`, `pesosAtuais`) para o rebanho inteiro, em vez de uma consulta por card. Usei o mesmo padrão do `partoPorMae`, que já existia: um `Map` por id. Durante o desenvolvimento existiu um `usePesoAtual` temporário (uma consulta por animal); ele foi apagado e não entra no histórico.
+- **`AnimalComFase` ganhou `pesoKg` e `crias`:** a lista e o resumo leem do mesmo objeto, sem buscar de novo.
+- **`jaPariu`:** sem isso, uma vaca comprada adulta, que pariu antes de entrar no app, aparecia como novilha na aba errada. Era pendência do back-end, passada para o front pelo Líder Técnico.
+
+### Arquivos
+
+| Arquivo | Mudança |
+|---|---|
+| `src/features/rebanho/screens/RebanhoScreen.tsx` | Seleção em 2 toques, lista de 3 com rolagem, filtro, resumo, aba Machos condicional, `jaPariu` |
+| `src/features/rebanho/components/AnimalCard.tsx` | Layout do `df309c5` com peso da pesagem e `MilkAmount` |
+| `src/features/rebanho/components/ResumoAnimalCard.tsx` | **novo**: card de resumo |
+| `src/features/rebanho/hooks/useRebanho.ts` | + `pesoKg` e `crias` (consultas agregadas) e `jaPariu` no `calcularFase` |
+| `src/components/ui/MilkAmount.tsx` | `liters: number \| null`, vírgula, `Typography.captionBold` |
+| `src/utils/formatters.ts` | + `SEM_VALOR`, `formatDecimal`, `formatMedida` |
+
+### Resultado do `tsc`
+
+```
+$ npx tsc --noEmit
+(sem saída)
+exit code: 0
+```
+
+Obs.: `npx eslint` quebra dentro do `eslint-plugin-import` (stack em `exportMap/builder.js`), antes de analisar as regras. É um problema da ferramenta, não destes arquivos.
