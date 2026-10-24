@@ -83,6 +83,11 @@ export const animais = sqliteTable(
     nascimentoAproximado: integer('nascimento_aproximado', { mode: 'boolean' })
       .notNull()
       .default(false),
+    /**
+     * Já pariu antes de entrar no app (ex.: vaca comprada adulta). Sem isso, uma
+     * fêmea sem cria registrada ficaria novilha para sempre.
+     */
+    jaPariu: integer('ja_pariu', { mode: 'boolean' }).notNull().default(false),
     maeId: text('mae_id').references((): AnySQLiteColumn => animais.id, {
       onDelete: 'set null',
     }),

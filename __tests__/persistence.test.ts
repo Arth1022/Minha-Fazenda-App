@@ -21,6 +21,7 @@ import {
   tratamentosDoAnimal,
   ultimoUsoDoMedicamento,
 } from '@/features/rebanho/data/tratamentos';
+import { calcularFase } from '@/features/rebanho/services/fase';
 import { salvarTipoProducao } from '@/providers/FazendaProvider';
 import {
   animais,
@@ -81,6 +82,13 @@ async function runPersistenceTest() {
   check(vaca.sexo === 'F' && vaca.status === 'ativo' && !vaca.nascimentoAproximado, 'padrões: fêmea, ativa, nascimento exato');
   check(vaca.createdAt instanceof Date && vaca.updatedAt instanceof Date, 'created_at / updated_at preenchidos como Date');
   check((await animalPorId(vaca.id))?.raca === 'Girolando', 'animalPorId encontra o animal com os campos mapeados');
+  check(vaca.jaPariu === false, 'ja_pariu começa false (sem backfill por idade)');
+  const compradaParida = await createAnimal({ brinco: '#205', origem: 'comprado', dataNascimento: dia(1, 1, 2020), jaPariu: true });
+  check((await animalPorId(compradaParida.id))?.jaPariu === true, 'createAnimal grava ja_pariu (vaca comprada já parida)');
+  check(
+    calcularFase({ ...compradaParida, ultimoParto: null }, dia(24, 10)) === 'vaca',
+    'comprada com ja_pariu é vaca sem cria registrada'
+  );
 
   // 3. Cobertura com previsão de parto
   const cobertura = await createReproducao({ animalId: vaca.id, tipo: 'inseminacao', data: dia(1, 1) });
@@ -103,6 +111,10 @@ async function runPersistenceTest() {
   check(
     partos.length === 1 && partos[0].maeId === vaca.id && partos[0].data instanceof Date,
     'último parto de cada mãe sai do nascimento da cria'
+  );
+  check(
+    calcularFase({ ...vaca, ultimoParto: partos[0].data }, dia(24, 10)) === 'vaca',
+    'fêmea com cria registrada é vaca sem ja_pariu (caso da Mimosa do seed)'
   );
 
   const comCrias = await db.query.animais.findFirst({

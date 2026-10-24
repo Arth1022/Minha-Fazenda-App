@@ -54,17 +54,26 @@ console.log('🐄 MINHA FAZENDA - REGRAS DO REBANHO');
 console.log('=========================================================\n');
 
 // Fase
-const fase = (sexo: 'F' | 'M', meses: number | null, ultimoParto: Date | null = null) =>
+const fase = (
+  sexo: 'F' | 'M',
+  meses: number | null,
+  ultimoParto: Date | null = null,
+  jaPariu?: boolean
+) =>
   calcularFase(
-    { sexo, dataNascimento: meses === null ? null : mesesAtras(meses), ultimoParto },
+    { sexo, dataNascimento: meses === null ? null : mesesAtras(meses), ultimoParto, jaPariu },
     HOJE
   );
 check(fase('F', 11) === 'bezerra', 'fêmea com 11 meses é bezerra');
 check(fase('F', 12) === 'novilha', 'fêmea com 12 meses é novilha');
 check(fase('F', 23) === 'novilha', 'fêmea com 23 meses sem parto é novilha');
-check(fase('F', 20, dia(1, 9)) === 'vaca', 'fêmea que já pariu é vaca');
-check(fase('F', 24) === 'vaca', 'fêmea com 24 meses é vaca mesmo sem parto registrado');
-check(fase('F', null) === 'vaca', 'fêmea sem idade é tratada como adulta');
+check(fase('F', 20, dia(1, 9)) === 'vaca', 'fêmea com cria registrada é vaca');
+check(fase('F', 30, null, true) === 'vaca', 'fêmea com ja_pariu = true é vaca (comprada já parida)');
+check(fase('F', 30) === 'novilha', 'fêmea de 30 meses sem parto e sem ja_pariu é novilha');
+check(fase('F', 30, null, false) === 'novilha', 'ja_pariu = false não muda a regra');
+check(fase('F', 8, null, true) === 'vaca', 'o parto decide antes da idade');
+check(fase('F', null) === 'novilha', 'fêmea sem idade e sem parto é novilha (adulta que não pariu)');
+check(fase('F', null, null, true) === 'vaca', 'fêmea sem idade que já pariu é vaca');
 check(fase('M', 6) === 'bezerro', 'macho com 6 meses é bezerro');
 check(fase('M', 18) === 'garrote', 'macho com 18 meses é garrote');
 check(fase('M', 30) === 'touro', 'macho com 30 meses é touro');

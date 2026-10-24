@@ -8,7 +8,7 @@ export type SituacaoLeite = 'lactacao' | 'seca';
 
 /** Até esta idade (exclusive) o animal é bezerra/bezerro. */
 export const IDADE_FIM_CRIA_MESES = 12;
-/** A partir desta idade o macho é touro e a fêmea sem parto registrado vira vaca. */
+/** A partir desta idade o macho é touro. Na fêmea, só o parto faz dela vaca. */
 export const IDADE_ADULTO_MESES = 24;
 /** Duração padrão de uma lactação: depois disso a vaca é considerada seca. */
 export const DURACAO_LACTACAO_DIAS = 305;
@@ -32,8 +32,10 @@ export const SITUACAO_LEITE_LABEL: Record<SituacaoLeite, string> = {
 export interface DadosFase {
   sexo: Sexo;
   dataNascimento: Date | null;
-  /** Data do parto mais recente (null se nunca pariu) */
+  /** Data do parto mais recente registrado no app (null se não há) */
   ultimoParto: Date | null;
+  /** Já pariu antes de entrar no app (coluna `ja_pariu`); padrão false */
+  jaPariu?: boolean;
 }
 
 /** Idade em meses completos. */
@@ -53,21 +55,23 @@ export function dataNascimentoPorIdade(idadeMeses: number, hoje = new Date()): D
 }
 
 /**
- * Fase do animal, calculada por sexo, idade e partos.
- * - Fêmea: bezerra (< 12 meses), novilha, vaca (já pariu ou tem 24 meses ou mais).
+ * Fase do animal, calculada por sexo, idade e partos (Embrapa: Glossário Gado de
+ * Corte e Manual Roda da Reprodução 2.0).
+ * - Fêmea: bezerra (< 12 meses), novilha (não pariu), vaca (já pariu). Só o parto
+ *   faz a fêmea virar vaca; a idade decide apenas a saída de bezerra.
  * - Macho: bezerro (< 12 meses), garrote (12 a 23 meses), touro (24 meses ou mais).
- * Sem data de nascimento, o animal é tratado como adulto.
+ * Sem data de nascimento, o animal é tratado como adulto: novilha ou touro.
  */
 export function calcularFase(
-  { sexo, dataNascimento, ultimoParto }: DadosFase,
+  { sexo, dataNascimento, ultimoParto, jaPariu = false }: DadosFase,
   hoje = new Date()
 ): Fase {
   const idade = dataNascimento ? idadeEmMeses(dataNascimento, hoje) : null;
 
   if (sexo === 'F') {
-    if (ultimoParto) return 'vaca';
-    if (idade === null || idade >= IDADE_ADULTO_MESES) return 'vaca';
-    return idade < IDADE_FIM_CRIA_MESES ? 'bezerra' : 'novilha';
+    if (jaPariu || ultimoParto) return 'vaca';
+    if (idade !== null && idade < IDADE_FIM_CRIA_MESES) return 'bezerra';
+    return 'novilha';
   }
 
   if (idade === null || idade >= IDADE_ADULTO_MESES) return 'touro';
