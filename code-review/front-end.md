@@ -554,3 +554,119 @@ export function AppIcon({ name, size = IconSize.lg, color = '#64748B' }: AppIcon
 - Fecha o ponto 2 do review da Sprint 1: o "12" solto do `MilkAmount` agora vem do tema.
 - **Os valores são os que já se usavam:** 12 no selo de leite, 20 como padrão do `AppIcon` e na Home, e 16 como meio-termo para chips e botões. Nenhum ícone muda de tamanho.
 - `HomeScreen.tsx` e `OrdenhaCard.tsx` também passam números fixos, mas estavam travados (o back-end está trocando imports para DTOs). Ficam para quando forem liberados.
+
+**Commit:** `421b877`
+
+## Componentes de formulário novos
+
+Todos são arquivos novos, exportados em `@/components/forms` (o `InfoBanner` em `@/components/ui`). Nenhum consulta o banco: recebem valor e devolvem pelo `onChange`. Seguem o visual do `ChipSelector` (rótulo `caption` 600, borda `borderStrong`, selecionado em verde) e usam só tokens do tema.
+
+| Componente | Valor | Uso previsto |
+|---|---|---|
+| `WeekdayPicker` | `DiaSemana[]` (1 = domingo … 7 = sábado) | Novo Tratamento: dias da dose |
+| `IntervalPicker` | `4 \| 6 \| 8 \| 12 \| 24` | Novo Tratamento: "a cada N h" quando são todos os dias |
+| `AvisoPicker` | `0 \| 15 \| 60 \| 1440` | Novo Tratamento: "Quando notificar" (`aviso_minutos_antes`) |
+| `SwitchField` | `boolean` | Cadastro: "Já pariu?" |
+| `CollapsibleSection` | — (abre/fecha) | Cadastro: "Mais detalhes" |
+| `AnimalPicker` | `id \| null` | Mãe; base do `OrigemAnimalField` |
+| `OrigemAnimalField` | `{ id, descricao }` | Pai (cadastro) e touro (cobertura) |
+| `DateField` | `Date` | Data de pesagem, cobertura, parto, saída e dose |
+| `InfoBanner` | — | "Limite de lembretes atingido" |
+
+### `WeekdayPicker`
+
+```tsx
+export const TODOS_OS_DIAS: DiaSemana[] = [1, 2, 3, 4, 5, 6, 7];
+
+const alternar = (dia: DiaSemana) =>
+  onChange(
+    value.includes(dia)
+      ? value.filter((d) => d !== dia)
+      : [...value, dia].sort((a, b) => a - b)
+  );
+```
+
+**Por quê**
+- **De 1 a 7 com 1 = domingo:** é o padrão do `expo-notifications` (`DiaSemana` vem de `@/dtos`). O valor vai direto para o agendamento, sem conversão.
+- **Visual de alarme do celular** (pedido do usuário): sete círculos D S T Q Q S S. Como as letras se repetem (Q, S), cada círculo tem `accessibilityLabel` com o nome do dia, para o leitor de tela.
+- **"Todos os dias" / "Limpar":** é o atalho mais comum (remédio diário). Com todos marcados, o formulário mostra o `IntervalPicker`.
+- O array fica sempre ordenado, então `[2, 4]` e `[4, 2]` não viram valores diferentes.
+
+### `IntervalPicker` e `AvisoPicker`
+
+```tsx
+export const INTERVALOS_HORAS = [4, 6, 8, 12, 24] as const;
+export const AVISOS_MINUTOS = [0, 15, 60, 1440] as const;
+
+<ChipSelector
+  options={OPCOES}
+  value={String(value)}
+  onChange={(v) => onChange(Number(v) as IntervaloHoras)}
+/>
+```
+
+**Por quê**
+- **São um `ChipSelector` por dentro:** não duplicam o estilo de chip, só traduzem número ↔ texto (o `ChipSelector` trabalha com `string`).
+- **Opções fixas, sem campo livre:** o intervalo só aceita divisores de 24, então a dose cai nos mesmos horários todo dia. Como não há digitação, não há o que validar.
+- As listas e os tipos (`IntervaloHoras`, `AvisoMinutos`) são exportados para o formulário e o back-end usarem os mesmos valores.
+
+### `SwitchField` e `CollapsibleSection`
+
+**Por quê:** os dois são pequenos e genéricos (rótulo + `Switch`; título + ▾ + conteúdo). O `CollapsibleSection` começa **fechado**, para o cadastro continuar curto. Quem não quer detalhes nem vê os campos.
+
+### `AnimalPicker`
+
+```tsx
+const escolhido = animais.find((animal) => animal.id === value);
+if (escolhido) return /* cartão verde "🐮 Mimosa · #104  ✕" */;
+// senão: campo de busca + até 5 sugestões por brinco/nome (sem acento/caixa)
+```
+
+**Por quê**
+- **Devolve o `id`, não o texto:** `mae_id`, `pai_id` e `touro_id` são FKs. Antes era `mae_brinco` em texto, que quebrava se o brinco mudasse.
+- **Quem chama filtra a lista** (só fêmeas para mãe, só machos para pai/touro). O componente não conhece regra de rebanho.
+- **Escolhido = cartão com ✕:** fica claro que já existe uma seleção, e tocar no cartão desfaz. A busca reaproveita `normalizarTexto` ("mimosa" acha "Mimosa").
+
+### `OrigemAnimalField`: "Da fazenda" × "De fora / sêmen"
+
+```tsx
+export interface OrigemAnimalValue {
+  id: string | null;
+  descricao: string | null;
+}
+
+const trocarOrigem = (nova: Origem) => {
+  setOrigem(nova);
+  onChange({ id: null, descricao: null });
+};
+```
+
+**Por quê**
+- **Dois chips no topo** decidem qual campo aparece: o `AnimalPicker` (→ `id`) ou o texto livre (→ `descricao`). É a forma mais simples de alternar, pedida pelo Líder Técnico.
+- **Trocar limpa o outro lado:** nunca vão `pai_id` e `pai_descricao` juntos.
+- **Um componente para os dois usos:** pai no cadastro (`pai_id`/`pai_descricao`) e touro na cobertura (`touro_id`/`touro_descricao`).
+- **`OrigemAnimalValue` fica no componente, não em `@/dtos`:** é a forma do valor do campo (UI), não um contrato com `data/`. Quem salva mapeia para as colunas.
+
+### `DateField`
+
+```tsx
+function textoDaData(data: Date): string {
+  const dias = diasEntre(data, new Date());
+  if (dias === 0) return 'Hoje';
+  if (dias === 1) return 'Ontem';
+  return formatDataBR(data);
+}
+```
+
+**Por quê**
+- **Começa em "Hoje ▾":** quase todo registro (pesagem, parto, dose) é do dia. O produtor só toca se precisar mudar.
+- **Calendário nativo** (`@react-native-community/datetimepicker`, já instalado e usado pelo `TimeWheelPicker`). Ele não digita data, então não precisa de máscara nem de validação de formato.
+- `maximumDate` / `minimumDate` deixam quem chama impedir data futura em registros que já aconteceram.
+
+### `InfoBanner`
+
+**Por quê:** é uma faixa simples (ícone + texto) com as cores `warning*` que já existem no tema, e tem a variante `info` para outros avisos. `accessibilityRole="alert"` faz o leitor de tela anunciar o aviso. Ele só exibe: quem decide se o limite (~60 lembretes) foi atingido é o back-end.
+
+### Validação
+
+`tsc` isolado (HEAD + só estes arquivos, com índice temporário): **OK**. O `tsc` do working tree inteiro acusa erros em `__tests__/` (trabalho em andamento do back-end), não nestes arquivos.
