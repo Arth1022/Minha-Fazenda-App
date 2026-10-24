@@ -7,6 +7,7 @@ export * from './animal.dto';
 export * from './fazenda.dto';
 export * from './ficha.dto';
 export * from './notificacoes.dto';
+export * from './novoTratamento.dto';
 export * from './ordenha.dto';
 export * from './pesagem.dto';
 export * from './reproducao.dto';

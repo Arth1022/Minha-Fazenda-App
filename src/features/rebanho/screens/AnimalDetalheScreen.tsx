@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 
-import { CustomInput, FormModal } from '@/components/forms';
+import { CustomInput } from '@/components/forms';
 import {
   Button,
   Card,
@@ -12,19 +12,13 @@ import {
 } from '@/components/ui';
 import { AgroColors, Radius, Spacing } from '@/constants/theme';
 import type { Tratamento } from '@/dtos';
-import { formatDataBR, maskDataBR, parseDataBR } from '@/utils';
-import { createTratamento, toggleDiaConfirmado } from '../data/tratamentos';
+import { formatDataBR } from '@/utils';
+import { NovoTratamentoForm } from '../components/NovoTratamentoForm';
+import { toggleDiaConfirmado } from '../data/tratamentos';
 import { useFichaAnimal } from '../hooks/useFichaAnimal';
 
 const MS_POR_DIA = 24 * 60 * 60 * 1000;
 const SEM_VALOR = '—';
-const ERRO_DATA = 'Informe a data no formato DD/MM/AAAA.';
-
-interface TratamentoErrors {
-  medicamento?: string;
-  inicio?: string;
-  fim?: string;
-}
 
 /** Meia-noite do dia, para contar dias sem considerar o horário. */
 function inicioDoDia(date: Date): number {
@@ -63,67 +57,14 @@ export default function AnimalDetalheScreen() {
   // TODO(F3a): trocar pelo tratamentosAtivos do back-end
   const activeTratamento = ficha?.tratamentos[0] ?? null;
 
-  // Estado para modal de "Novo Tratamento"
   const [modalVisible, setModalVisible] = useState(false);
-  const [novoMedicamento, setNovoMedicamento] = useState('');
-  const [novoInicio, setNovoInicio] = useState('');
-  const [novoFim, setNovoFim] = useState('');
-  const [errors, setErrors] = useState<TratamentoErrors>({});
-  const [saving, setSaving] = useState(false);
 
   const displayBrinco = animal ? `Brinco ${animal.brinco}` : SEM_VALOR;
   const confirmedDays = activeTratamento?.diasConfirmados ?? [];
 
-  const openModal = () => {
-    setNovoMedicamento('');
-    setNovoInicio(formatDataBR(new Date()));
-    setNovoFim('');
-    setErrors({});
-    setModalVisible(true);
-  };
-
-  const clearError = (field: keyof TratamentoErrors) => {
-    if (errors[field]) setErrors((prev) => ({ ...prev, [field]: undefined }));
-  };
-
   const handleToggleDay = async (day: number) => {
     if (!activeTratamento) return;
     await toggleDiaConfirmado(activeTratamento, day);
-  };
-
-  const handleCreateTratamento = async () => {
-    const medicamento = novoMedicamento.trim();
-    const dataInicio = parseDataBR(novoInicio);
-    const dataFim = parseDataBR(novoFim);
-
-    const nextErrors: TratamentoErrors = {};
-    if (!medicamento) nextErrors.medicamento = 'Informe o nome do medicamento.';
-    if (!dataInicio) nextErrors.inicio = ERRO_DATA;
-    if (!dataFim) {
-      nextErrors.fim = ERRO_DATA;
-    } else if (dataInicio && dataFim.getTime() < dataInicio.getTime()) {
-      nextErrors.fim = 'O fim deve ser igual ou posterior ao início.';
-    }
-
-    if (!id || !dataInicio || !dataFim || Object.keys(nextErrors).length > 0) {
-      setErrors(nextErrors);
-      return;
-    }
-
-    setSaving(true);
-    try {
-      await createTratamento({
-        animalId: id,
-        medicamento,
-        dataInicio,
-        dataFim,
-        diasConfirmados: [],
-        notificacaoAtiva: true,
-      });
-      setModalVisible(false);
-    } finally {
-      setSaving(false);
-    }
   };
 
   return (
@@ -143,7 +84,7 @@ export default function AnimalDetalheScreen() {
             variant="primary"
             size="lg"
             fullWidth
-            onPress={openModal}
+            onPress={() => setModalVisible(true)}
           />
           {/* F6 "Outros registros" (outline): Pesagem, Cobertura, Parto (se ficha.podeReproduzir) e Saída */}
         </View>
@@ -247,58 +188,12 @@ export default function AnimalDetalheScreen() {
       {/* D. F5 ProximosCard + aviso do limite de notificações (contagemNotificacoes) */}
       {/* E. F5 LinhaDoTempo (Histórico): opcional, sai primeiro se o prazo apertar */}
 
-      {/* Modal de Formulário para Novo Tratamento */}
-      <FormModal
+      <NovoTratamentoForm
         visible={modalVisible}
-        title="Novo Tratamento"
-        subtitle={`Registrar protocolo sanitário para ${displayBrinco}`}
+        animalId={id}
+        identificacao={displayBrinco}
         onClose={() => setModalVisible(false)}
-        onSubmit={handleCreateTratamento}
-        submitLabel="Iniciar Tratamento"
-        loading={saving}>
-        <CustomInput
-          label="Medicamento / Protocolo"
-          required
-          value={novoMedicamento}
-          onChangeText={(text) => {
-            setNovoMedicamento(text);
-            clearError('medicamento');
-          }}
-          placeholder="Nome do medicamento ou vacina"
-          error={errors.medicamento}
-        />
-
-        <View style={styles.dateInputsRow}>
-          <CustomInput
-            containerStyle={{ flex: 1 }}
-            label="Data de Início"
-            required
-            value={novoInicio}
-            onChangeText={(text) => {
-              setNovoInicio(maskDataBR(text));
-              clearError('inicio');
-            }}
-            placeholder="DD/MM/AAAA"
-            keyboardType="number-pad"
-            maxLength={10}
-            error={errors.inicio}
-          />
-          <CustomInput
-            containerStyle={{ flex: 1 }}
-            label="Data de Fim"
-            required
-            value={novoFim}
-            onChangeText={(text) => {
-              setNovoFim(maskDataBR(text));
-              clearError('fim');
-            }}
-            placeholder="DD/MM/AAAA"
-            keyboardType="number-pad"
-            maxLength={10}
-            error={errors.fim}
-          />
-        </View>
-      </FormModal>
+      />
     </ScreenContainer>
   );
 }
