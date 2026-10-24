@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 
@@ -13,9 +13,16 @@ import {
 import { AgroColors, Radius, Spacing } from '@/constants/theme';
 import type { Tratamento } from '@/dtos';
 import { formatDataBR } from '@/utils';
+import { FichaResumo } from '../components/FichaResumo';
 import { NovoTratamentoForm } from '../components/NovoTratamentoForm';
+import {
+  OutrosRegistrosMenu,
+  type TipoRegistro,
+} from '../components/OutrosRegistrosMenu';
+import { RegistroForm } from '../components/registros/RegistroForm';
 import { toggleDiaConfirmado } from '../data/tratamentos';
 import { useFichaAnimal } from '../hooks/useFichaAnimal';
+import { useRebanho } from '../hooks/useRebanho';
 
 const MS_POR_DIA = 24 * 60 * 60 * 1000;
 const SEM_VALOR = '—';
@@ -58,6 +65,12 @@ export default function AnimalDetalheScreen() {
   const activeTratamento = ficha?.tratamentos[0] ?? null;
 
   const [modalVisible, setModalVisible] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [registro, setRegistro] = useState<TipoRegistro | null>(null);
+
+  // Touros para a cobertura: os machos ativos do rebanho
+  const rebanho = useRebanho();
+  const touros = useMemo(() => rebanho.filter((a) => a.sexo === 'M'), [rebanho]);
 
   const displayBrinco = animal ? `Brinco ${animal.brinco}` : SEM_VALOR;
   const confirmedDays = activeTratamento?.diasConfirmados ?? [];
@@ -86,22 +99,17 @@ export default function AnimalDetalheScreen() {
             fullWidth
             onPress={() => setModalVisible(true)}
           />
-          {/* F6 "Outros registros" (outline): Pesagem, Cobertura, Parto (se ficha.podeReproduzir) e Saída */}
+          <Button
+            label="Outros registros"
+            variant="outline"
+            size="lg"
+            fullWidth
+            onPress={() => setMenuVisible(true)}
+          />
         </View>
       }>
-      {/* A. F2 FichaResumo: substitui a identificação abaixo (inclui "Produção de Leite" só quando preenchida) */}
-      {/* Identificação do Animal e Medicamento Ativo */}
-      <View style={styles.animalProfileRow}>
-        <View style={styles.avatarCircle}>
-          <Text style={styles.avatarEmoji}>🐮</Text>
-        </View>
-        <View style={styles.animalTitleCol}>
-          <Text style={styles.animalBrincoText}>{displayBrinco}</Text>
-          <Text style={styles.medicationSubText}>
-            {activeTratamento?.medicamento ?? 'Nenhum tratamento registrado'}
-          </Text>
-        </View>
-      </View>
+      {/* A. Resumo */}
+      {ficha ? <FichaResumo ficha={ficha} alerta={null} /> : null}
 
       {/* B. Tratamento: F3a TratamentoAtivoCard substitui este bloco */}
       {activeTratamento ? (
@@ -194,6 +202,24 @@ export default function AnimalDetalheScreen() {
         identificacao={displayBrinco}
         onClose={() => setModalVisible(false)}
       />
+
+      <OutrosRegistrosMenu
+        visible={menuVisible}
+        reprodutiva={ficha?.podeReproduzir ?? false}
+        onClose={() => setMenuVisible(false)}
+        onSelect={(tipo) => {
+          setMenuVisible(false);
+          setRegistro(tipo);
+        }}
+      />
+      {registro && id ? (
+        <RegistroForm
+          tipo={registro}
+          animalId={id}
+          touros={touros}
+          onClose={() => setRegistro(null)}
+        />
+      ) : null}
     </ScreenContainer>
   );
 }
@@ -201,36 +227,6 @@ export default function AnimalDetalheScreen() {
 const styles = StyleSheet.create({
   footerActions: {
     gap: Spacing.two,
-  },
-  animalProfileRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-    marginTop: 2,
-  },
-  avatarCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#E5E7EB',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarEmoji: {
-    fontSize: 24,
-  },
-  animalTitleCol: {
-    gap: 2,
-  },
-  animalBrincoText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: AgroColors.textPrimary,
-  },
-  medicationSubText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: AgroColors.textMuted,
   },
   dateInputsRow: {
     flexDirection: 'row',
