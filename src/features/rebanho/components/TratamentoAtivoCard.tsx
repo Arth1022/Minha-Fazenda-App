@@ -38,9 +38,13 @@ export function TratamentoAtivoCard({ ativo }: TratamentoAtivoCardProps) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.tituloCol}>
-        <Text style={styles.medicamento}>{tratamento.medicamento}</Text>
-        {tratamento.dose ? <Text style={styles.dose}>{tratamento.dose}</Text> : null}
+      {/* Faixa verde à esquerda marca onde começa cada tratamento */}
+      <View style={styles.titulo}>
+        <View style={styles.faixa} />
+        <View style={styles.tituloCol}>
+          <Text style={styles.medicamento}>{tratamento.medicamento}</Text>
+          {tratamento.dose ? <Text style={styles.dose}>{tratamento.dose}</Text> : null}
+        </View>
       </View>
 
       <PeriodoDoTratamento tratamento={tratamento} />
@@ -54,7 +58,18 @@ const styles = StyleSheet.create({
   container: {
     gap: Spacing.md,
   },
+  titulo: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: Spacing.sm,
+  },
+  faixa: {
+    width: 4,
+    borderRadius: 2,
+    backgroundColor: AgroColors.primaryLight,
+  },
   tituloCol: {
+    flex: 1,
     gap: 2,
   },
   medicamento: {

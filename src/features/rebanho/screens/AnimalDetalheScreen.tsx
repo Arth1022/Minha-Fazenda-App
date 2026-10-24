@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 
-import { Button, EmptyState, Header, ScreenContainer } from '@/components/ui';
+import { Button, Header, ScreenContainer } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { FichaResumo } from '../components/FichaResumo';
 import { NovoTratamentoForm } from '../components/NovoTratamentoForm';
@@ -12,7 +12,7 @@ import {
 } from '../components/AdicionarRegistroMenu';
 import { RegistroForm } from '../components/registros/RegistroForm';
 import { ReproducaoSecao } from '../components/ReproducaoSecao';
-import { TratamentoAtivoCard } from '../components/TratamentoAtivoCard';
+import { TratamentosSecao } from '../components/TratamentosSecao';
 import { confirmarPrenhez } from '../data/reproducoes';
 import { useFichaAnimal } from '../hooks/useFichaAnimal';
 import { useRebanho } from '../hooks/useRebanho';
@@ -67,12 +67,8 @@ export default function AnimalDetalheScreen() {
       {/* A. Resumo */}
       {ficha ? <FichaResumo ficha={ficha} alerta={null} /> : null}
 
-      {/* B. Tratamento: um bloco por tratamento em andamento */}
-      {ativos.length > 0 ? (
-        ativos.map((ativo) => <TratamentoAtivoCard key={ativo.tratamento.id} ativo={ativo} />)
-      ) : (
-        <EmptyState message="Nenhum tratamento em andamento para este animal." />
-      )}
+      {/* B. Tratamentos: um bloco por tratamento em andamento, com divisória */}
+      {ficha ? <TratamentosSecao ativos={ativos} /> : null}
 
       {/* C. Reprodução: só novilha e vaca */}
       {ficha?.podeReproduzir ? (
