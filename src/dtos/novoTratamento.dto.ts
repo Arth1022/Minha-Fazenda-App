@@ -14,4 +14,6 @@ export interface AgendaEmEdicao {
   avisoMinutosAntes: number;
   comecaEm: Date;
   ate: Date;
+  /** Tratamento contínuo: sem data de fim (`ate` é ignorado) */
+  semFim: boolean;
 }

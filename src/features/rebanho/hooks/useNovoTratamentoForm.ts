@@ -39,6 +39,7 @@ export const novoTratamentoSchema = z
     avisoMinutosAntes: z.custom<AvisoMinutos>(),
     comecaEm: z.date(),
     ate: z.date(),
+    semFim: z.boolean(),
     carenciaLeiteDias: diasDeCarencia,
     carenciaCarneDias: diasDeCarencia,
   })
@@ -61,6 +62,7 @@ function valoresIniciais(): NovoTratamentoFormValues {
     avisoMinutosAntes: 0,
     comecaEm: hoje,
     ate: hoje,
+    semFim: false,
     carenciaLeiteDias: '',
     carenciaCarneDias: '',
   };
@@ -86,7 +88,7 @@ export function useNovoTratamentoForm(animalId: string | undefined, onSaved: () 
   const [ultimoUso, setUltimoUso] = useState<UltimoUsoMedicamento | null>(null);
 
   const valores = useWatch({ control: form.control }) as NovoTratamentoFormValues;
-  const { medicamento, comecaEm, ate } = valores;
+  const { medicamento, comecaEm, ate, semFim } = valores;
 
   useEffect(() => {
     let cancelado = false;
@@ -127,7 +129,8 @@ export function useNovoTratamentoForm(animalId: string | undefined, onSaved: () 
       medicamento: v.medicamento,
       dose: v.dose || null,
       dataInicio: inicioDoDia(v.comecaEm),
-      dataFim: inicioDoDia(v.ate),
+      // Sem fim = contínuo (null); dose única = fim igual ao início
+      dataFim: v.semFim ? null : inicioDoDia(v.ate),
       diasSemana: [...v.diasSemana].sort((a, b) => a - b),
       horario: v.horario,
       // Repetir no dia só vale com todos os dias marcados
@@ -150,6 +153,7 @@ export function useNovoTratamentoForm(animalId: string | undefined, onSaved: () 
     produzLeite,
     todoDia: valores.diasSemana.length === TODOS_OS_DIAS.length,
     comecaEm,
+    semFim,
     resumo: resumoDaAgenda(valores),
     placeholderCarencia: placeholderDaCarencia(ultimoUso),
   };

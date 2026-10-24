@@ -47,8 +47,12 @@ function diaSemanaDe(data: Date): DiaSemana {
 }
 
 /** Começa e termina no mesmo dia: uma dose só. */
-export function ehDoseUnica({ comecaEm, ate }: Pick<AgendaEmEdicao, 'comecaEm' | 'ate'>): boolean {
-  return diasEntre(comecaEm, ate) <= 0;
+export function ehDoseUnica({
+  comecaEm,
+  ate,
+  semFim,
+}: Pick<AgendaEmEdicao, 'comecaEm' | 'ate' | 'semFim'>): boolean {
+  return !semFim && diasEntre(comecaEm, ate) <= 0;
 }
 
 /** Algum dos dias marcados cai entre o início e o fim? */
@@ -56,9 +60,10 @@ export function temDoseNoPeriodo({
   diasSemana,
   comecaEm,
   ate,
-}: Pick<AgendaEmEdicao, 'diasSemana' | 'comecaEm' | 'ate'>): boolean {
+  semFim,
+}: Pick<AgendaEmEdicao, 'diasSemana' | 'comecaEm' | 'ate' | 'semFim'>): boolean {
   // Uma semana basta: depois disso os dias da semana se repetem
-  const dias = Math.min(diasEntre(comecaEm, ate), 6);
+  const dias = semFim ? 6 : Math.min(diasEntre(comecaEm, ate), 6);
   for (let i = 0; i <= dias; i++) {
     if (diasSemana.includes(diaSemanaDe(adicionarDias(comecaEm, i)))) return true;
   }
@@ -97,7 +102,9 @@ export function resumoDaAgenda(agenda: AgendaEmEdicao, hoje = new Date()): strin
     const vezes = repete
       ? `a cada ${agenda.intervaloHoras} h a partir ${horas(agenda.horario, 'de')}`
       : `${textoDosDias(agenda.diasSemana)} ${horas(agenda.horario, 'a')}`;
-    quando = `${vezes}, de ${inicio} até ${textoDoDia(agenda.ate, hoje)}`;
+    quando = agenda.semFim
+      ? `${vezes}, a partir de ${inicio}, sem data de fim`
+      : `${vezes}, de ${inicio} até ${textoDoDia(agenda.ate, hoje)}`;
   }
 
   return `${nome}: ${quando}. ${textoDoAviso(agenda.avisoMinutosAntes)}`;

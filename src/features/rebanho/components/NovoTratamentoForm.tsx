@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { Controller } from 'react-hook-form';
+import React, { useEffect } from "react";
+import { StyleSheet, Text, View } from "react-native";
+import { Controller } from "react-hook-form";
 
 import {
   AutocompleteInput,
@@ -10,12 +10,13 @@ import {
   DateField,
   FormModal,
   IntervalPicker,
+  SwitchField,
   TimeWheelPicker,
   WeekdayPicker,
-} from '@/components/forms';
-import { MEDICAMENTOS_SUGERIDOS } from '@/constants/medicamentos';
-import { AgroColors, Radius, Spacing, Typography } from '@/constants/theme';
-import { useNovoTratamentoForm } from '../hooks/useNovoTratamentoForm';
+} from "@/components/forms";
+import { MEDICAMENTOS_SUGERIDOS } from "@/constants/medicamentos";
+import { AgroColors, Radius, Spacing, Typography } from "@/constants/theme";
+import { useNovoTratamentoForm } from "../hooks/useNovoTratamentoForm";
 
 export interface NovoTratamentoFormProps {
   visible: boolean;
@@ -44,6 +45,7 @@ export function NovoTratamentoForm({
     produzLeite,
     todoDia,
     comecaEm,
+    semFim,
     resumo,
     placeholderCarencia,
   } = useNovoTratamentoForm(animalId, onClose);
@@ -62,7 +64,8 @@ export function NovoTratamentoForm({
       onClose={onClose}
       onSubmit={submit}
       submitLabel="Salvar Tratamento"
-      loading={saving}>
+      loading={saving}
+    >
       <Controller
         control={control}
         name="medicamento"
@@ -80,7 +83,12 @@ export function NovoTratamentoForm({
         )}
       />
 
-      <ControlledInput control={control} name="dose" label="Dose" placeholder="Ex: 2 ml" />
+      <ControlledInput
+        control={control}
+        name="dose"
+        label="Dose"
+        placeholder="Ex: 2 ml"
+      />
 
       <Controller
         control={control}
@@ -100,7 +108,11 @@ export function NovoTratamentoForm({
           control={control}
           name="intervaloHoras"
           render={({ field }) => (
-            <IntervalPicker label="Repetir a cada" value={field.value} onChange={field.onChange} />
+            <IntervalPicker
+              label="Repetir a cada"
+              value={field.value}
+              onChange={field.onChange}
+            />
           )}
         />
       ) : null}
@@ -121,7 +133,11 @@ export function NovoTratamentoForm({
           control={control}
           name="avisoMinutosAntes"
           render={({ field }) => (
-            <AvisoPicker label="Avisar" value={field.value} onChange={field.onChange} />
+            <AvisoPicker
+              label="Avisar"
+              value={field.value}
+              onChange={field.onChange}
+            />
           )}
         />
 
@@ -131,25 +147,44 @@ export function NovoTratamentoForm({
               control={control}
               name="comecaEm"
               render={({ field }) => (
-                <DateField label="Começa em" value={field.value} onChange={field.onChange} />
-              )}
-            />
-          </View>
-          <View style={styles.coluna}>
-            <Controller
-              control={control}
-              name="ate"
-              render={({ field }) => (
                 <DateField
-                  label="Até"
+                  label="Começa em"
                   value={field.value}
                   onChange={field.onChange}
-                  minimumDate={comecaEm}
                 />
               )}
             />
           </View>
+          {semFim ? null : (
+            <View style={styles.coluna}>
+              <Controller
+                control={control}
+                name="ate"
+                render={({ field }) => (
+                  <DateField
+                    label="Até"
+                    value={field.value}
+                    onChange={field.onChange}
+                    minimumDate={comecaEm}
+                  />
+                )}
+              />
+            </View>
+          )}
         </View>
+
+        <Controller
+          control={control}
+          name="semFim"
+          render={({ field }) => (
+            <SwitchField
+              label="Sem data de fim"
+              helperText="Uso contínuo: segue até você encerrar"
+              value={field.value}
+              onChange={field.onChange}
+            />
+          )}
+        />
 
         <View style={styles.duasColunas}>
           {produzLeite ? (
@@ -189,10 +224,10 @@ const styles = StyleSheet.create({
   label: {
     ...Typography.caption,
     color: AgroColors.textSecondary,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   duasColunas: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: Spacing.sm,
   },
   coluna: {
