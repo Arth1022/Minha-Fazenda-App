@@ -1,5 +1,15 @@
 # Code review · Back-end
 
+**Commits da Sprint 1 (back-end)**
+
+| Hash | Conteúdo |
+|---|---|
+| `17487ef` | Módulo de notificações (migration 0004) |
+| `d51eda3` | Regra de fase pela literatura e `ja_pariu` (migration 0005) |
+| `6775a56` | Volta do leite estimado e da ração, funções agregadas (migration 0006) |
+| `9600e2d` | Docs: este arquivo com o hash do `6775a56` |
+| "Contratos em src/dtos (review Sprint 1)" | Pasta `src/dtos` (ver a última seção) |
+
 ## Sprint 1 · Notificações
 
 > **Commit:** `17487ef`
@@ -460,7 +470,7 @@ A Mimosa (a única vaca do seed) tem 18 L/dia de leite e 6 kg/dia de ração, e 
 - `src/services/notificacoes/gatilhos.ts`: `Quando` → gatilho (puro)
 - `src/services/notificacoes/canais.ts`: canais do Android
 - `src/services/notificacoes/vinculos.ts`: vínculo notificação↔registro (Drizzle)
-- `src/services/notificacoes/lembretes.ts`: contrato `Lembrete`, animal e ordenha
+- `src/services/notificacoes/lembretes.ts`: lembretes do animal e da ordenha (o contrato `Lembrete` foi para `src/dtos` no review)
 - `src/services/notificacoes/plataforma.ts`, `plataforma.native.ts`, `plataforma.web.ts`
 - `src/database/migrations/0004_notificacoes_agendadas.sql`, `src/database/migrations/meta/0004_snapshot.json` (drizzle-kit)
 - `__tests__/notificacoes.test.ts`
@@ -650,6 +660,8 @@ A Mimosa (a única vaca do seed) tem 18 L/dia de leite e 6 kg/dia de ração, e 
 
 ### Resumo da API (`@/services/notificacoes`)
 
+Desde o review da Sprint 1, os tipos abaixo (`Lembrete`, `Vinculo`, `Quando`, `NovaNotificacao`...) são importados de `@/dtos`; as funções continuam em `@/services/notificacoes`.
+
 ```ts
 // Inicialização
 configurarNotificacoes(): Promise<void>
@@ -688,3 +700,74 @@ aoTocarNotificacao(callback: (dados: { url?: string } & Record<string, unknown>)
 parseHorario(horario: string): { hora: number; minuto: number } | null
 CANAIS                                                 // { ordenha, saude, reproducao }
 ```
+
+---
+
+## Sprint 1 · Review: pasta DTOs
+
+> **Commit:** "Contratos em src/dtos (review Sprint 1)". O hash vai para o Líder e entra neste arquivo na próxima atualização (um commit não consegue citar o próprio hash).
+
+Observação do usuário no review: *"Crie uma pasta chamada DTOs para todos os contratos que forem necessários."*
+
+### O que foi feito
+
+Criei `src/dtos/`, com um arquivo por domínio e um `index.ts` que reexporta tudo. Telas, hooks, services e testes passam a importar os contratos de `@/dtos`.
+
+| Arquivo | Contratos |
+|---|---|
+| `animal.dto.ts` | `Animal`, `NovoAnimal`, `Sexo`, `Origem`, `StatusAnimal` (reexport); `Fase`, `FaseFemea`, `FaseMacho`, `SituacaoLeite`, `DadosFase`, `AnimalComFase`, `DadosParto`, `StatusSaida`, `DadosSaida` (novo nome do objeto de `registrarSaida`), `CriasDaMae` (linha de `criasPorMae`) |
+| `pesagem.dto.ts` | `Pesagem`, `NovaPesagem` (reexport); `PesoAtual` (saída de `calcularPesoAtual`), `UltimaPesagem` (linha de `pesosAtuais`) |
+| `reproducao.dto.ts` | `Reproducao`, `NovaReproducao`, `TipoReproducao` (reexport); `NovaCobertura` (entrada de `createReproducao`), `UltimoParto` (linha de `ultimosPartos`) |
+| `tratamento.dto.ts` | `Tratamento`, `NovoTratamento` (reexport); `UltimoUsoMedicamento` |
+| `notificacoes.dto.ts` | `CanalId`, `DiaSemana`, `Quando`, `Horario`, `NovaNotificacao`, `DadosNotificacao`, `NotificacaoAgendada`, `StatusPermissao`, `Vinculo`, `TIPOS_LEMBRETE`, `TipoLembrete`, `Lembrete`; `EntidadeNotificacao`, `NotificacaoAgendadaRow` (reexport) |
+| `ordenha.dto.ts` | `Ordenha`, `NovaOrdenha`, `PeriodoOrdenha` (reexport) |
+| `fazenda.dto.ts` | `FazendaConfig`, `TipoProducao`, `Lote`, `NovoLote` (reexport) |
+
+Os tipos saíram de onde estavam: `services/fase.ts`, `services/indicadores.ts`, `data/animais.ts`, `data/tratamentos.ts`, `hooks/useRebanho.ts` (o `AnimalComFase`, a pedido do Líder) e `services/notificacoes/*`. Não ficou cópia nem reexport no lugar antigo, para cada contrato ter um só endereço. O barrel `@/services/notificacoes` agora exporta só funções e constantes de comportamento (`CANAIS`, `HORARIO_PADRAO_LEMBRETE`).
+
+### Por quê
+
+- **Tipos do Drizzle não foram duplicados.** `Animal`, `Tratamento` etc. continuam inferidos no `schema.ts` (`$inferSelect`/`$inferInsert`, como manda a doc do Drizzle: https://orm.drizzle.team/docs/goodies#type-api). O DTO só os reexporta. Quando o contrato é um recorte ou um agregado, ele é derivado do schema (`Pick<Animal, 'maeId'> & { total: number }`). Assim, uma coluna nova ou renomeada chega sozinha ao contrato.
+- **`export type` / `import type`.** O Babel do Expo compila arquivo por arquivo (`isolatedModules`) e precisa saber o que é só tipo para apagar na compilação (https://www.typescriptlang.org/docs/handbook/modules/reference.html#type-only-imports-and-exports). Com isso, importar `@/dtos` numa tela não carrega o `expo-sqlite` nem o `expo-notifications`. A única exceção é `TIPOS_LEMBRETE`, uma constante sem dependências que define o tipo `TipoLembrete`, do mesmo jeito que o schema faz com `SEXOS`/`Sexo`.
+- **Consultas agregadas continuam sendo query builders.** Funções como `criasPorMae()` devolvem a query, não uma `Promise`, porque o `useLiveQuery` precisa do builder. Por isso não dá para anotar o retorno com o DTO. Em vez disso, o teste de persistência tipa o resultado (`const crias: CriasDaMae[] = await criasPorMae()`). Se a consulta e o contrato divergirem, o `tsc` acusa.
+- **`CanalId`:** antes era `keyof typeof CANAIS`, ou seja, o tipo dependia do valor. Agora o tipo está no DTO e `CANAIS` é `Record<CanalId, …>`. O compilador continua exigindo um canal para cada id.
+- **Nome dos arquivos (`*.dto.ts`):** nem o Expo nem o React Native definem um padrão para isso. Usei o sufixo do style guide do NestJS (`create-cat.dto.ts`, https://docs.nestjs.com/controllers#request-payloads), o mais difundido em TypeScript, como o Líder sugeriu.
+- **Ficaram fora:** os tipos de props dos componentes (são do front); `Plataforma` (interno do módulo de notificações); e `EstadoNotificacoes`, que ainda não existe e nasce em `@/dtos` na Sprint 2, junto com `AlteracoesAnimal`, a entrada de `cadastrarAnimal`, a agenda do tratamento e o `EventoTimeline`.
+
+### Arquivos
+
+**Novos**
+- `src/dtos/index.ts`, `animal.dto.ts`, `pesagem.dto.ts`, `reproducao.dto.ts`, `tratamento.dto.ts`, `notificacoes.dto.ts`, `ordenha.dto.ts`, `fazenda.dto.ts`
+
+**Alterados (back-end)**
+- `src/features/rebanho/services/fase.ts`, `services/indicadores.ts`: tipos removidos, importados de `@/dtos`
+- `src/features/rebanho/data/animais.ts`, `pesagens.ts`, `reproducoes.ts`, `tratamentos.ts`; `src/features/home/ordenhas.ts`: assinaturas com os DTOs
+- `src/services/notificacoes/gatilhos.ts`, `canais.ts`, `lembretes.ts`, `notificacoes.ts`, `vinculos.ts`, `index.ts`: tipos removidos, importados de `@/dtos`
+- `__tests__/notificacoes.test.ts`, `regras.test.ts`, `persistence.test.ts`: imports de `@/dtos`; resultados agregados tipados com o DTO
+
+**Alterados (front, só a linha de import, com o ok do Líder e o front travado)**
+- `src/features/rebanho/hooks/useRebanho.ts`: além do import, a interface `AnimalComFase` saiu daqui
+- `src/features/rebanho/screens/RebanhoScreen.tsx`, `AnimalDetalheScreen.tsx`
+- `src/features/rebanho/components/AnimalCard.tsx`, `ResumoAnimalCard.tsx`, `NovoAnimalForm.tsx`
+- `src/features/rebanho/hooks/useNovoAnimalForm.ts`
+- `src/features/home/HomeScreen.tsx`, `OrdenhaCard.tsx`, `periodos.ts`, `useHomeOrdenha.ts`
+- `src/providers/FazendaProvider.tsx`
+
+### Saída dos testes
+
+`npm test` (exit 0): regras 38, banco 38, notificações 50, total **126 checks**, o mesmo número de antes. Não há teste novo; a mudança é de tipos, e quem a verifica é o `tsc`.
+
+```
+🎉 TODOS OS TESTES PASSARAM COM 100% DE SUCESSO!   (persistence)
+✅ último parto de cada mãe sai do nascimento da cria      ← tipado como UltimoParto[]
+✅ criasPorMae conta as crias de cada mãe numa consulta só  ← tipado como CriasDaMae[]
+✅ pesosAtuais traz uma linha por animal pesado             ← tipado como UltimaPesagem[]
+```
+
+- `npx tsc --noEmit` (tsconfig do app): sem erros.
+- `tsc -p tsconfig.test.json`: 10 erros, os mesmos do `HEAD` (`9600e2d`), conferidos num export limpo do commit. Todos vêm de o `@/database` dos testes não exportar `useLiveQuery`/`useDatabaseMigrations`, usados pelos hooks de tela (`useRebanho`, `useHomeOrdenha`, `FazendaProvider`, `AppProviders`). Antes eram 8; os 2 a mais entraram com os commits do front (`823a65d`/`5b85a29`), e nenhum está em arquivo do back-end.
+
+### Pontos em aberto
+
+1. **Regra para quem escreve contrato novo:** todo `interface`/`type` que a tela envia ou recebe nasce em `src/dtos/<domínio>.dto.ts` e é importado de `@/dtos`.
+2. **Tipos de props** continuam nos componentes, por decisão do Líder. Se um dia forem compartilhados entre features, vão para `src/dtos` também.

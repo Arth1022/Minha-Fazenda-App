@@ -1,5 +1,7 @@
 import { AndroidImportance, setNotificationChannelAsync } from 'expo-notifications';
 
+import type { CanalId } from '@/dtos';
+
 import { plataforma } from './plataforma';
 
 /**
@@ -7,7 +9,7 @@ import { plataforma } from './plataforma';
  * cada um nas configurações do aparelho. Depois de criado, o Android só deixa
  * mudar nome e descrição de um canal: para mudar importância, crie um id novo.
  */
-export const CANAIS = {
+export const CANAIS: Record<CanalId, { nome: string; descricao: string }> = {
   ordenha: {
     nome: 'Ordenha',
     descricao: 'Lembretes dos horários de ordenha',
@@ -20,9 +22,7 @@ export const CANAIS = {
     nome: 'Reprodução',
     descricao: 'Partos previstos e acompanhamento reprodutivo',
   },
-} as const;
-
-export type CanalId = keyof typeof CANAIS;
+};
 
 /** Cria (ou atualiza) os canais. Idempotente; no Android 13+ precisa vir antes do pedido de permissão. */
 export async function registrarCanais(): Promise<void> {

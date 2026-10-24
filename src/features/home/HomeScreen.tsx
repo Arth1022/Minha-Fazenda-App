@@ -19,7 +19,7 @@ import {
 } from '@/components/ui';
 import { APP_NAME } from '@/constants/app';
 import { AgroColors, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
-import type { PeriodoOrdenha } from '@/database';
+import type { PeriodoOrdenha } from '@/dtos';
 
 import { OrdenhaCard } from './OrdenhaCard';
 import { PERIODOS, SEM_HORARIO } from './periodos';

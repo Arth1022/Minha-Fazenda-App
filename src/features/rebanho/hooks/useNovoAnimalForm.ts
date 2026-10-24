@@ -2,7 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import type { Animal } from '@/database';
+import type { Animal } from '@/dtos';
 import { formatBrinco, isInteiro } from '@/utils';
 import { createAnimal } from '../data/animais';
 import { dataNascimentoPorIdade } from '../services/fase';

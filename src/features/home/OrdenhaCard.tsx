@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon, Button } from '@/components/ui';
 import { Radius, Shadows } from '@/constants/theme';
-import type { PeriodoOrdenha } from '@/database';
+import type { PeriodoOrdenha } from '@/dtos';
 
 import { PERIODOS, SEM_HORARIO } from './periodos';
 import { HorarioOrdenha } from './useHomeOrdenha';

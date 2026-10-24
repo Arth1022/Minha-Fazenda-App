@@ -1,12 +1,8 @@
 import { eq } from 'drizzle-orm';
 import React, { createContext, useContext } from 'react';
 
-import {
-  db,
-  fazendaConfig,
-  type TipoProducao,
-  useLiveQuery,
-} from '@/database';
+import { db, fazendaConfig, useLiveQuery } from '@/database';
+import type { TipoProducao } from '@/dtos';
 
 interface FazendaContextValue {
   /** null enquanto o produtor não respondeu a pergunta inicial */

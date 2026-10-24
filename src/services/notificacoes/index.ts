@@ -1,19 +1,17 @@
 /**
- * Notificações locais do app (expo-notifications). Telas e features importam daqui.
+ * Notificações locais do app (expo-notifications). Telas e features importam daqui;
+ * os tipos (Lembrete, Quando, NovaNotificacao...) vêm de `@/dtos`.
  *
  * Inicialização do app: `configurarNotificacoes()` e `sincronizarVinculos()`.
  * Permissão: `pedirPermissaoNotificacoes()` no primeiro tratamento ou cobertura registrado.
  */
-export { CANAIS, type CanalId } from './canais';
-export { parseHorario, type DiaSemana, type Quando } from './gatilhos';
+export { CANAIS } from './canais';
+export { parseHorario } from './gatilhos';
 export {
   HORARIO_PADRAO_LEMBRETE,
-  TIPOS_LEMBRETE,
   cancelarLembretesDoAnimal,
   reagendarLembreteOrdenha,
   reagendarLembretesDoAnimal,
-  type Lembrete,
-  type TipoLembrete,
 } from './lembretes';
 export {
   agendarNotificacao,
@@ -27,15 +25,10 @@ export {
   pedirAlarmeExato,
   pedirPermissaoNotificacoes,
   statusPermissaoNotificacoes,
-  type DadosNotificacao,
-  type NotificacaoAgendada,
-  type NovaNotificacao,
-  type StatusPermissao,
 } from './notificacoes';
 export {
   cancelarNotificacoesDe,
   notificacoesDe,
   sincronizarVinculos,
   substituirNotificacoesDe,
-  type Vinculo,
 } from './vinculos';

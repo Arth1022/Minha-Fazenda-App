@@ -1,10 +1,5 @@
-import type { Sexo } from '@/database';
+import type { DadosFase, Fase, Sexo, SituacaoLeite } from '@/dtos';
 import { diasEntre } from '@/utils/date';
-
-export type FaseFemea = 'bezerra' | 'novilha' | 'vaca';
-export type FaseMacho = 'bezerro' | 'garrote' | 'touro';
-export type Fase = FaseFemea | FaseMacho;
-export type SituacaoLeite = 'lactacao' | 'seca';
 
 /** Até esta idade (exclusive) o animal é bezerra/bezerro. */
 export const IDADE_FIM_CRIA_MESES = 12;
@@ -28,15 +23,6 @@ export const SITUACAO_LEITE_LABEL: Record<SituacaoLeite, string> = {
   lactacao: 'Em lactação',
   seca: 'Seca',
 };
-
-export interface DadosFase {
-  sexo: Sexo;
-  dataNascimento: Date | null;
-  /** Data do parto mais recente registrado no app (null se não há) */
-  ultimoParto: Date | null;
-  /** Já pariu antes de entrar no app (coluna `ja_pariu`); padrão false */
-  jaPariu?: boolean;
-}
 
 /** Idade em meses completos. */
 export function idadeEmMeses(dataNascimento: Date, hoje = new Date()): number {

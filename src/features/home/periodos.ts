@@ -1,5 +1,5 @@
 import type { AppIconName } from '@/components/ui';
-import type { PeriodoOrdenha } from '@/database';
+import type { PeriodoOrdenha } from '@/dtos';
 
 export interface PeriodoConfig {
   value: PeriodoOrdenha;

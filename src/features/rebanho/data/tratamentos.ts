@@ -1,11 +1,7 @@
 import { desc, eq, isNotNull, or } from 'drizzle-orm';
 
-import {
-  db,
-  tratamentos,
-  type NovoTratamento,
-  type Tratamento,
-} from '@/database';
+import { db, tratamentos } from '@/database';
+import type { NovoTratamento, Tratamento, UltimoUsoMedicamento } from '@/dtos';
 import { normalizarTexto } from '@/utils';
 
 /** Tratamentos do animal, do início mais recente para o mais antigo. */
@@ -29,11 +25,6 @@ export function tratamentosComCarencia() {
       )
     );
 }
-
-export type UltimoUsoMedicamento = Pick<
-  Tratamento,
-  'dose' | 'carenciaLeiteDias' | 'carenciaCarneDias'
->;
 
 /**
  * Dose e carências usadas da última vez com este remédio, para preencher o

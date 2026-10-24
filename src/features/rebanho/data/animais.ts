@@ -1,14 +1,7 @@
 import { and, asc, count, desc, eq, isNotNull, isNull, max } from 'drizzle-orm';
 
-import {
-  animais,
-  db,
-  reproducoes,
-  type Animal,
-  type NovoAnimal,
-  type Sexo,
-  type StatusAnimal,
-} from '@/database';
+import { animais, db, reproducoes } from '@/database';
+import type { Animal, DadosParto, DadosSaida, NovoAnimal } from '@/dtos';
 
 /** Rebanho na ordem de cadastro; por padrão só os animais ativos. */
 export function listarAnimais({ incluirInativos = false } = {}) {
@@ -50,12 +43,6 @@ export function criasPorMae() {
 export async function createAnimal(animal: NovoAnimal): Promise<Animal> {
   const [created] = await db.insert(animais).values(animal).returning();
   return created;
-}
-
-export interface DadosParto {
-  data: Date;
-  sexo: Sexo;
-  brinco: string;
 }
 
 /**
@@ -101,12 +88,10 @@ export async function registrarParto(
   });
 }
 
-export type StatusSaida = Exclude<StatusAnimal, 'ativo'>;
-
 /** Saída do rebanho: só muda o status, o registro nunca é apagado. */
 export async function registrarSaida(
   animalId: string,
-  saida: { status: StatusSaida; data: Date; motivo?: string }
+  saida: DadosSaida
 ): Promise<void> {
   await db
     .update(animais)

@@ -1,6 +1,7 @@
 import { desc, eq } from 'drizzle-orm';
 
-import { db, ordenhas, type NovaOrdenha } from '@/database';
+import { db, ordenhas } from '@/database';
+import type { NovaOrdenha } from '@/dtos';
 
 /** Registros de ordenha, do mais recente para o mais antigo. */
 export function todasOrdenhas() {

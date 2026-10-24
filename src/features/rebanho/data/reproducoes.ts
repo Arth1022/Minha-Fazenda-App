@@ -1,6 +1,7 @@
 import { desc, eq } from 'drizzle-orm';
 
-import { db, reproducoes, type NovaReproducao, type Reproducao } from '@/database';
+import { db, reproducoes } from '@/database';
+import type { NovaCobertura, Reproducao } from '@/dtos';
 import { calcularPrevisaoParto } from '../services/indicadores';
 
 /** Coberturas e inseminações do animal, da mais recente para a mais antiga. */
@@ -14,7 +15,7 @@ export function reproducoesDoAnimal(animalId: string) {
 
 /** Registra a cobertura/inseminação já com a previsão de parto calculada. */
 export async function createReproducao(
-  input: Omit<NovaReproducao, 'previsaoParto'>
+  input: NovaCobertura
 ): Promise<Reproducao> {
   const [created] = await db
     .insert(reproducoes)

@@ -1,4 +1,4 @@
-import type { Pesagem, Tratamento } from '@/database';
+import type { Pesagem, Tratamento } from '@/dtos';
 import {
   calcularFase,
   calcularSituacaoLeite,

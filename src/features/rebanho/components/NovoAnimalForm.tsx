@@ -9,7 +9,7 @@ import {
 } from '@/components/forms';
 import { RACAS_BOVINAS } from '@/constants/racas';
 import { Spacing } from '@/constants/theme';
-import type { Animal } from '@/database';
+import type { Animal } from '@/dtos';
 import { useNovoAnimalForm } from '../hooks/useNovoAnimalForm';
 
 export interface NovoAnimalFormProps {

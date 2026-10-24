@@ -1,12 +1,13 @@
 import { useMemo } from 'react';
 
-import {
-  type Animal,
-  type Pesagem,
-  type Reproducao,
-  type Tratamento,
-  useLiveQuery,
-} from '@/database';
+import { useLiveQuery } from '@/database';
+import type {
+  Animal,
+  AnimalComFase,
+  Pesagem,
+  Reproducao,
+  Tratamento,
+} from '@/dtos';
 import {
   animalPorId,
   criasDe,
@@ -19,20 +20,8 @@ import { reproducoesDoAnimal } from '../data/reproducoes';
 import { useFazenda } from '@/providers/FazendaProvider';
 import { formatDiaMes } from '@/utils/date';
 import { tratamentosComCarencia, tratamentosDoAnimal } from '../data/tratamentos';
-import { calcularFase, type Fase } from '../services/fase';
+import { calcularFase } from '../services/fase';
 import { carenciaAte } from '../services/indicadores';
-
-export interface AnimalComFase extends Animal {
-  fase: Fase;
-  /** Parto mais recente (nascimento da cria mais nova), null se nunca pariu */
-  ultimoParto: Date | null;
-  /** Alerta principal do animal (no máximo um) */
-  alerta: string | null;
-  /** Peso da pesagem mais recente, null se nunca foi pesado */
-  pesoKg: number | null;
-  /** Quantidade de crias registradas */
-  crias: number;
-}
 
 /** Animais ativos com fase, alerta, peso atual e crias já calculados (reativo). */
 export function useRebanho(): AnimalComFase[] {

@@ -1,7 +1,14 @@
 import * as Notifications from 'expo-notifications';
 
-import { registrarCanais, type CanalId } from './canais';
-import { gatilhoDoAgendado, montarGatilho, type Quando } from './gatilhos';
+import type {
+  DadosNotificacao,
+  NotificacaoAgendada,
+  NovaNotificacao,
+  StatusPermissao,
+} from '@/dtos';
+
+import { registrarCanais } from './canais';
+import { gatilhoDoAgendado, montarGatilho } from './gatilhos';
 import { plataforma } from './plataforma';
 
 /**
@@ -11,31 +18,6 @@ import { plataforma } from './plataforma';
  * Só Android e iOS agendam; na web as funções não fazem nada.
  */
 export const notificacoesDisponiveis = plataforma !== 'web';
-
-export interface NovaNotificacao {
-  /** Identificador próprio (para cancelar depois); sem ele o sistema gera um. */
-  id?: string;
-  titulo: string;
-  mensagem?: string;
-  quando: Quando;
-  canal: CanalId;
-  /** Rota do expo-router aberta ao tocar na notificação (ex.: "/animal/123"). */
-  url?: string;
-  dados?: Record<string, unknown>;
-}
-
-export interface DadosNotificacao extends Record<string, unknown> {
-  url?: string;
-}
-
-export interface NotificacaoAgendada {
-  id: string;
-  titulo: string | null;
-  mensagem: string | null;
-  dados: DadosNotificacao;
-}
-
-export type StatusPermissao = 'concedida' | 'pendente' | 'negada';
 
 /**
  * Mostra as notificações também com o app aberto, cria os canais e reaplica os

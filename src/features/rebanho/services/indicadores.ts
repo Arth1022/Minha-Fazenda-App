@@ -1,17 +1,8 @@
-import type { Pesagem, Tratamento } from '@/database';
+import type { Pesagem, PesoAtual, Tratamento } from '@/dtos';
 import { adicionarDias, diasEntre, inicioDoDia } from '@/utils/date';
 
 /** Gestação média da vaca, em dias. */
 export const GESTACAO_DIAS = 283;
-
-export interface PesoAtual {
-  pesoKg: number;
-  data: Date;
-  /** Diferença para a pesagem anterior (null se é a primeira) */
-  ganhoKg: number | null;
-  /** Dias desde a pesagem anterior (null se é a primeira) */
-  diasDesdeAnterior: number | null;
-}
 
 /** Última pesagem e o ganho de peso desde a anterior. */
 export function calcularPesoAtual(pesagens: Pesagem[]): PesoAtual | null {

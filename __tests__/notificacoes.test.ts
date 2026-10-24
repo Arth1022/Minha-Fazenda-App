@@ -2,6 +2,7 @@
 // tsconfig.test.json aponta esses caminhos para ./support (fakes em memória e sql.js).
 import { eq } from 'drizzle-orm';
 
+import type { Lembrete } from '@/dtos';
 import { createAnimal } from '@/features/rebanho/data/animais';
 import {
   agendarNotificacao,
@@ -17,7 +18,6 @@ import {
   reagendarLembretesDoAnimal,
   sincronizarVinculos,
   statusPermissaoNotificacoes,
-  type Lembrete,
 } from '@/services/notificacoes';
 import { gatilhoDoAgendado, montarGatilho } from '@/services/notificacoes/gatilhos';
 import { horarioDoAviso } from '@/services/notificacoes/lembretes';

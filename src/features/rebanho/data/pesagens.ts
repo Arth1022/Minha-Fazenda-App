@@ -1,6 +1,7 @@
 import { desc, eq, max } from 'drizzle-orm';
 
-import { db, pesagens, type NovaPesagem } from '@/database';
+import { db, pesagens } from '@/database';
+import type { NovaPesagem } from '@/dtos';
 
 /** Pesagens do animal, da mais recente para a mais antiga. */
 export function pesagensDoAnimal(animalId: string) {

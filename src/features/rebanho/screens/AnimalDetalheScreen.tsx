@@ -11,7 +11,7 @@ import {
   ScreenContainer,
 } from '@/components/ui';
 import { AgroColors, Radius, Spacing } from '@/constants/theme';
-import type { Tratamento } from '@/database';
+import type { Tratamento } from '@/dtos';
 import { formatDataBR, maskDataBR, parseDataBR } from '@/utils';
 import { createTratamento, toggleDiaConfirmado } from '../data/tratamentos';
 import { useAnimal, useAnimalTratamentos } from '../hooks/useRebanho';

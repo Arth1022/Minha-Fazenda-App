@@ -4,8 +4,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Card } from '@/components/ui/Card';
 import { MilkAmount } from '@/components/ui/MilkAmount';
 import { AgroColors, Spacing, Typography } from '@/constants/theme';
+import type { AnimalComFase } from '@/dtos';
 import { formatMedida } from '@/utils/formatters';
-import type { AnimalComFase } from '../hooks/useRebanho';
 
 export interface ResumoAnimalCardProps {
   animal: AnimalComFase;

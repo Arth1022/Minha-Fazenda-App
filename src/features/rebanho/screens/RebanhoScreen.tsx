@@ -16,12 +16,12 @@ import {
   Spacing,
   Typography,
 } from '@/constants/theme';
-import type { Animal } from '@/database';
+import type { Animal, AnimalComFase, Fase } from '@/dtos';
 import { AnimalCard } from '../components/AnimalCard';
 import { NovoAnimalForm } from '../components/NovoAnimalForm';
 import { ResumoAnimalCard } from '../components/ResumoAnimalCard';
-import { useRebanho, type AnimalComFase } from '../hooks/useRebanho';
-import { calcularFase, type Fase } from '../services/fase';
+import { useRebanho } from '../hooks/useRebanho';
+import { calcularFase } from '../services/fase';
 
 type Grupo = 'vacas' | 'novilhas' | 'bezerros' | 'machos';
 

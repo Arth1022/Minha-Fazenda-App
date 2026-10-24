@@ -1,7 +1,8 @@
 import { and, eq, inArray } from 'drizzle-orm';
 
-import { db, notificacoesAgendadas, type EntidadeNotificacao } from '@/database';
+import { db, notificacoesAgendadas } from '@/database';
 import { newId } from '@/database/id';
+import type { NovaNotificacao, Vinculo } from '@/dtos';
 
 import { montarGatilho } from './gatilhos';
 import {
@@ -9,14 +10,7 @@ import {
   cancelarNotificacoes,
   listarNotificacoesAgendadas,
   notificacoesDisponiveis,
-  type NovaNotificacao,
 } from './notificacoes';
-
-/** O registro dono das notificações (um animal, um turno de ordenha...). */
-export interface Vinculo {
-  entidade: EntidadeNotificacao;
-  entidadeId: string;
-}
 
 const doVinculo = ({ entidade, entidadeId }: Vinculo) =>
   and(

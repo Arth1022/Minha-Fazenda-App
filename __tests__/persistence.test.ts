@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 
 // As features importam `@/database`; o tsconfig.test.json aponta esse caminho para
 // ./support/database (sql.js em memória com o mesmo schema e migrations do app).
+import type { CriasDaMae, UltimaPesagem, UltimoParto } from '@/dtos';
 import { salvarOrdenha, todasOrdenhas } from '@/features/home/ordenhas';
 import {
   animalPorId,
@@ -112,7 +113,8 @@ async function runPersistenceTest() {
     'parto fecha a cobertura em aberto da vaca'
   );
   check((await criasDe(vaca.id)).length === 1, 'crias = animais com mae_id da vaca');
-  const partos = await ultimosPartos();
+  // Tipar com o DTO faz o tsc acusar se a consulta e o contrato divergirem
+  const partos: UltimoParto[] = await ultimosPartos();
   check(
     partos.length === 1 && partos[0].maeId === vaca.id && partos[0].data instanceof Date,
     'último parto de cada mãe sai do nascimento da cria'
@@ -121,7 +123,7 @@ async function runPersistenceTest() {
     calcularFase({ ...vaca, ultimoParto: partos[0].data }, dia(24, 10)) === 'vaca',
     'fêmea com cria registrada é vaca sem ja_pariu (caso da Mimosa do seed)'
   );
-  const crias = await criasPorMae();
+  const crias: CriasDaMae[] = await criasPorMae();
   check(
     crias.length === 1 && crias[0].maeId === vaca.id && crias[0].total === 1,
     'criasPorMae conta as crias de cada mãe numa consulta só'
@@ -144,7 +146,8 @@ async function runPersistenceTest() {
   // A mais antiga gravada por último: o peso atual tem de vir da data, não da ordem de gravação
   await createPesagem({ animalId: vaca.id, data: dia(20, 10), pesoKg: 500 });
   await createPesagem({ animalId: vaca.id, data: dia(5, 10), pesoKg: 480 });
-  const atuais = new Map((await pesosAtuais()).map((p) => [p.animalId, p]));
+  const ultimas: UltimaPesagem[] = await pesosAtuais();
+  const atuais = new Map(ultimas.map((p) => [p.animalId, p]));
   check(atuais.size === 2, 'pesosAtuais traz uma linha por animal pesado');
   check(
     atuais.get(vaca.id)?.pesoKg === 500 && atuais.get(vaca.id)?.data?.getTime() === dia(20, 10).getTime(),

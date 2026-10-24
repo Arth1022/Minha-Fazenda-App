@@ -1,21 +1,13 @@
-import type { PeriodoOrdenha } from '@/database';
+import type {
+  CanalId,
+  Lembrete,
+  NovaNotificacao,
+  PeriodoOrdenha,
+  TipoLembrete,
+} from '@/dtos';
 
-import type { CanalId } from './canais';
 import { parseHorario } from './gatilhos';
-import type { NovaNotificacao } from './notificacoes';
 import { cancelarNotificacoesDe, substituirNotificacoesDe } from './vinculos';
-
-export const TIPOS_LEMBRETE = ['dose', 'fim_carencia', 'parto', 'vacina'] as const;
-export type TipoLembrete = (typeof TIPOS_LEMBRETE)[number];
-
-/** Lembrete de um animal; a lista vem de `calcularLembretes` (regra do rebanho). */
-export interface Lembrete {
-  id: string;
-  tipo: TipoLembrete;
-  data: Date;
-  titulo: string;
-  animalId: string;
-}
 
 /** Datas sem horário (meia-noite) avisam neste horário do dia, não de madrugada. */
 export const HORARIO_PADRAO_LEMBRETE = '07:00';

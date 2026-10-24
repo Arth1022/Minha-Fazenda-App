@@ -3,19 +3,7 @@ import {
   type SchedulableNotificationTriggerInput,
 } from 'expo-notifications';
 
-/** Dia da semana no padrão do expo-notifications: 1 = domingo ... 7 = sábado. */
-export type DiaSemana = 1 | 2 | 3 | 4 | 5 | 6 | 7;
-
-/** Quando a notificação dispara. Horários no formato "HH:mm" (ex.: "05:30"). */
-export type Quando =
-  | { tipo: 'data'; data: Date }
-  | { tipo: 'diario'; horario: string }
-  | { tipo: 'semanal'; diaSemana: DiaSemana; horario: string };
-
-export interface Horario {
-  hora: number;
-  minuto: number;
-}
+import type { Horario, Quando } from '@/dtos';
 
 /** Converte "HH:mm" em hora e minuto; null se o texto não é um horário válido. */
 export function parseHorario(horario: string): Horario | null {

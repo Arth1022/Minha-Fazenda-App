@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 
-import { type Ordenha, type PeriodoOrdenha, useLiveQuery } from '@/database';
+import { useLiveQuery } from '@/database';
+import type { Ordenha, PeriodoOrdenha } from '@/dtos';
 import { salvarOrdenha, todasOrdenhas } from './ordenhas';
 
 const MINUTES_BEFORE_ORDENHA = 15;
