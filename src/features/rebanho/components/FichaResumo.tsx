@@ -40,8 +40,8 @@ export function FichaResumo({ ficha, alerta }: FichaResumoProps) {
         <View style={styles.perfilTextos}>
           <Text style={styles.titulo} numberOfLines={1}>
             {titulo}
-            {idade ? <Text style={styles.idade}> · {idade}</Text> : null}
           </Text>
+          <Text style={styles.idade}>{idade ?? 'Idade não informada'}</Text>
           <Text style={styles.subtitulo}>{subtitulo}</Text>
         </View>
         {situacaoLeite ? (
@@ -101,8 +101,8 @@ const styles = StyleSheet.create({
     ...Typography.screenTitle,
   },
   idade: {
+    ...Typography.bodyMedium,
     color: AgroColors.textSecondary,
-    fontWeight: '600',
   },
   subtitulo: {
     ...Typography.caption,
