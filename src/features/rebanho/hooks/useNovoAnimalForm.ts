@@ -27,7 +27,10 @@ export const novoAnimalSchema = z.object({
       'Meses de 0 a 11.'
     ),
   raca: z.string().trim(),
-  jaPariu: z.boolean(),
+  crias: z
+    .string()
+    .trim()
+    .refine((v) => v === '' || isInteiro(v), 'Informe as crias em número inteiro.'),
   // "Mais detalhes"
   pesoKg: decimalOpcional,
   producaoLeiteL: decimalOpcional,
@@ -45,7 +48,7 @@ const DEFAULT_VALUES: NovoAnimalFormValues = {
   idadeAnos: '',
   idadeMeses: '',
   raca: '',
-  jaPariu: false,
+  crias: '',
   pesoKg: '',
   producaoLeiteL: '',
   racaoKgDia: '',
@@ -81,12 +84,13 @@ export function useNovoAnimalForm(onCreated: (animal: Animal) => void) {
   const [sexo, idadeAnos, idadeMeses] = form.watch(['sexo', 'idadeAnos', 'idadeMeses']);
   const idade = idadeTotalMeses(idadeAnos, idadeMeses);
   const femea = sexo === 'F';
-  // "Já pariu?" só faz sentido para fêmea adulta (sem idade, tratamos como adulta)
-  const mostrarJaPariu = femea && (idade === null || idade >= IDADE_FIM_CRIA_MESES);
+  // Crias só fazem sentido para fêmea adulta (sem idade, tratamos como adulta)
+  const mostrarCrias = femea && (idade === null || idade >= IDADE_FIM_CRIA_MESES);
 
   const submit = form.handleSubmit(async (values) => {
     const idadeMesesTotal = idadeTotalMeses(values.idadeAnos, values.idadeMeses);
     const ehFemea = values.sexo === 'F';
+    const criasAnteriores = mostrarCrias && values.crias ? Number(values.crias) : 0;
 
     const novo: NovoAnimal = {
       brinco: formatBrinco(values.brinco),
@@ -96,8 +100,9 @@ export function useNovoAnimalForm(onCreated: (animal: Animal) => void) {
       dataNascimento:
         idadeMesesTotal === null ? undefined : dataNascimentoPorIdade(idadeMesesTotal),
       nascimentoAproximado: idadeMesesTotal !== null,
-      // Leite, ração e "já pariu" não se aplicam a macho
-      jaPariu: ehFemea && values.jaPariu,
+      // Quem já teve cria é vaca (Embrapa); leite e ração não se aplicam a macho
+      criasAnteriores,
+      jaPariu: criasAnteriores > 0,
       producaoLeiteL: ehFemea ? decimalOuNull(values.producaoLeiteL) : null,
       racaoKgDia: ehFemea ? decimalOuNull(values.racaoKgDia) : null,
       maeId: values.maeId,
@@ -126,6 +131,6 @@ export function useNovoAnimalForm(onCreated: (animal: Animal) => void) {
     submit,
     saving: form.formState.isSubmitting,
     femea,
-    mostrarJaPariu,
+    mostrarCrias,
   };
 }

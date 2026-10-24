@@ -46,8 +46,10 @@ export interface FichaAnimal {
   peso: PesoAtual | null;
   /** Pesagens, da mais recente para a mais antiga */
   pesagens: Pesagem[];
-  /** Crias, da mais nova para a mais velha */
+  /** Crias cadastradas no app, da mais nova para a mais velha */
   crias: Animal[];
+  /** Total de crias: as cadastradas + as que teve antes de entrar no app */
+  totalCrias: number;
   reproducao: ReproducaoFicha;
   /** Coberturas e inseminações, da mais recente para a mais antiga */
   reproducoes: Reproducao[];

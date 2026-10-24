@@ -87,6 +87,9 @@ async function runPersistenceTest() {
   check(vaca.jaPariu === false, 'ja_pariu começa false (sem backfill por idade)');
   const compradaParida = await createAnimal({ brinco: '#205', origem: 'comprado', dataNascimento: dia(1, 1, 2020), jaPariu: true });
   check((await animalPorId(compradaParida.id))?.jaPariu === true, 'createAnimal grava ja_pariu (vaca comprada já parida)');
+  check(vaca.criasAnteriores === 0, 'crias_anteriores começa 0');
+  const pariuAntes = await createAnimal({ brinco: '#206', criasAnteriores: 3, jaPariu: true });
+  check((await animalPorId(pariuAntes.id))?.criasAnteriores === 3, 'createAnimal grava crias_anteriores');
   check(
     calcularFase({ ...compradaParida, ultimoParto: null }, dia(24, 10)) === 'vaca',
     'comprada com ja_pariu é vaca sem cria registrada'

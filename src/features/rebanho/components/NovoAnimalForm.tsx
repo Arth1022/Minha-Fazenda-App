@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useEffect } from 'react';
 import { Controller } from 'react-hook-form';
+import { StyleSheet, View } from 'react-native';
 
 import {
   AnimalPicker,
@@ -10,8 +10,7 @@ import {
   ControlledInput,
   FormModal,
   OrigemAnimalField,
-  SwitchField,
-  type ChipOption,
+  type ChipOption
 } from '@/components/forms';
 import { RACAS_BOVINAS } from '@/constants/racas';
 import { Spacing } from '@/constants/theme';
@@ -41,7 +40,7 @@ export function NovoAnimalForm({
   onClose,
   onCreated,
 }: NovoAnimalFormProps) {
-  const { control, clearErrors, submit, saving, femea, mostrarJaPariu } =
+  const { control, clearErrors, submit, saving, femea, mostrarCrias } =
     useNovoAnimalForm(onCreated);
 
   const femeas = animais.filter((animal) => animal.sexo === 'F');
@@ -125,18 +124,14 @@ export function NovoAnimalForm({
         )}
       />
 
-      {mostrarJaPariu ? (
-        <Controller
+      {mostrarCrias ? (
+        <ControlledInput
           control={control}
-          name="jaPariu"
-          render={({ field }) => (
-            <SwitchField
-              label="Já pariu?"
-              helperText="Marque se ela teve cria antes de entrar no app"
-              value={field.value}
-              onChange={field.onChange}
-            />
-          )}
+          name="crias"
+          label="Crias"
+          placeholder="0"
+          keyboardType="number-pad"
+          helperText="Quantas crias ela já teve antes de entrar no app"
         />
       ) : null}
 

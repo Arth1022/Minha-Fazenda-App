@@ -101,6 +101,7 @@ export function useFichaAnimal(id?: string): FichaAnimal | null {
       peso: calcularPesoAtual(pesagens),
       pesagens,
       crias,
+      totalCrias: crias.length + animal.criasAnteriores,
       reproducao: {
         coberturaAberta,
         previsaoParto: coberturaAberta ? calcularPrevisaoParto(coberturaAberta.data) : null,

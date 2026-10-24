@@ -30,7 +30,7 @@ export interface AnimalComFase extends Animal {
   alerta: string | null;
   /** Peso da pesagem mais recente, null se nunca foi pesado */
   pesoKg: number | null;
-  /** Quantidade de crias registradas */
+  /** Total de crias: as cadastradas com ela como mãe + `criasAnteriores` */
   crias: number;
 }
 

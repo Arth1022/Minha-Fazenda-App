@@ -73,7 +73,7 @@ export function FichaResumo({ ficha, alerta }: FichaResumoProps) {
             </ResumoLinha>
           ) : null}
           {podeReproduzir ? (
-            <ResumoLinha label="Crias">{ficha.crias.length}</ResumoLinha>
+            <ResumoLinha label="Crias">{ficha.totalCrias}</ResumoLinha>
           ) : null}
           {ultimoParto ? (
             <ResumoLinha label="Último parto">{formatDataBR(ultimoParto)}</ResumoLinha>

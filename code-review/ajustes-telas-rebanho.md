@@ -187,3 +187,29 @@ Ainda há emojis fora destas telas, que não mexi para não sair do escopo: a ta
 **Alterados:** `schema.ts`, `data/tratamentos.ts`, `services/doses.ts`, `dtos/novoTratamento.dto.ts`, `useNovoTratamentoForm.ts`, `NovoTratamentoForm.tsx`, `TratamentoAtivoCard.tsx`, `FichaResumo.tsx`, `AnimalCard.tsx`, `ResumoAnimalCard.tsx`, `RebanhoScreen.tsx`, `AnimalDetalheScreen.tsx`, `RegistroForm.tsx` (import), `AppIcon.tsx`, `MilkAmount.tsx`, `DateField.tsx`, `TimeWheelPicker.tsx`, `CollapsibleSection.tsx`, `FormModal.tsx`, `HomeScreen.tsx` (label do horário), `__tests__/doses.test.ts`, `__tests__/regras.test.ts` (fixture com `observacoes`).
 
 **Apagados:** `code-review/front-end.md` e `code-review/back-end.md`, a pedido do usuário.
+
+---
+
+## 7. Cadastro: "Já pariu?" vira o campo "Crias"
+
+O interruptor "Já pariu?" do modal Novo Animal virou um campo numérico, "Crias": quantas crias ela teve antes de entrar no app. Ele só aparece para fêmea adulta, a mesma regra que valia para o interruptor.
+
+```ts
+// src/database/schema.ts (migration 0010_animais_crias_anteriores, gerada pelo drizzle-kit)
+criasAnteriores: integer('crias_anteriores').notNull().default(0),
+```
+
+```ts
+// useNovoAnimalForm.ts
+const criasAnteriores = mostrarCrias && values.crias ? Number(values.crias) : 0;
+...
+criasAnteriores,
+jaPariu: criasAnteriores > 0,
+```
+
+**Por quê:**
+- O número precisa ser guardado para aparecer na ficha e na lista. As crias que nasceram antes do app não são cadastradas como animal, então contar só por `mae_id` daria 0.
+- A coluna `ja_pariu` continua existindo e passa a ser derivada das crias: teve cria, é vaca (Embrapa). Assim o `calcularFase` e os animais já cadastrados não mudam.
+- O total exibido soma as crias cadastradas com ela como mãe e as `criasAnteriores`. Na lista é `AnimalComFase.crias` (`useRebanho`), na ficha é o campo novo `FichaAnimal.totalCrias` (`useFichaAnimal`). O `FichaResumo` continua só exibindo.
+
+Teste novo em `__tests__/persistence.test.ts`: `crias_anteriores` começa em 0 e o `createAnimal` grava o valor.

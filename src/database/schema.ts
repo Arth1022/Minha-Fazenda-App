@@ -89,6 +89,11 @@ export const animais = sqliteTable(
      * fêmea sem cria registrada ficaria novilha para sempre.
      */
     jaPariu: integer('ja_pariu', { mode: 'boolean' }).notNull().default(false),
+    /**
+     * Crias que ela teve antes de entrar no app (não cadastradas como animal).
+     * O total de crias é este número mais as cadastradas com ela como mãe.
+     */
+    criasAnteriores: integer('crias_anteriores').notNull().default(0),
     maeId: text('mae_id').references((): AnySQLiteColumn => animais.id, {
       onDelete: 'set null',
     }),

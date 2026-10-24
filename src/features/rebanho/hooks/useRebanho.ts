@@ -47,7 +47,8 @@ export function useRebanho(): AnimalComFase[] {
         ultimoParto,
         alerta: carencia ? `Em carência até ${formatDiaMes(carencia)}` : null,
         pesoKg: pesoPor.get(animal.id) ?? null,
-        crias: criasPor.get(animal.id) ?? 0,
+        // Cadastradas com ela como mãe + as que teve antes de entrar no app
+        crias: (criasPor.get(animal.id) ?? 0) + animal.criasAnteriores,
         fase: calcularFase({
           sexo: animal.sexo,
           dataNascimento: animal.dataNascimento,
