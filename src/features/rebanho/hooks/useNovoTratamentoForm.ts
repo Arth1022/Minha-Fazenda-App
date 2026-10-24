@@ -9,10 +9,15 @@ import {
   type IntervaloHoras,
 } from '@/components/forms';
 import type { DiaSemana, UltimoUsoMedicamento } from '@/dtos';
+import { MEDICAMENTOS_SUGERIDOS } from '@/constants/medicamentos';
 import { useFazenda } from '@/providers/FazendaProvider';
 import { isInteiro } from '@/utils';
 import { inicioDoDia } from '@/utils/date';
-import { createTratamento, ultimoUsoDoMedicamento } from '../data/tratamentos';
+import {
+  createTratamento,
+  nomesDeMedicamentos,
+  ultimoUsoDoMedicamento,
+} from '../data/tratamentos';
 import {
   resumoDaAgenda,
   temDoseNoPeriodo,
@@ -86,6 +91,7 @@ export function useNovoTratamentoForm(animalId: string | undefined, onSaved: () 
     defaultValues: valoresIniciais(),
   });
   const [ultimoUso, setUltimoUso] = useState<UltimoUsoMedicamento | null>(null);
+  const [sugestoes, setSugestoes] = useState<string[]>([...MEDICAMENTOS_SUGERIDOS]);
 
   const valores = useWatch({ control: form.control }) as NovoTratamentoFormValues;
   const { medicamento, comecaEm, ate, semFim } = valores;
@@ -118,6 +124,8 @@ export function useNovoTratamentoForm(animalId: string | undefined, onSaved: () 
   const reset = () => {
     form.reset(valoresIniciais());
     setUltimoUso(null);
+    // Os remédios já usados na fazenda vêm primeiro, depois o calendário sanitário
+    nomesDeMedicamentos(MEDICAMENTOS_SUGERIDOS).then(setSugestoes, () => {});
   };
 
   const submit = form.handleSubmit(async (v) => {
@@ -156,5 +164,6 @@ export function useNovoTratamentoForm(animalId: string | undefined, onSaved: () 
     semFim,
     resumo: resumoDaAgenda(valores),
     placeholderCarencia: placeholderDaCarencia(ultimoUso),
+    sugestoes,
   };
 }

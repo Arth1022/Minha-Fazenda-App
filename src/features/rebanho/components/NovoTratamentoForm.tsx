@@ -1,6 +1,6 @@
-import React, { useEffect } from "react";
-import { StyleSheet, Text, View } from "react-native";
-import { Controller } from "react-hook-form";
+import React, { useEffect } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import { Controller } from 'react-hook-form';
 
 import {
   AutocompleteInput,
@@ -13,10 +13,9 @@ import {
   SwitchField,
   TimeWheelPicker,
   WeekdayPicker,
-} from "@/components/forms";
-import { MEDICAMENTOS_SUGERIDOS } from "@/constants/medicamentos";
-import { AgroColors, Radius, Spacing, Typography } from "@/constants/theme";
-import { useNovoTratamentoForm } from "../hooks/useNovoTratamentoForm";
+} from '@/components/forms';
+import { AgroColors, Radius, Spacing, Typography } from '@/constants/theme';
+import { useNovoTratamentoForm } from '../hooks/useNovoTratamentoForm';
 
 export interface NovoTratamentoFormProps {
   visible: boolean;
@@ -48,6 +47,7 @@ export function NovoTratamentoForm({
     semFim,
     resumo,
     placeholderCarencia,
+    sugestoes,
   } = useNovoTratamentoForm(animalId, onClose);
 
   useEffect(() => {
@@ -64,8 +64,7 @@ export function NovoTratamentoForm({
       onClose={onClose}
       onSubmit={submit}
       submitLabel="Salvar Tratamento"
-      loading={saving}
-    >
+      loading={saving}>
       <Controller
         control={control}
         name="medicamento"
@@ -77,18 +76,13 @@ export function NovoTratamentoForm({
             onChangeText={field.onChange}
             onBlur={field.onBlur}
             placeholder="Ex: Brucelose"
-            suggestions={MEDICAMENTOS_SUGERIDOS}
+            suggestions={sugestoes}
             error={fieldState.error?.message}
           />
         )}
       />
 
-      <ControlledInput
-        control={control}
-        name="dose"
-        label="Dose"
-        placeholder="Ex: 2 ml"
-      />
+      <ControlledInput control={control} name="dose" label="Dose" placeholder="Ex: 2 ml" />
 
       <Controller
         control={control}
@@ -108,11 +102,7 @@ export function NovoTratamentoForm({
           control={control}
           name="intervaloHoras"
           render={({ field }) => (
-            <IntervalPicker
-              label="Repetir a cada"
-              value={field.value}
-              onChange={field.onChange}
-            />
+            <IntervalPicker label="Repetir a cada" value={field.value} onChange={field.onChange} />
           )}
         />
       ) : null}
@@ -122,9 +112,7 @@ export function NovoTratamentoForm({
         <Controller
           control={control}
           name="horario"
-          render={({ field }) => (
-            <TimeWheelPicker value={field.value} onChange={field.onChange} />
-          )}
+          render={({ field }) => <TimeWheelPicker value={field.value} onChange={field.onChange} />}
         />
       </View>
 
@@ -133,11 +121,7 @@ export function NovoTratamentoForm({
           control={control}
           name="avisoMinutosAntes"
           render={({ field }) => (
-            <AvisoPicker
-              label="Avisar"
-              value={field.value}
-              onChange={field.onChange}
-            />
+            <AvisoPicker label="Avisar" value={field.value} onChange={field.onChange} />
           )}
         />
 
@@ -147,11 +131,7 @@ export function NovoTratamentoForm({
               control={control}
               name="comecaEm"
               render={({ field }) => (
-                <DateField
-                  label="Começa em"
-                  value={field.value}
-                  onChange={field.onChange}
-                />
+                <DateField label="Começa em" value={field.value} onChange={field.onChange} />
               )}
             />
           </View>
@@ -224,10 +204,10 @@ const styles = StyleSheet.create({
   label: {
     ...Typography.caption,
     color: AgroColors.textSecondary,
-    fontWeight: "600",
+    fontWeight: '600',
   },
   duasColunas: {
-    flexDirection: "row",
+    flexDirection: 'row',
     gap: Spacing.sm,
   },
   coluna: {
