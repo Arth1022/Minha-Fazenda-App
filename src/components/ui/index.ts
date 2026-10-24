@@ -8,6 +8,7 @@ export {
   type FloatingActionButtonProps,
 } from './FloatingActionButton';
 export { Header, type HeaderProps } from './Header';
+export { MilkAmount, type MilkAmountProps } from './MilkAmount';
 export {
   ScreenContainer,
   type ScreenContainerProps,

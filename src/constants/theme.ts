@@ -30,8 +30,10 @@ export const AgroColors = {
   mapPolygonLavouraBorder: '#FEF08A',
 
   // Semânticas e Indicadores
-  waterBlue: '#0EA5E9',        // Produção de leite / volume diário (22.1 L, 285 L)
+  waterBlue: '#0EA5E9',        // Informativo (badge info)
   waterBlueBg: '#E0F2FE',      // Fundo suave azul
+  milk: '#A16207',             // Produção de leite (ícone e valor em litros)
+  milkBg: '#FEF6E4',           // Fundo creme do leite
   wheatGold: '#EAB308',        // Indicador de lavoura / sol manhã
   sunsetOrange: '#F97316',     // Indicador pôr do sol / tarde
   warning: '#D97706',          // Alerta / Estoque baixo / Manutenção devida

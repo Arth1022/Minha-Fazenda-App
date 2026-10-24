@@ -1,7 +1,15 @@
 import React from 'react';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 
-export type AppIconName = 'sun' | 'sunset' | 'moon' | 'bell' | 'edit' | 'plus' | 'x';
+export type AppIconName =
+  | 'sun'
+  | 'sunset'
+  | 'moon'
+  | 'bell'
+  | 'edit'
+  | 'plus'
+  | 'x'
+  | 'milk';
 
 export interface AppIconProps {
   name: AppIconName;
@@ -137,6 +145,23 @@ export function AppIcon({ name, size = 20, color = '#64748B' }: AppIconProps) {
           strokeLinejoin="round">
           <Line x1="18" y1="6" x2="6" y2="18" />
           <Line x1="6" y1="6" x2="18" y2="18" />
+        </Svg>
+      );
+
+    case 'milk':
+      return (
+        <Svg
+          width={size}
+          height={size}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={color}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round">
+          <Path d="M8 2h8" />
+          <Path d="M9 2v2.789a4 4 0 0 1-.672 2.219l-.656.984A4 4 0 0 0 7 10.212V20a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-9.789a4 4 0 0 0-.672-2.219l-.656-.984A4 4 0 0 1 15 4.788V2" />
+          <Path d="M7 15a6.472 6.472 0 0 1 5 0 6.47 6.47 0 0 0 5 0" />
         </Svg>
       );
 
