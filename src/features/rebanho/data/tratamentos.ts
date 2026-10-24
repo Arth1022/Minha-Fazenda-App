@@ -1,4 +1,4 @@
-import { desc, eq, isNotNull, or } from 'drizzle-orm';
+import { desc, eq, isNotNull, max, or } from 'drizzle-orm';
 
 import { db, tratamentos } from '@/database';
 import type { NovoTratamento, Tratamento, UltimoUsoMedicamento } from '@/dtos';
@@ -25,6 +25,34 @@ export function tratamentosComCarencia() {
         isNotNull(tratamentos.carenciaCarneDias)
       )
     );
+}
+
+/** Sugestões que aparecem sempre, mesmo sem uso anterior. */
+export const MEDICAMENTOS_FIXOS = ['Brucelose'];
+
+/**
+ * Nomes para sugerir no campo do remédio: os já usados na fazenda (do uso mais
+ * recente para o mais antigo), depois `sugestoes` que ainda não apareceram.
+ * Nomes iguais sem acento/maiúsculas aparecem uma vez só, na grafia mais recente.
+ */
+export async function nomesDeMedicamentos(
+  sugestoes: readonly string[] = MEDICAMENTOS_FIXOS
+): Promise<string[]> {
+  const usados = await db
+    .select({ medicamento: tratamentos.medicamento, ultimoUso: max(tratamentos.dataInicio) })
+    .from(tratamentos)
+    .groupBy(tratamentos.medicamento)
+    .orderBy(desc(max(tratamentos.dataInicio)));
+
+  const vistos = new Set<string>();
+  const nomes: string[] = [];
+  for (const nome of [...usados.map((u) => u.medicamento.trim()), ...sugestoes, ...MEDICAMENTOS_FIXOS]) {
+    const chave = normalizarTexto(nome);
+    if (!chave || vistos.has(chave)) continue;
+    vistos.add(chave);
+    nomes.push(nome);
+  }
+  return nomes;
 }
 
 /**

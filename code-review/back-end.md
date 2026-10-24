@@ -936,3 +936,46 @@ O `ace033a` tratava `dataFim` null como dose única, o que contradiz o combinado
 - **Dose única = `dataFim` igual a `dataInicio`.**
 - **Implementação:** as funções usam um gerador interno (`diasDeDose(agenda, de, ate)`), que percorre só a janela pedida. O `ehDiaDeDose` deixou de montar a lista inteira.
 - **Testes:** `test:doses` foi de 34 para 40 checks. Os novos cobrem dose única, contínuo até hoje, dia de dose no futuro, pendente e próximas sem fim, e ativo sem fim.
+
+---
+
+## Sprint 2 · B5: cadastro com peso inicial, pai na cria e nomes de medicamentos
+
+> **Commit:** "Sprint 2 B5: cadastrarAnimal com peso inicial, pai da cria e nomesDeMedicamentos". O hash entra na próxima atualização.
+
+Por decisão do usuário, não haverá edição de dados do animal. O `updateAnimal` e a regra de "virar macho" saíram do escopo.
+
+### O que foi feito
+
+- **`cadastrarAnimal(novo, { pesoInicialKg?, dataPesagem? })`:**
+  - grava o animal e o peso de entrada numa **transação síncrona** do expo-sqlite (mesmo padrão do `registrarParto`); se a pesagem falhar, o animal não fica gravado;
+  - a data da pesagem é `dataPesagem`, senão `dataEntrada`, senão hoje;
+  - um peso ≤ 0 ou não numérico é recusado antes da transação;
+  - valida mãe fêmea e pai macho (e que os dois existam);
+  - o `createAnimal` passa a delegar para ele.
+- **`registrarParto`:** o pai da cria vem do `touroId`/`touroDescricao` da cobertura em aberto. Se `paiId`/`paiDescricao` forem informados no `DadosParto`, valem esses.
+- **`nomesDeMedicamentos(sugestoes = ['Brucelose'])`:**
+  - devolve os nomes já usados na fazenda, do uso mais recente para o mais antigo, e depois as sugestões;
+  - nomes iguais sem acento ou maiúscula aparecem uma vez só, na grafia mais recente;
+  - "Brucelose" (`MEDICAMENTOS_FIXOS`) entra sempre, mesmo quando o front passa outra lista;
+  - o front pode passar a sua lista de sugestões (`MEDICAMENTOS_SUGERIDOS`) como argumento.
+- **DTOs:** `OpcoesCadastroAnimal`; o `DadosParto` ganhou `paiId?` e `paiDescricao?`.
+
+### Por quê
+
+- **Uma transação só** para o animal e o peso, porque o produtor não pode ficar com um animal "sem o peso que digitou" se a segunda escrita falhar.
+- **Validar o peso antes** da transação, porque o erro sai mais claro e não chega a abrir escrita.
+- **A lista de sugestões vem como parâmetro,** porque a lista de vacinas e princípios ativos é de apresentação e mora no front (`src/constants/medicamentos.ts`). O back-end garante só a regra fixa: a Brucelose.
+
+### Testes (`npm run test:cadastro`): 16 checks
+
+`npm test` (exit 0): 194 checks no total, somando regras, banco, notificações, migrations, doses e cadastro.
+
+### API
+
+```ts
+cadastrarAnimal(novo: NovoAnimal, opcoes?: { pesoInicialKg?: number | null; dataPesagem?: Date | null }): Promise<Animal>
+registrarParto(maeId: string, { data, sexo, brinco, paiId?, paiDescricao? }: DadosParto): Promise<Animal>
+nomesDeMedicamentos(sugestoes?: readonly string[]): Promise<string[]>
+MEDICAMENTOS_FIXOS = ['Brucelose']
+```

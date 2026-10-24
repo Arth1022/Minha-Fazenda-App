@@ -57,7 +57,8 @@
     "test:notificacoes": "tsx --tsconfig tsconfig.test.json __tests__/notificacoes.test.ts",
     "test:migrations": "tsx --tsconfig tsconfig.test.json __tests__/migrations.test.ts",
     "test:doses": "tsx --tsconfig tsconfig.test.json __tests__/doses.test.ts",
-    "test": "npm run test:regras && npm run test:db && npm run test:notificacoes && npm run test:migrations && npm run test:doses"
+    "test:cadastro": "tsx --tsconfig tsconfig.test.json __tests__/cadastro.test.ts",
+    "test": "npm run test:regras && npm run test:db && npm run test:notificacoes && npm run test:migrations && npm run test:doses && npm run test:cadastro"
   },
   "private": true
 }

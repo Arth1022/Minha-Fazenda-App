@@ -1,7 +1,16 @@
 import { and, asc, count, desc, eq, isNotNull, isNull, max } from 'drizzle-orm';
 
-import { animais, db, reproducoes } from '@/database';
-import type { Animal, DadosParto, DadosSaida, NovoAnimal } from '@/dtos';
+import { animais, db, pesagens, reproducoes } from '@/database';
+import type {
+  Animal,
+  DadosParto,
+  DadosSaida,
+  NovoAnimal,
+  OpcoesCadastroAnimal,
+  Sexo,
+} from '@/dtos';
+
+type Transacao = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /** Rebanho na ordem de cadastro; por padrão só os animais ativos. */
 export function listarAnimais({ incluirInativos = false } = {}) {
@@ -40,28 +49,82 @@ export function criasPorMae() {
     .groupBy(animais.maeId);
 }
 
-export async function createAnimal(animal: NovoAnimal): Promise<Animal> {
-  const [created] = await db.insert(animais).values(animal).returning();
-  return created;
+/** Confere que o parente existe e tem o sexo esperado (mãe fêmea, pai macho). */
+function validarParente(tx: Transacao, id: string | null | undefined, sexo: Sexo) {
+  if (!id) return;
+  const parente = tx.select({ sexo: animais.sexo }).from(animais).where(eq(animais.id, id)).get();
+  if (!parente) throw new Error(sexo === 'F' ? 'A mãe informada não está no rebanho' : 'O pai informado não está no rebanho');
+  if (parente.sexo !== sexo) throw new Error(sexo === 'F' ? 'A mãe precisa ser fêmea' : 'O pai precisa ser macho');
+}
+
+/**
+ * Cadastra o animal e, se informado, o peso de entrada, numa transação só:
+ * se a pesagem falhar, o animal também não é gravado. A pesagem usa
+ * `dataPesagem`, ou a data de entrada, ou hoje.
+ */
+export async function cadastrarAnimal(
+  novo: NovoAnimal,
+  { pesoInicialKg = null, dataPesagem = null }: OpcoesCadastroAnimal = {}
+): Promise<Animal> {
+  if (pesoInicialKg !== null && !(Number.isFinite(pesoInicialKg) && pesoInicialKg > 0)) {
+    throw new Error('Peso inicial inválido');
+  }
+  // Transação síncrona do driver expo-sqlite: as escritas usam .run()/.get()
+  return db.transaction((tx) => {
+    validarParente(tx, novo.maeId, 'F');
+    validarParente(tx, novo.paiId, 'M');
+    const animal = tx.insert(animais).values(novo).returning().get();
+    if (pesoInicialKg !== null) {
+      tx.insert(pesagens)
+        .values({
+          animalId: animal.id,
+          pesoKg: pesoInicialKg,
+          data: dataPesagem ?? novo.dataEntrada ?? new Date(),
+        })
+        .run();
+    }
+    return animal;
+  });
+}
+
+/** Cadastro sem pesagem; prefira `cadastrarAnimal`. */
+export function createAnimal(animal: NovoAnimal): Promise<Animal> {
+  return cadastrarAnimal(animal);
 }
 
 /**
  * Registra o parto: cria o bezerro já ligado à mãe (origem "nascido", nascimento
  * na data do parto) e fecha a cobertura em aberto mais recente da vaca, se houver.
+ * O pai da cria é o informado ou, sem informar, o touro dessa cobertura.
  */
 export async function registrarParto(
   maeId: string,
-  { data, sexo, brinco }: DadosParto
+  { data, sexo, brinco, paiId, paiDescricao }: DadosParto
 ): Promise<Animal> {
   // Transação síncrona do driver expo-sqlite: as escritas usam .run()/.get()
   return db.transaction((tx) => {
     const mae = tx.select().from(animais).where(eq(animais.id, maeId)).get();
+    const coberturaAberta = tx
+      .select()
+      .from(reproducoes)
+      .where(and(eq(reproducoes.animalId, maeId), isNull(reproducoes.dataParto)))
+      .orderBy(desc(reproducoes.data))
+      .limit(1)
+      .get();
+
+    const paiInformado = paiId !== undefined || paiDescricao !== undefined;
+    const pai = paiInformado
+      ? { paiId: paiId ?? null, paiDescricao: paiDescricao ?? null }
+      : { paiId: coberturaAberta?.touroId ?? null, paiDescricao: coberturaAberta?.touroDescricao ?? null };
+    validarParente(tx, pai.paiId, 'M');
+
     const cria = tx
       .insert(animais)
       .values({
         brinco,
         sexo,
         maeId,
+        ...pai,
         origem: 'nascido',
         dataNascimento: data,
         dataEntrada: data,
@@ -70,13 +133,6 @@ export async function registrarParto(
       .returning()
       .get();
 
-    const coberturaAberta = tx
-      .select()
-      .from(reproducoes)
-      .where(and(eq(reproducoes.animalId, maeId), isNull(reproducoes.dataParto)))
-      .orderBy(desc(reproducoes.data))
-      .limit(1)
-      .get();
     if (coberturaAberta) {
       tx.update(reproducoes)
         .set({ dataParto: data, criaId: cria.id, prenhezConfirmada: true })

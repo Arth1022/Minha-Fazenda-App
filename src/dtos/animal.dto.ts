@@ -36,6 +36,16 @@ export interface DadosParto {
   data: Date;
   sexo: Sexo;
   brinco: string;
+  /** Pai da cria; sem informar, vem do touro da cobertura em aberto */
+  paiId?: string | null;
+  paiDescricao?: string | null;
+}
+
+/** Opções de `cadastrarAnimal`: peso de entrada, gravado na mesma transação. */
+export interface OpcoesCadastroAnimal {
+  pesoInicialKg?: number | null;
+  /** Data da pesagem inicial; padrão: data de entrada, ou hoje */
+  dataPesagem?: Date | null;
 }
 
 export type StatusSaida = Exclude<StatusAnimal, 'ativo'>;
