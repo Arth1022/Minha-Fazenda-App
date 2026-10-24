@@ -3,6 +3,7 @@ import { desc, eq, isNotNull, or } from 'drizzle-orm';
 import { db, tratamentos } from '@/database';
 import type { NovoTratamento, Tratamento, UltimoUsoMedicamento } from '@/dtos';
 import { normalizarTexto } from '@/utils';
+import { errosDaAgenda, TODOS_OS_DIAS } from '../services/doses';
 
 /** Tratamentos do animal, do início mais recente para o mais antigo. */
 export function tratamentosDoAnimal(animalId: string) {
@@ -56,14 +57,28 @@ export async function ultimoUsoDoMedicamento(
   };
 }
 
+/** Grava o tratamento. Recusa agenda inválida (ver `errosDaAgenda`). */
 export async function createTratamento(
   input: NovoTratamento
 ): Promise<Tratamento> {
+  const erros = errosDaAgenda({
+    dataInicio: input.dataInicio,
+    dataFim: input.dataFim ?? null,
+    diasSemana: input.diasSemana ?? TODOS_OS_DIAS,
+    horario: input.horario ?? null,
+    intervaloHoras: input.intervaloHoras ?? null,
+    avisoMinutosAntes: input.avisoMinutosAntes ?? 0,
+  });
+  if (erros.length > 0) throw new Error(erros.join('; '));
+
   const [created] = await db.insert(tratamentos).values(input).returning();
   return created;
 }
 
-/** Marca ou desmarca a dose de um dia, mantendo os dias ordenados. */
+/**
+ * Marca ou desmarca a dose de um dia, mantendo os dias ordenados.
+ * @deprecated use `confirmarDia` / `desfazerDia` (data/doses), que gravam em doses_aplicadas.
+ */
 export async function toggleDiaConfirmado(
   tratamento: Tratamento,
   dia: number

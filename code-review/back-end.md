@@ -861,3 +861,63 @@ type DoseAplicada = { id: string; tratamentoId: string; dia: Date; criadoPor: st
 type Animal = { ...; paiId: string | null; paiDescricao: string | null }
 type Reproducao = { ...; touroId: string | null; touroDescricao: string | null }
 ```
+
+---
+
+## Sprint 2 · B2: doses (agenda e "Dei a dose de hoje")
+
+> **Commit:** "Sprint 2 B2: doses do tratamento (agenda, confirmar e desfazer dia)". O hash entra na próxima atualização.
+
+### O que foi feito
+
+**Funções puras (`src/features/rebanho/services/doses.ts`)**
+- `diasComDose(agenda)` → `{ indice, dia }[]`. O índice é o "dia N" em dias corridos: seg/qua/sex começando numa segunda dá 1, 3, 5, 8, 10, 12. Sem `dataFim`, é dose única no dia do início.
+- `minutosDasDoses(agenda)` e `horariosDoDia(agenda, dia)`: com intervalo, o dia tem 24/intervalo doses a partir do horário, dando a volta no relógio (20:00 de 8 em 8 h → 04:00, 12:00, 20:00).
+- `proximasDoses(agenda, desde, n)` → `DoseAgendada[]` (`momento`, `semHorario`). É a base dos lembretes do B4. A dose sem horário vale pelo dia inteiro.
+- `proximaDosePendente(agenda, diasConfirmados, agora)` → `DosePendente | null`: o próximo dia sem confirmação, a partir de hoje. A dose de hoje continua pendente mesmo depois do horário.
+- `tratamentosAtivos(tratamentos, hoje)`, `ehDiaDeDose`, `ultimoDia`, `diaDaSemana`, `TODOS_OS_DIAS`.
+- `errosDaAgenda(agenda)` → `string[]`, com textos prontos para o formulário. A agenda é recusada quando:
+  - não tem dia da semana;
+  - o horário é inválido;
+  - o intervalo não divide o dia, vem sem horário ou vem sem todos os dias marcados;
+  - o fim é antes do início;
+  - o período não tem nenhum dia de dose.
+
+**Banco (`src/features/rebanho/data/doses.ts`)**
+- `diasConfirmados(tratamentoId)` e `diasConfirmadosDoAnimal(animalId)` (join, numa consulta só): devolvem queries prontas para o `useLiveQuery`.
+- `confirmarDia(tratamentoId, dia)`: grava a meia-noite local, é idempotente (`onConflictDoNothing` sobre o UNIQUE) e recusa dia que não é dia de dose.
+- `desfazerDia(tratamentoId, dia)`: idempotente.
+- `createTratamento` agora valida a agenda com `errosDaAgenda` antes de gravar e não grava nada se houver erro.
+- `toggleDiaConfirmado` ficou `@deprecated`. Sai junto com `dias_confirmados`, quando a tela migrar.
+
+**DTOs (`tratamento.dto.ts`):** `AgendaDoTratamento` (um `Pick` do `Tratamento`), `DiaDeDose`, `DoseAgendada`, `DosePendente`, `DoseConfirmada`.
+
+### Por quê
+
+- **O dia N é calculado, não gravado.** O banco guarda a data do dia, então mudar a regra do índice (ou passar a confirmar por horário) não exige migration.
+- **Idempotência no banco,** não no código. Dois toques rápidos em "Dei a dose" geram um insert ignorado, sem corrida entre leitura e escrita.
+- **`AgendaDoTratamento` e não `AgendaTratamento`:** o front criou `AgendaTratamento` em `agenda.dto.ts` para o estado do formulário (com `medicamento`, `comecaEm`/`ate` e intervalo 24 = uma vez ao dia). Os dois tipos são diferentes. Na hora de salvar, o formulário converte para `NovoTratamento`: intervalo 24 → `intervaloHoras: null`.
+- **Os reagendamentos dos lembretes** depois de confirmar ou desfazer entram no B4, quando existir o `reagendarLembretes()`.
+
+### Testes (`npm run test:doses`): 34 checks
+
+Funções puras (dias N, horários com intervalo, validação, próximas doses, pendente, ativos) e banco (agenda gravada, agenda inválida não grava nada, confirmar idempotente, dia fora da agenda recusado, desfazer, consulta por animal).
+
+### API (para o front)
+
+```ts
+// services/doses
+diasComDose(agenda): { indice: number; dia: Date }[]
+proximasDoses(agenda, desde: Date, n: number): DoseAgendada[]
+proximaDosePendente(agenda, diasConfirmados: Date[], agora?: Date): DosePendente | null   // { indice, dia, horarios: Date[] }
+tratamentosAtivos<T>(tratamentos: T[], hoje?: Date): T[]
+errosDaAgenda(agenda: AgendaDoTratamento): string[]
+horariosDoDia(agenda, dia: Date): Date[]
+ehDiaDeDose(agenda, dia: Date): boolean
+
+// data/doses
+diasConfirmados(tratamentoId)          // query: DoseAplicada[]
+diasConfirmadosDoAnimal(animalId)      // query: { tratamentoId, dia }[]
+confirmarDia(tratamentoId, dia: Date): Promise<void>
+desfazerDia(tratamentoId, dia: Date): Promise<void>
+```
