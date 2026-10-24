@@ -1,10 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Alert } from 'react-native';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import type { Animal } from '@/dtos';
+import type { Animal, NovoAnimal } from '@/dtos';
 import { decimalOpcional, formatBrinco, isInteiro, parseDecimal } from '@/utils';
-import { createAnimal } from '../data/animais';
+import { cadastrarAnimal } from '../data/animais';
 import { dataNascimentoPorIdade, IDADE_FIM_CRIA_MESES } from '../services/fase';
 
 export const novoAnimalSchema = z.object({
@@ -87,8 +88,7 @@ export function useNovoAnimalForm(onCreated: (animal: Animal) => void) {
     const idadeMesesTotal = idadeTotalMeses(values.idadeAnos, values.idadeMeses);
     const ehFemea = values.sexo === 'F';
 
-    // TODO(B5): trocar por cadastrarAnimal, que grava o peso inicial (values.pesoKg) na mesma transação
-    const created = await createAnimal({
+    const novo: NovoAnimal = {
       brinco: formatBrinco(values.brinco),
       nome: values.nome || undefined,
       raca: values.raca || undefined,
@@ -103,10 +103,21 @@ export function useNovoAnimalForm(onCreated: (animal: Animal) => void) {
       maeId: values.maeId,
       paiId: values.pai.id,
       paiDescricao: values.pai.descricao,
-    });
+    };
 
-    form.reset(DEFAULT_VALUES);
-    onCreated(created);
+    try {
+      // Animal e peso de entrada numa transação só (o back-end valida mãe, pai e peso)
+      const created = await cadastrarAnimal(novo, {
+        pesoInicialKg: decimalOuNull(values.pesoKg),
+      });
+      form.reset(DEFAULT_VALUES);
+      onCreated(created);
+    } catch (erro) {
+      Alert.alert(
+        'Não foi possível salvar',
+        erro instanceof Error ? erro.message : 'Tente novamente.'
+      );
+    }
   });
 
   return {

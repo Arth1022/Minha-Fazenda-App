@@ -853,7 +853,23 @@ paiDescricao: values.pai.descricao,
 - **`decimalOuNull`:** campo vazio vira `null`, nunca `0`. Leite/ração vazios aparecem como "—" na lista, sem inventar valor.
 - **Sem modo edição:** decisão do usuário. Não haverá "Editar dados" na ficha, então o cadastro existe só neste modal.
 
-**Pendente (B5):** o **peso atual** já está no formulário, mas só vai ser gravado quando o back-end entregar o `cadastrarAnimal` (animal + 1ª pesagem na mesma transação). O Líder Técnico pediu para não chamar `createPesagem` depois do `createAnimal`, porque se der erro no meio fica animal sem pesagem. Está marcado com `TODO(B5)` no hook; a troca é uma linha.
+**Peso inicial (B5, resolvido):** no início o peso ficava no formulário sem ser gravado, esperando o `cadastrarAnimal` do back-end (`6530492`). Agora o envio usa:
+
+```ts
+try {
+  // Animal e peso de entrada numa transação só (o back-end valida mãe, pai e peso)
+  const created = await cadastrarAnimal(novo, {
+    pesoInicialKg: decimalOuNull(values.pesoKg),
+  });
+  form.reset(DEFAULT_VALUES);
+  onCreated(created);
+} catch (erro) {
+  Alert.alert('Não foi possível salvar', erro instanceof Error ? erro.message : 'Tente novamente.');
+}
+```
+
+- **Transação:** se a pesagem falhar, o animal também não é gravado. Por isso não usamos `createAnimal` + `createPesagem` em sequência.
+- **Erro na tela:** o `cadastrarAnimal` recusa mãe que não é fêmea, pai que não é macho e peso ≤ 0, e a mensagem dele aparece no `Alert`. O formulário fica aberto e preenchido, para o produtor corrigir.
 
 **Validação:** `tsc` isolado OK.
 
@@ -968,7 +984,7 @@ export interface EventoLinhaDoTempo {
 
 | Pendência | Onde | Depende de | Troca |
 |---|---|---|---|
-| **Peso do cadastro não é gravado** | `useNovoAnimalForm.ts`: `TODO(B5)` | B5 `cadastrarAnimal` (animal + 1ª pesagem em transação) | Trocar o `createAnimal` pela nova função, passando `values.pesoKg` |
+| ~~Peso do cadastro não é gravado~~ | `useNovoAnimalForm.ts` | B5 `cadastrarAnimal` | **Resolvido**: usa `cadastrarAnimal` com `pesoInicialKg` e erro no `Alert` |
 | **Tipo provisório do histórico** | `LinhaDoTempo.tsx`: `TODO(B1)` | B1 `EventoTimeline` em `@/dtos` | Trocar a interface local pelo import |
 | **Ligar na ficha** | `AnimalDetalheScreen.tsx` (placeholders A, C, D, E e botão F6) | Full-stack (F8) | Snippets passados pelo Líder Técnico |
 | **`IconSize` na Home** | `HomeScreen.tsx`, `OrdenhaCard.tsx` | Arquivos estavam travados | Trocar `size={20}` por `IconSize.lg` |
