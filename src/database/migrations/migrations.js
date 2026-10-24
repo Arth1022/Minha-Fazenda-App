@@ -7,6 +7,7 @@ import m0002 from './0002_remove_campos_antigos.sql';
 import m0003 from './0003_rebanho_completo.sql';
 import m0004 from './0004_notificacoes_agendadas.sql';
 import m0005 from './0005_animais_ja_pariu.sql';
+import m0006 from './0006_animais_leite_racao.sql';
 
   export default {
     journal,
@@ -16,7 +17,8 @@ m0001,
 m0002,
 m0003,
 m0004,
-m0005
+m0005,
+m0006
     }
   }
   

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNotNull, isNull, max } from 'drizzle-orm';
+import { and, asc, count, desc, eq, isNotNull, isNull, max } from 'drizzle-orm';
 
 import {
   animais,
@@ -33,6 +33,15 @@ export function criasDe(maeId: string) {
 export function ultimosPartos() {
   return db
     .select({ maeId: animais.maeId, data: max(animais.dataNascimento) })
+    .from(animais)
+    .where(isNotNull(animais.maeId))
+    .groupBy(animais.maeId);
+}
+
+/** Quantidade de crias de cada mãe, numa consulta só (para a lista do rebanho). */
+export function criasPorMae() {
+  return db
+    .select({ maeId: animais.maeId, total: count() })
     .from(animais)
     .where(isNotNull(animais.maeId))
     .groupBy(animais.maeId);

@@ -7,12 +7,13 @@ import {
   animalPorId,
   createAnimal,
   criasDe,
+  criasPorMae,
   listarAnimais,
   registrarParto,
   registrarSaida,
   ultimosPartos,
 } from '@/features/rebanho/data/animais';
-import { createPesagem, pesagensDoAnimal } from '@/features/rebanho/data/pesagens';
+import { createPesagem, pesagensDoAnimal, pesosAtuais } from '@/features/rebanho/data/pesagens';
 import { createReproducao, reproducoesDoAnimal } from '@/features/rebanho/data/reproducoes';
 import {
   createTratamento,
@@ -89,6 +90,10 @@ async function runPersistenceTest() {
     calcularFase({ ...compradaParida, ultimoParto: null }, dia(24, 10)) === 'vaca',
     'comprada com ja_pariu é vaca sem cria registrada'
   );
+  check(vaca.producaoLeiteL === null && vaca.racaoKgDia === null, 'leite estimado e ração são opcionais (null)');
+  const leiteira = await createAnimal({ brinco: '#206', producaoLeiteL: 18.5, racaoKgDia: 6 });
+  const gravada = await animalPorId(leiteira.id);
+  check(gravada?.producaoLeiteL === 18.5 && gravada.racaoKgDia === 6, 'createAnimal grava leite estimado e ração por dia');
 
   // 3. Cobertura com previsão de parto
   const cobertura = await createReproducao({ animalId: vaca.id, tipo: 'inseminacao', data: dia(1, 1) });
@@ -116,6 +121,11 @@ async function runPersistenceTest() {
     calcularFase({ ...vaca, ultimoParto: partos[0].data }, dia(24, 10)) === 'vaca',
     'fêmea com cria registrada é vaca sem ja_pariu (caso da Mimosa do seed)'
   );
+  const crias = await criasPorMae();
+  check(
+    crias.length === 1 && crias[0].maeId === vaca.id && crias[0].total === 1,
+    'criasPorMae conta as crias de cada mãe numa consulta só'
+  );
 
   const comCrias = await db.query.animais.findFirst({
     where: eq(animais.id, vaca.id),
@@ -131,6 +141,16 @@ async function runPersistenceTest() {
   await createPesagem({ animalId: cria.id, data: dia(24, 10), pesoKg: 42.5 });
   const pesos = await pesagensDoAnimal(cria.id);
   check(pesos[0].pesoKg === 42.5 && pesos[1].pesoKg === 35, 'pesagens da mais recente para a mais antiga');
+  // A mais antiga gravada por último: o peso atual tem de vir da data, não da ordem de gravação
+  await createPesagem({ animalId: vaca.id, data: dia(20, 10), pesoKg: 500 });
+  await createPesagem({ animalId: vaca.id, data: dia(5, 10), pesoKg: 480 });
+  const atuais = new Map((await pesosAtuais()).map((p) => [p.animalId, p]));
+  check(atuais.size === 2, 'pesosAtuais traz uma linha por animal pesado');
+  check(
+    atuais.get(vaca.id)?.pesoKg === 500 && atuais.get(vaca.id)?.data?.getTime() === dia(20, 10).getTime(),
+    'peso atual é o da pesagem mais recente, com a data dela'
+  );
+  check(atuais.get(cria.id)?.pesoKg === 42.5, 'peso atual da cria');
 
   // 6. Tratamentos, dias e último uso do remédio
   const tratamento = await createTratamento({

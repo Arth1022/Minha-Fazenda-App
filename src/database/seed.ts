@@ -51,6 +51,8 @@ export function runDevSeed(): void {
         origem: 'comprado',
         dataEntrada: mesesAtras(36),
         loteId: maternidade.id,
+        producaoLeiteL: 18,
+        racaoKgDia: 6,
       })
       .returning()
       .get();
@@ -94,6 +96,7 @@ export function runDevSeed(): void {
         dataNascimento: mesesAtras(20),
         origem: 'nascido',
         loteId: recria.id,
+        racaoKgDia: 3,
       })
       .returning()
       .get();

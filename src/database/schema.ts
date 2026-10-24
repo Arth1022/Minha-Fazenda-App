@@ -97,6 +97,10 @@ export const animais = sqliteTable(
     dataSaida: integer('data_saida', { mode: 'timestamp_ms' }),
     motivoSaida: text('motivo_saida'),
     loteId: text('lote_id').references(() => lotes.id, { onDelete: 'set null' }),
+    /** Leite estimado por dia (litros), informado pelo produtor; opcional */
+    producaoLeiteL: real('producao_leite_l'),
+    /** Ração por dia (kg), informada pelo produtor; opcional */
+    racaoKgDia: real('racao_kg_dia'),
     criadoPor: criadoPor(),
     ...timestamps,
   },

@@ -2,6 +2,8 @@
 
 ## Sprint 1 · Notificações
 
+> **Commit:** `17487ef`
+
 Módulo de notificações **locais** (sem servidor), reutilizável por qualquer feature: permissão, canais do Android, agendamento por data ou recorrente, cancelamento, listagem, toque na notificação e vínculo notificação↔registro no banco. Já atende os lembretes do animal (contrato `Lembrete`) e o lembrete diário da ordenha. **Não integrei com nenhuma tela**: as funções ficam prontas para o front chamar.
 
 Tudo fica em `src/services/notificacoes/`; telas e features importam de `@/services/notificacoes`.
@@ -320,6 +322,8 @@ export async function reagendarLembreteOrdenha(periodo: PeriodoOrdenha, horario:
 
 ## Sprint 1 · Regra de fase (literatura Embrapa)
 
+> **Commit:** `d51eda3`
+
 `src/features/rebanho/services/fase.ts`:
 
 ```ts
@@ -372,6 +376,82 @@ if (sexo === 'F') {
 
 ---
 
+## Sprint 1 · Correção: volta do leite estimado
+
+> **Commit:** C, o próximo depois de `d51eda3` (o hash entra no commit seguinte, porque um commit não contém o próprio hash)
+
+O usuário mandou voltar a tela do Rebanho para como era antes do `5688a37`, com o card de resumo e o leite estimado.
+
+### Colunas `producao_leite_l` e `racao_kg_dia` (migration 0006)
+
+```ts
+// src/database/schema.ts (animais)
+/** Leite estimado por dia (litros), informado pelo produtor; opcional */
+producaoLeiteL: real('producao_leite_l'),
+/** Ração por dia (kg), informada pelo produtor; opcional */
+racaoKgDia: real('racao_kg_dia'),
+```
+
+```sql
+-- 0006_animais_leite_racao.sql (drizzle-kit)
+ALTER TABLE `animais` ADD `producao_leite_l` real;
+ALTER TABLE `animais` ADD `racao_kg_dia` real;
+```
+
+**O que foi feito.** As duas colunas voltaram como `real` anulável. Os nomes e tipos são os mesmos de antes da 0002, então o front reaproveita o que já conhecia (`Animal.producaoLeiteL`, `Animal.racaoKgDia`). O `createAnimal` aceita os dois campos sem mudança, porque recebe `NovoAnimal`. O futuro `updateAnimal` também vai aceitar.
+
+**Por quê.**
+- **Migration nova, sem reverter a 0002.** Um banco que já aplicou a 0002 (que apagou as colunas) só recebe as colunas de volta com um `ALTER TABLE ADD`. Reverter a 0002 quebraria o histórico do migrator.
+- **Anuláveis:** o leite estimado é opcional e informado pelo produtor. Novilha, bezerra e macho não têm. Não há backfill: os dados antigos foram apagados pela 0002 e não dá para recuperá-los.
+- **Peso e crias não voltaram como coluna**, como o líder definiu. São dados derivados de `pesagens` e de `animais.mae_id`, e guardá-los de novo criaria duas fontes da mesma informação.
+
+### Funções agregadas para a lista (sem N+1)
+
+```ts
+// src/features/rebanho/data/animais.ts
+/** Quantidade de crias de cada mãe, numa consulta só (para a lista do rebanho). */
+export function criasPorMae() {
+  return db
+    .select({ maeId: animais.maeId, total: count() })
+    .from(animais)
+    .where(isNotNull(animais.maeId))
+    .groupBy(animais.maeId);
+}
+
+// src/features/rebanho/data/pesagens.ts
+/**
+ * Última pesagem de cada animal, numa consulta só (para a lista do rebanho).
+ * No SQLite, com max() as colunas fora do agregado vêm da linha que tem o
+ * máximo, então o peso é o da pesagem mais recente
+ * (https://www.sqlite.org/lang_select.html#bareagg).
+ */
+export function pesosAtuais() {
+  return db
+    .select({ animalId: pesagens.animalId, pesoKg: pesagens.pesoKg, data: max(pesagens.data) })
+    .from(pesagens)
+    .groupBy(pesagens.animalId);
+}
+```
+
+**O que foi feito.** São duas consultas agregadas, cada uma devolvendo uma linha por animal, no mesmo padrão do `ultimosPartos()` que o `useRebanho` já usa. O front junta com um `Map` e evita N+1, que seria uma consulta de crias e uma de pesagens para cada card.
+
+**Por quê.**
+- **Duas consultas separadas, e não um `resumoDoAnimal` único com joins.** Elas seguem o padrão existente e funcionam direto no `useLiveQuery`. Um join de animais × pesagens × crias multiplicaria linhas e pediria subconsultas.
+- **`max()` com coluna fora do agregado:** é um comportamento documentado do SQLite (*bare columns in an aggregate query*). Com um único `max()`, as colunas vêm da linha do máximo. Assim sai uma linha por animal, mesmo com duas pesagens no mesmo dia. O teste grava a pesagem mais antiga por último, para provar que o peso vem pela data e não pela ordem de gravação.
+- **Trade-off:** é SQL específico do SQLite. Se o banco mudar (ex.: Postgres no sync), a consulta passa a precisar de `DISTINCT ON` ou de uma window function.
+- **Ganho de peso continua na ficha,** com `calcularPesoAtual(pesagensDoAnimal(id))`. A lista só precisa do peso atual.
+
+### Seed
+
+A Mimosa (a única vaca do seed) tem 18 L/dia de leite e 6 kg/dia de ração, e a novilha #102 tem 3 kg/dia de ração. Não há outras vacas no seed. Não criei animal novo para não mudar o resto da tela de exemplo.
+
+### Testes (`__tests__/persistence.test.ts`)
+- leite e ração são `null` por padrão e o `createAnimal` grava os dois;
+- `criasPorMae` conta as crias por mãe;
+- `pesosAtuais` devolve uma linha por animal, com o peso e a data da pesagem mais recente.
+
+---
+
 ### Arquivos
 
 **Novos**
@@ -386,12 +466,16 @@ if (sexo === 'F') {
 - `__tests__/notificacoes.test.ts`
 - `__tests__/support/expo-notifications.ts`: fake para os testes em Node
 - `src/database/migrations/0005_animais_ja_pariu.sql`, `src/database/migrations/meta/0005_snapshot.json` (drizzle-kit)
+- `src/database/migrations/0006_animais_leite_racao.sql`, `src/database/migrations/meta/0006_snapshot.json` (drizzle-kit)
 - `code-review/back-end.md`: este arquivo
 
 **Alterados**
-- `src/database/schema.ts`: tabela `notificacoes_agendadas`, coluna `animais.ja_pariu`
+- `src/database/schema.ts`: tabela `notificacoes_agendadas`, colunas `animais.ja_pariu`, `producao_leite_l` e `racao_kg_dia`
+- `src/features/rebanho/data/animais.ts`: `criasPorMae()`
+- `src/features/rebanho/data/pesagens.ts`: `pesosAtuais()`
+- `src/database/seed.ts`: leite e ração no seed
 - `src/features/rebanho/services/fase.ts`: regra de fase pela literatura
-- `__tests__/regras.test.ts`, `__tests__/persistence.test.ts`: testes de fase e de `ja_pariu`
+- `__tests__/regras.test.ts`, `__tests__/persistence.test.ts`: testes de fase, `ja_pariu`, leite/ração e funções agregadas
 - `android/app/src/main/AndroidManifest.xml`: `SCHEDULE_EXACT_ALARM`
 - `src/database/migrations/migrations.js`, `src/database/migrations/meta/_journal.json` (drizzle-kit)
 - `tsconfig.test.json`: path do fake de `expo-notifications`
@@ -400,7 +484,7 @@ if (sexo === 'F') {
 
 ### Saída dos testes
 
-`npm test` (exit 0) roda as três suítes: regras, banco e notificações. São 120 checks.
+`npm test` (exit 0) roda as três suítes: regras, banco e notificações. São 126 checks.
 
 ```
 =========================================================
@@ -449,13 +533,15 @@ if (sexo === 'F') {
 🌾 MINHA FAZENDA - TESTE DE PERSISTÊNCIA (Drizzle + SQLite)
 =========================================================
 ✅ tipo de produção gravado e alterado numa única linha
-✅ id do animal é UUID v4 (2beec7de-191e-488d-8da6-644e07d4e1aa)
+✅ id do animal é UUID v4 (40fcc857-f29f-43a4-9d26-eee3cf76cf20)
 ✅ padrões: fêmea, ativa, nascimento exato
 ✅ created_at / updated_at preenchidos como Date
 ✅ animalPorId encontra o animal com os campos mapeados
 ✅ ja_pariu começa false (sem backfill por idade)
 ✅ createAnimal grava ja_pariu (vaca comprada já parida)
 ✅ comprada com ja_pariu é vaca sem cria registrada
+✅ leite estimado e ração são opcionais (null)
+✅ createAnimal grava leite estimado e ração por dia
 ✅ cobertura grava a previsão de parto (+283 dias)
 ✅ parto cria o bezerro com mãe, origem e nascimento preenchidos
 ✅ bezerro nasce no lote da mãe
@@ -463,8 +549,12 @@ if (sexo === 'F') {
 ✅ crias = animais com mae_id da vaca
 ✅ último parto de cada mãe sai do nascimento da cria
 ✅ fêmea com cria registrada é vaca sem ja_pariu (caso da Mimosa do seed)
+✅ criasPorMae conta as crias de cada mãe numa consulta só
 ✅ relações animal → crias, lote e reproduções
 ✅ pesagens da mais recente para a mais antiga
+✅ pesosAtuais traz uma linha por animal pesado
+✅ peso atual é o da pesagem mais recente, com a data dela
+✅ peso atual da cria
 ✅ tratamento começa sem dias confirmados
 ✅ marcar dias mantém a lista ordenada
 ✅ update renova updated_at e preserva created_at
