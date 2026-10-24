@@ -942,3 +942,33 @@ export interface EventoLinhaDoTempo {
 - **É o primeiro a sair se o prazo apertar** (decisão do usuário). Por isso é um componente isolado, que a ficha pode simplesmente não renderizar.
 
 **Validação:** `tsc` isolado OK.
+
+**Commit:** `46424e0`
+
+## Sprint 2 · Resumo do front-end
+
+| Item | Commit | Entrega |
+|---|---|---|
+| F10 | `421b877` | Token `IconSize` (12/16/20) no `AppIcon` e no `MilkAmount` |
+| Componentes | `ad145b9` | `WeekdayPicker`, `IntervalPicker`, `AvisoPicker`, `SwitchField`, `CollapsibleSection`, `AnimalPicker`, `OrigemAnimalField`, `DateField`, `InfoBanner` |
+| F6 | `ff8e761` | `OutrosRegistrosMenu` + `FormModal` com `onSubmit` opcional |
+| F7 | `7965910` | `PesagemForm`, `CoberturaForm`, `PartoForm`, `SaidaForm`, `RegistroForm`, `useEnvioRegistro` |
+| F2 | `75b74a7` | `FichaResumo` + `ResumoLinha` extraído |
+| F9 | `295df9c` | Cadastro com sexo, "Já pariu?" e "Mais detalhes" |
+| F4 | `2b3cd7b` | `ReproducaoCard` |
+| F5 | `46424e0` | `ProximosCard` + `LinhaDoTempo` |
+
+**Princípios que valem para todos os itens**
+- **Componentes de exibição recebem dados prontos** (`FichaResumo`, `ReproducaoCard`, `ProximosCard`, `LinhaDoTempo`): nenhum importa `data/`. Regras e consultas ficam no back-end/hooks, e ações voltam por callback.
+- **Contratos de dados vêm de `@/dtos`;** os props ficam no próprio componente. Os dois tipos de valor de UI (`OrigemAnimalValue` e o provisório `EventoLinhaDoTempo`) ficam no componente.
+- **Validação mínima:** só o que a tabela exige (peso > 0, brinco da cria). O resto tem padrão (data = hoje) ou usa opções fixas (chips), sem digitação a validar.
+- **Só tokens do tema** (`AgroColors`, `Spacing`, `Radius`, `Typography`, `IconSize`). Os únicos números soltos são tamanhos de emoji e de avatar.
+
+### Pendências
+
+| Pendência | Onde | Depende de | Troca |
+|---|---|---|---|
+| **Peso do cadastro não é gravado** | `useNovoAnimalForm.ts`: `TODO(B5)` | B5 `cadastrarAnimal` (animal + 1ª pesagem em transação) | Trocar o `createAnimal` pela nova função, passando `values.pesoKg` |
+| **Tipo provisório do histórico** | `LinhaDoTempo.tsx`: `TODO(B1)` | B1 `EventoTimeline` em `@/dtos` | Trocar a interface local pelo import |
+| **Ligar na ficha** | `AnimalDetalheScreen.tsx` (placeholders A, C, D, E e botão F6) | Full-stack (F8) | Snippets passados pelo Líder Técnico |
+| **`IconSize` na Home** | `HomeScreen.tsx`, `OrdenhaCard.tsx` | Arquivos estavam travados | Trocar `size={20}` por `IconSize.lg` |
