@@ -4,8 +4,7 @@ import type {
   DoseAgendada,
   DosePendente,
 } from '@/dtos';
-import { parseHorario } from '@/services/notificacoes/gatilhos';
-import { adicionarDias, diasEntre, inicioDoDia } from '@/utils/date';
+import { adicionarDias, diasEntre, inicioDoDia, parseHorario } from '@/utils/date';
 
 /** Dias da semana no padrão do expo-notifications: 1 = domingo ... 7 = sábado. */
 export const TODOS_OS_DIAS = [1, 2, 3, 4, 5, 6, 7];

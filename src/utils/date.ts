@@ -2,6 +2,15 @@
  * Utilitários de data no formato brasileiro (DD/MM/AAAA)
  */
 
+import type { Horario } from '@/dtos';
+
+/** Converte "HH:mm" em hora e minuto; null se o texto não é um horário válido. */
+export function parseHorario(horario: string): Horario | null {
+  const match = horario.trim().match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+  if (!match) return null;
+  return { hora: Number(match[1]), minuto: Number(match[2]) };
+}
+
 /** Converte "DD/MM/AAAA" em Date; retorna null se inválida. */
 export function parseDataBR(value: string): Date | null {
   const match = value.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);

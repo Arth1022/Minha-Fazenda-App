@@ -4,13 +4,9 @@ import {
 } from 'expo-notifications';
 
 import type { Horario, Quando } from '@/dtos';
+import { parseHorario } from '@/utils/date';
 
-/** Converte "HH:mm" em hora e minuto; null se o texto não é um horário válido. */
-export function parseHorario(horario: string): Horario | null {
-  const match = horario.trim().match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
-  if (!match) return null;
-  return { hora: Number(match[1]), minuto: Number(match[2]) };
-}
+export { parseHorario };
 
 function horarioValido(horario: string): Horario {
   const parsed = parseHorario(horario);
