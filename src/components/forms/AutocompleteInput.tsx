@@ -2,6 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AgroColors, Radius, Spacing } from '@/constants/theme';
+import { normalizarTexto } from '@/utils';
 import { CustomInput, type CustomInputProps } from './CustomInput';
 
 export interface AutocompleteInputProps extends Omit<
@@ -16,21 +17,17 @@ export interface AutocompleteInputProps extends Omit<
   maxSuggestions?: number;
 }
 
-/** Remove acentos e caixa para comparar "guzera" com "Guzerá". */
-const normalize = (text: string) =>
-  text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
-
 /** Sugestões que começam com o texto primeiro, depois as que apenas o contêm. */
 function filterSuggestions(
   suggestions: readonly string[],
   value: string,
   max: number
 ): string[] {
-  const query = normalize(value);
+  const query = normalizarTexto(value);
   if (!query) return [];
   const normalized = suggestions.map((item) => ({
     item,
-    key: normalize(item),
+    key: normalizarTexto(item),
   }));
   // Valor já corresponde exatamente a uma sugestão: nada a sugerir
   if (normalized.some(({ key }) => key === query)) return [];

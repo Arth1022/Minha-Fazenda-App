@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 
 import { db, enableForeignKeys } from './client';
 import migrations from './migrations/migrations';
+import { devSeedHabilitado, runDevSeed } from './seed';
 
 /**
  * Único ponto de acesso ao banco local (Drizzle + expo-sqlite).
@@ -30,6 +31,7 @@ export function useDatabaseMigrations(): MigrationState {
     migrate(db, migrations)
       .then(() => {
         enableForeignKeys();
+        if (devSeedHabilitado) runDevSeed();
         setState({ success: true });
       })
       .catch((error: Error) => setState({ success: false, error }));

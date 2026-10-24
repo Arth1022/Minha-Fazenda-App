@@ -52,7 +52,9 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "lint": "expo lint",
-    "test:db": "tsx --tsconfig tsconfig.test.json __tests__/persistence.test.ts"
+    "test:db": "tsx --tsconfig tsconfig.test.json __tests__/persistence.test.ts",
+    "test:regras": "tsx --tsconfig tsconfig.test.json __tests__/regras.test.ts",
+    "test": "npm run test:regras && npm run test:db"
   },
   "private": true
 }

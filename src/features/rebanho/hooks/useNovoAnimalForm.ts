@@ -1,11 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useFieldArray, useForm } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import { TIPOS_COBERTURA, type Animal } from '@/database';
-import { decimalOpcional, formatBrinco, isInteiro, parseDecimal } from '@/utils';
+import type { Animal } from '@/database';
+import { formatBrinco, isInteiro } from '@/utils';
 import { createAnimal } from '../data/animais';
-import { categoriaService } from '../services/CategoriaService';
+import { dataNascimentoPorIdade } from '../services/fase';
 
 export const novoAnimalSchema = z.object({
   brinco: z.string().trim().min(1, 'Informe o número do brinco (ex: #104).'),
@@ -25,29 +25,9 @@ export const novoAnimalSchema = z.object({
       'Meses de 0 a 11.'
     ),
   raca: z.string().trim(),
-  pesoKg: z
-    .string()
-    .trim()
-    .refine((v) => parseDecimal(v) > 0, 'Informe um peso válido em kg.'),
-  producaoLeiteL: decimalOpcional,
-  crias: z
-    .string()
-    .trim()
-    .refine((v) => v === '' || isInteiro(v), 'Informe um número inteiro.'),
-  racaoKgDia: decimalOpcional,
-  paiBrinco: z.string().trim(),
-  maeBrinco: z.string().trim(),
-  coberturas: z.array(
-    z.object({
-      data: z.date(),
-      tipo: z.enum(TIPOS_COBERTURA),
-      touroSemen: z.string().optional(),
-    })
-  ),
 });
 
 export type NovoAnimalFormValues = z.infer<typeof novoAnimalSchema>;
-export type CoberturaFormValue = NovoAnimalFormValues['coberturas'][number];
 
 const DEFAULT_VALUES: NovoAnimalFormValues = {
   brinco: '',
@@ -55,13 +35,6 @@ const DEFAULT_VALUES: NovoAnimalFormValues = {
   idadeAnos: '',
   idadeMeses: '',
   raca: '',
-  pesoKg: '',
-  producaoLeiteL: '',
-  crias: '',
-  racaoKgDia: '',
-  paiBrinco: '',
-  maeBrinco: '',
-  coberturas: [],
 };
 
 /** Idade total em meses; null se não informada ou inválida. */
@@ -83,40 +56,19 @@ export function useNovoAnimalForm(onCreated: (animal: Animal) => void) {
     resolver: zodResolver(novoAnimalSchema),
     defaultValues: DEFAULT_VALUES,
   });
-  const coberturas = useFieldArray({
-    control: form.control,
-    name: 'coberturas',
-  });
 
   const submit = form.handleSubmit(async (values) => {
     const brinco = formatBrinco(values.brinco);
-    const idadeMesesTotal = idadeTotalMeses(
-      values.idadeAnos,
-      values.idadeMeses
-    );
-    const bezerro =
-      idadeMesesTotal !== null &&
-      categoriaService.categoriaPorIdade(idadeMesesTotal) === 'bezerro';
+    const idadeMesesTotal = idadeTotalMeses(values.idadeAnos, values.idadeMeses);
 
-    const created = await createAnimal(
-      {
-        brinco,
-        nome: values.nome || `Brinco ${brinco}`,
-        raca: values.raca || undefined,
-        pesoKg: parseDecimal(values.pesoKg),
-        // Bezerros não produzem leite nem têm crias
-        producaoLeiteL: bezerro ? 0 : parseDecimal(values.producaoLeiteL) || 0,
-        crias: bezerro ? 0 : parseInt(values.crias, 10) || 0,
-        racaoKgDia: parseDecimal(values.racaoKgDia) || 0,
-        paiBrinco: values.paiBrinco ? formatBrinco(values.paiBrinco) : undefined,
-        maeBrinco: values.maeBrinco ? formatBrinco(values.maeBrinco) : undefined,
-        dataNascimento:
-          idadeMesesTotal === null
-            ? undefined
-            : categoriaService.dataNascimentoPorIdade(idadeMesesTotal),
-      },
-      bezerro ? [] : values.coberturas
-    );
+    const created = await createAnimal({
+      brinco,
+      nome: values.nome || undefined,
+      raca: values.raca || undefined,
+      dataNascimento:
+        idadeMesesTotal === null ? undefined : dataNascimentoPorIdade(idadeMesesTotal),
+      nascimentoAproximado: idadeMesesTotal !== null,
+    });
 
     form.reset(DEFAULT_VALUES);
     onCreated(created);
@@ -125,7 +77,6 @@ export function useNovoAnimalForm(onCreated: (animal: Animal) => void) {
   return {
     control: form.control,
     clearErrors: form.clearErrors,
-    coberturas,
     submit,
     saving: form.formState.isSubmitting,
   };

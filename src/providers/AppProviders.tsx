@@ -5,6 +5,7 @@ import * as SplashScreen from 'expo-splash-screen';
 
 import { useDatabaseMigrations } from '@/database';
 import { AgroColors, Spacing, Typography } from '@/constants/theme';
+import { FazendaProvider } from './FazendaProvider';
 
 interface AppProvidersProps {
   children: React.ReactNode;
@@ -14,7 +15,7 @@ export function AppProviders({ children }: AppProvidersProps) {
   const colorScheme = useColorScheme();
   const { success, error } = useDatabaseMigrations();
 
-  let content = children;
+  let content = <FazendaProvider>{children}</FazendaProvider>;
   if (error) {
     content = <DatabaseError message={error.message} />;
   } else if (!success) {

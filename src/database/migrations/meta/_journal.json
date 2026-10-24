@@ -15,6 +15,20 @@
       "when": 1792810407989,
       "tag": "0001_rebanho_e_ordenha",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1792811868089,
+      "tag": "0002_remove_campos_antigos",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1792811905648,
+      "tag": "0003_rebanho_completo",
+      "breakpoints": true
     }
   ]
 }

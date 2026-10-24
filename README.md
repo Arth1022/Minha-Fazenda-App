@@ -16,16 +16,17 @@ src/
 │  └─ animal/[id].tsx      # Rota fora das abas (Ficha do animal / QR Code)
 ├─ features/               # 1 pasta por domínio
 │  ├─ home/                # HomeScreen.tsx, OrdenhaCard.tsx, useHomeOrdenha.ts, ordenhas.ts
-│  ├─ rebanho/             # screens/, components/, hooks/, services/ (CategoriaService)
-│  │                       # data/ (animais.ts, tratamentos.ts: consultas e gravações)
+│  ├─ rebanho/             # screens/, components/, hooks/
+│  │                       # data/: animais, pesagens, reproducoes, tratamentos (consultas e gravações)
+│  │                       # services/: fase.ts e indicadores.ts (regras puras: fase, peso, carência, parto)
 │  ├─ mapa/                # MapaScreen.tsx      (somente front, sem persistência)
 │  ├─ estoque/             # EstoqueScreen.tsx   (somente front, sem persistência)
 │  └─ maquinas/            # MaquinasScreen.tsx  (somente front, sem persistência)
-├─ database/               # schema.ts (fonte única), client.ts, index.ts, id.ts, migrations/
+├─ database/               # schema.ts (fonte única), client.ts, index.ts, id.ts, seed.ts, migrations/
 ├─ components/             # UI genérica reutilizável: ui/ (Header, Card, EmptyState...) e forms/
-├─ providers/              # AppProviders.tsx (migrations na abertura + ThemeProvider)
+├─ providers/              # AppProviders.tsx (migrations na abertura), FazendaProvider.tsx (leite/corte/misto)
 └─ constants/  utils/      # Tema (theme.ts), formatadores, datas e validadores
-__tests__/                 # Teste de persistência (support/ = banco sql.js para Node)
+__tests__/                 # regras.test.ts (regras puras) e persistence.test.ts (support/ = banco sql.js)
 ```
 
 Somente **Home** (ordenha) e **Rebanho** têm persistência local. Mapa, Estoque e Máquinas existem apenas como telas (layout e estados vazios).
@@ -52,6 +53,8 @@ Somente **Home** (ordenha) e **Rebanho** têm persistência local. Mapa, Estoque
   npx drizzle-kit generate
   ```
 - **Telas reativas:** `useLiveQuery` reexecuta a consulta quando a tabela principal dela muda.
+- **Regras calculadas, não digitadas:** fase (sexo + idade + parto), crias (`mae_id`), peso atual e ganho (pesagens), carência e previsão de parto ficam em `features/rebanho/services/`, como funções puras.
+- **Seed de desenvolvimento:** opcional. Com `EXPO_PUBLIC_DEV_SEED=1` no `.env`, um banco vazio recebe um rebanho de exemplo ao abrir o app em modo dev.
 - **Convenções (prontas para um sync futuro):** `id` em UUID texto gerado no app, `created_at` / `updated_at` em todas as tabelas (`updated_at` renovado em todo update), datas em epoch ms e arrays em JSON. As chaves estrangeiras (`ON DELETE CASCADE`) são ligadas logo após as migrations.
 
 ---
@@ -79,6 +82,6 @@ npx expo run:ios
 # Validação de tipos e ESLint
 npm run lint
 
-# Teste de persistência (schema, migrations, transações, cascata) com SQLite em Node
-npm run test:db
+# Regras do rebanho + persistência (schema, migrations, transações, cascata) com SQLite em Node
+npm test
 ```

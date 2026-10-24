@@ -26,3 +26,29 @@ export function formatDataBR(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   return `${day}/${month}/${date.getFullYear()}`;
 }
+
+const MS_POR_DIA = 24 * 60 * 60 * 1000;
+
+/** Meia-noite do dia (horário local). */
+export function inicioDoDia(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+/** Soma dias corridos a uma data (resultado à meia-noite). */
+export function adicionarDias(date: Date, dias: number): Date {
+  const result = inicioDoDia(date);
+  result.setDate(result.getDate() + dias);
+  return result;
+}
+
+/** Dias corridos de `de` até `ate`, sem considerar o horário. */
+export function diasEntre(de: Date, ate: Date): number {
+  return Math.round(
+    (inicioDoDia(ate).getTime() - inicioDoDia(de).getTime()) / MS_POR_DIA
+  );
+}
+
+/** Formata uma Date como "DD/MM". */
+export function formatDiaMes(date: Date): string {
+  return formatDataBR(date).slice(0, 5);
+}

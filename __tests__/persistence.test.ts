@@ -6,18 +6,29 @@ import { salvarOrdenha, todasOrdenhas } from '@/features/home/ordenhas';
 import {
   animalPorId,
   createAnimal,
-  todosAnimais,
+  criasDe,
+  listarAnimais,
+  registrarParto,
+  registrarSaida,
+  ultimosPartos,
 } from '@/features/rebanho/data/animais';
+import { createPesagem, pesagensDoAnimal } from '@/features/rebanho/data/pesagens';
+import { createReproducao, reproducoesDoAnimal } from '@/features/rebanho/data/reproducoes';
 import {
   createTratamento,
   toggleDiaConfirmado,
+  tratamentosComCarencia,
   tratamentosDoAnimal,
+  ultimoUsoDoMedicamento,
 } from '@/features/rebanho/data/tratamentos';
+import { salvarTipoProducao } from '@/providers/FazendaProvider';
 import {
   animais,
-  coberturas,
   db,
+  fazendaConfig,
   initTestDatabase,
+  lotes,
+  reproducoes,
   sqlite,
   tratamentos,
 } from './support/database';
@@ -33,6 +44,16 @@ function check(condition: boolean, message: string) {
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const dia = (d: number, m: number, a = 2026) => new Date(a, m - 1, d);
+
+async function rejeita(acao: () => Promise<unknown>): Promise<boolean> {
+  try {
+    await acao();
+    return false;
+  } catch {
+    return true;
+  }
+}
 
 async function runPersistenceTest() {
   console.log('=========================================================');
@@ -41,132 +62,130 @@ async function runPersistenceTest() {
 
   await initTestDatabase();
 
-  // 1. Animal + coberturas numa transação
-  const animal = await createAnimal(
-    { brinco: '#201', nome: 'Mimosa', raca: 'Holandesa', pesoKg: 510 },
-    [
-      { data: new Date(2026, 5, 1), tipo: 'inseminacao', touroSemen: 'Sêmen A' },
-      { data: new Date(2026, 2, 1), tipo: 'monta_natural' },
-    ]
-  );
-  check(UUID_V4.test(animal.id), `id do animal é UUID v4 (${animal.id})`);
-  check(animal.crias === 0, 'crias padrão = 0');
-  check(
-    animal.createdAt instanceof Date && animal.updatedAt instanceof Date,
-    'created_at / updated_at preenchidos como Date'
-  );
+  // 1. Configuração da fazenda: uma única linha, alterável
+  await salvarTipoProducao('corte');
+  await salvarTipoProducao('misto');
+  const configs = await db.select().from(fazendaConfig);
+  check(configs.length === 1 && configs[0].tipoProducao === 'misto', 'tipo de produção gravado e alterado numa única linha');
 
-  const comRelacoes = await db.query.animais.findFirst({
-    where: eq(animais.id, animal.id),
-    with: { coberturas: true, tratamentos: true },
+  // 2. Cadastro com valores padrão
+  const [lote] = await db.insert(lotes).values({ nome: 'Maternidade' }).returning();
+  const vaca = await createAnimal({
+    brinco: '#201',
+    nome: 'Mimosa',
+    raca: 'Girolando',
+    dataNascimento: dia(1, 1, 2021),
+    loteId: lote.id,
   });
-  check(comRelacoes?.coberturas.length === 2, 'relação animal → coberturas');
+  check(UUID_V4.test(vaca.id), `id do animal é UUID v4 (${vaca.id})`);
+  check(vaca.sexo === 'F' && vaca.status === 'ativo' && !vaca.nascimentoAproximado, 'padrões: fêmea, ativa, nascimento exato');
+  check(vaca.createdAt instanceof Date && vaca.updatedAt instanceof Date, 'created_at / updated_at preenchidos como Date');
+  check((await animalPorId(vaca.id))?.raca === 'Girolando', 'animalPorId encontra o animal com os campos mapeados');
 
-  // Falha no meio da transação: nada pode ficar gravado
-  let falhou = false;
-  try {
-    await createAnimal({ brinco: '#202' }, [
-      { data: new Date(), tipo: null as unknown as 'inseminacao' },
-    ]);
-  } catch {
-    falhou = true;
-  }
-  const brinco202 = await db.select().from(animais).where(eq(animais.brinco, '#202'));
-  check(falhou && brinco202.length === 0, 'transação desfeita quando uma cobertura é inválida');
+  // 3. Cobertura com previsão de parto
+  const cobertura = await createReproducao({ animalId: vaca.id, tipo: 'inseminacao', data: dia(1, 1) });
+  check(cobertura.previsaoParto?.getTime() === dia(11, 10).getTime(), 'cobertura grava a previsão de parto (+283 dias)');
 
-  const lido = await animalPorId(animal.id);
+  // 4. Parto: cria o bezerro ligado à mãe e fecha a cobertura
+  const cria = await registrarParto(vaca.id, { data: dia(10, 10), sexo: 'M', brinco: '#301' });
   check(
-    lido?.brinco === '#201' && lido.pesoKg === 510,
-    'animalPorId encontra o animal com os campos mapeados'
+    cria.maeId === vaca.id && cria.origem === 'nascido' && cria.dataNascimento?.getTime() === dia(10, 10).getTime(),
+    'parto cria o bezerro com mãe, origem e nascimento preenchidos'
   );
-  check((await todosAnimais()).length === 1, 'todosAnimais lista o rebanho');
+  check(cria.loteId === lote.id, 'bezerro nasce no lote da mãe');
+  const [coberturaFechada] = await reproducoesDoAnimal(vaca.id);
+  check(
+    coberturaFechada.criaId === cria.id && coberturaFechada.dataParto?.getTime() === dia(10, 10).getTime(),
+    'parto fecha a cobertura em aberto da vaca'
+  );
+  check((await criasDe(vaca.id)).length === 1, 'crias = animais com mae_id da vaca');
+  const partos = await ultimosPartos();
+  check(
+    partos.length === 1 && partos[0].maeId === vaca.id && partos[0].data instanceof Date,
+    'último parto de cada mãe sai do nascimento da cria'
+  );
 
-  // 2. Tratamentos
-  const antigo = await createTratamento({
-    animalId: animal.id,
-    medicamento: 'Vermífugo',
-    dataInicio: new Date(2026, 9, 1),
-    dataFim: new Date(2026, 9, 5),
+  const comCrias = await db.query.animais.findFirst({
+    where: eq(animais.id, vaca.id),
+    with: { crias: true, lote: true, reproducoes: true },
   });
-  const recente = await createTratamento({
-    animalId: animal.id,
+  check(
+    comCrias?.crias.length === 1 && comCrias.lote?.nome === 'Maternidade' && comCrias.reproducoes.length === 1,
+    'relações animal → crias, lote e reproduções'
+  );
+
+  // 5. Pesagens
+  await createPesagem({ animalId: cria.id, data: dia(10, 10), pesoKg: 35 });
+  await createPesagem({ animalId: cria.id, data: dia(24, 10), pesoKg: 42.5 });
+  const pesos = await pesagensDoAnimal(cria.id);
+  check(pesos[0].pesoKg === 42.5 && pesos[1].pesoKg === 35, 'pesagens da mais recente para a mais antiga');
+
+  // 6. Tratamentos, dias e último uso do remédio
+  const tratamento = await createTratamento({
+    animalId: vaca.id,
     medicamento: 'Antibiótico',
-    dataInicio: new Date(2026, 9, 10),
-    dataFim: new Date(2026, 9, 19),
+    dose: '20 ml',
+    dataInicio: dia(20, 10),
+    carenciaLeiteDias: 4,
+    carenciaCarneDias: 21,
   });
-  check(
-    recente.diasConfirmados.length === 0 && recente.notificacaoAtiva,
-    'tratamento começa sem dias confirmados e com notificação ativa'
-  );
-
-  const doAnimal = await tratamentosDoAnimal(animal.id);
-  check(
-    doAnimal[0].id === recente.id && doAnimal[1].id === antigo.id,
-    'tratamentos ordenados do início mais recente para o mais antigo'
-  );
-
+  check(tratamento.diasConfirmados.length === 0 && tratamento.notificacaoAtiva, 'tratamento começa sem dias confirmados');
   await sleep(5);
-  await toggleDiaConfirmado(recente, 3);
-  let [atual] = await tratamentosDoAnimal(animal.id);
+  await toggleDiaConfirmado(tratamento, 3);
+  let [atual] = await tratamentosDoAnimal(vaca.id);
   await toggleDiaConfirmado(atual, 1);
-  [atual] = await tratamentosDoAnimal(animal.id);
+  [atual] = await tratamentosDoAnimal(vaca.id);
   check(atual.diasConfirmados.join(',') === '1,3', 'marcar dias mantém a lista ordenada');
-  await toggleDiaConfirmado(atual, 3);
-  [atual] = await tratamentosDoAnimal(animal.id);
-  check(atual.diasConfirmados.join(',') === '1', 'desmarcar dia remove da lista');
   check(
-    atual.updatedAt.getTime() > recente.updatedAt.getTime() &&
-      atual.createdAt.getTime() === recente.createdAt.getTime(),
+    atual.updatedAt.getTime() > tratamento.updatedAt.getTime() &&
+      atual.createdAt.getTime() === tratamento.createdAt.getTime(),
     'update renova updated_at e preserva created_at'
   );
 
-  const [bruto] = sqlite.exec(
-    `select data_inicio, dias_confirmados from tratamentos where id = '${recente.id}'`
-  )[0].values;
+  const ultimoUso = await ultimoUsoDoMedicamento('  ANTIBIOTICO ');
   check(
-    bruto[0] === new Date(2026, 9, 10).getTime() && bruto[1] === '[1]',
-    'datas gravadas em epoch ms e arrays em JSON'
+    ultimoUso?.dose === '20 ml' && ultimoUso.carenciaLeiteDias === 4 && ultimoUso.carenciaCarneDias === 21,
+    'mesmo remédio (sem acento/maiúsculas) traz dose e carências do último uso'
+  );
+  check((await ultimoUsoDoMedicamento('Vermífugo')) === null, 'remédio nunca usado não preenche nada');
+  check((await tratamentosComCarencia()).length === 1, 'lista tratamentos com carência para os alertas');
+
+  const [bruto] = sqlite.exec(
+    `select data_inicio, dias_confirmados from tratamentos where id = '${tratamento.id}'`
+  )[0].values;
+  check(bruto[0] === dia(20, 10).getTime() && bruto[1] === '[1,3]', 'datas gravadas em epoch ms e arrays em JSON');
+
+  check(
+    await rejeita(() => createTratamento({ animalId: 'nao-existe', medicamento: 'X', dataInicio: new Date() })),
+    'chave estrangeira rejeita tratamento de animal inexistente'
   );
 
-  let fkRejeitada = false;
-  try {
-    await createTratamento({ animalId: 'nao-existe', medicamento: 'X', dataInicio: new Date() });
-  } catch {
-    fkRejeitada = true;
-  }
-  check(fkRejeitada, 'chave estrangeira rejeita tratamento de animal inexistente');
+  // 7. Saída: muda o status, nunca apaga
+  const vendido = await createAnimal({ brinco: '#202', sexo: 'M' });
+  await registrarSaida(vendido.id, { status: 'vendido', data: dia(23, 10), motivo: 'Venda para recria' });
+  const ativos = await listarAnimais();
+  const todos = await listarAnimais({ incluirInativos: true });
+  check(!ativos.some((a) => a.id === vendido.id) && todos.some((a) => a.id === vendido.id), 'lista padrão mostra só ativos; o vendido continua gravado');
+  const saida = todos.find((a) => a.id === vendido.id);
+  check(saida?.status === 'vendido' && saida.motivoSaida === 'Venda para recria', 'saída grava status, data e motivo');
 
-  // 3. Ordenha
-  await salvarOrdenha({
-    periodo: 'manha',
-    horarioPrevisto: '05:30',
-    horarioNotificacao: '05:15',
-    dataRegistro: new Date(),
-  });
+  // 8. Ordenha
+  await salvarOrdenha({ periodo: 'manha', horarioPrevisto: '05:30', horarioNotificacao: '05:15', dataRegistro: new Date() });
   const [ordenha] = await todasOrdenhas();
   await salvarOrdenha(
-    {
-      periodo: 'manha',
-      horarioPrevisto: '06:00',
-      horarioNotificacao: '05:45',
-      dataRegistro: new Date(),
-    },
+    { periodo: 'manha', horarioPrevisto: '06:00', horarioNotificacao: '05:45', dataRegistro: new Date() },
     ordenha.id
   );
   const ordenhasSalvas = await todasOrdenhas();
-  check(
-    ordenhasSalvas.length === 1 && ordenhasSalvas[0].horarioPrevisto === '06:00',
-    'salvarOrdenha atualiza o registro existente do turno'
-  );
+  check(ordenhasSalvas.length === 1 && ordenhasSalvas[0].horarioPrevisto === '06:00', 'salvarOrdenha atualiza o registro existente do turno');
 
-  // 4. Exclusão em cascata (ON DELETE CASCADE)
-  await db.delete(animais).where(eq(animais.id, animal.id));
-  const coberturasRestantes = await db.select().from(coberturas);
-  const tratamentosRestantes = await db.select().from(tratamentos);
-  check(
-    coberturasRestantes.length === 0 && tratamentosRestantes.length === 0,
-    'apagar o animal apaga coberturas e tratamentos em cascata'
-  );
+  // 9. Integridade ao apagar (o app não apaga animais; o banco protege as referências)
+  await db.delete(lotes).where(eq(lotes.id, lote.id));
+  check((await animalPorId(vaca.id))?.loteId === null, 'apagar lote limpa o lote dos animais');
+  await db.delete(animais).where(eq(animais.id, vaca.id));
+  check((await animalPorId(cria.id))?.maeId === null, 'apagar a mãe mantém a cria, sem mãe');
+  check((await db.select().from(tratamentos)).length === 0, 'apagar o animal apaga os tratamentos dele');
+  check((await db.select().from(reproducoes)).length === 0, 'apagar o animal apaga as reproduções dele');
 
   console.log('\n🎉 TODOS OS TESTES PASSARAM COM 100% DE SUCESSO!\n');
 }
