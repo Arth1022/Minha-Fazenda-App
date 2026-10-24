@@ -713,3 +713,59 @@ onSubmit?: () => void;
 **Por quê:** o menu precisa do mesmo modal (fundo escuro, cartão, título, ✕), mas sem os botões Salvar/Cancelar. Deixar `onSubmit` opcional reaproveita o modal inteiro em vez de copiar ~150 linhas de estilo. Quem já usa (Home, Novo Animal, Tratamento) passa `onSubmit` e não muda nada.
 
 **Validação:** `tsc` isolado OK.
+
+**Commit:** `ff8e761`
+
+## F7 · Mini-formulários: Pesagem, Cobertura, Parto e Saída
+
+`src/features/rebanho/components/registros/` (novos) + `hooks/useEnvioRegistro.ts`
+
+| Formulário | Campos | Grava com |
+|---|---|---|
+| `PesagemForm` | Peso* (kg), Data (Hoje ▾) | `createPesagem` |
+| `CoberturaForm` | Tipo (Monta natural / Inseminação), Data, Touro (`OrigemAnimalField`) | `createReproducao` (com `touroId` / `touroDescricao`) |
+| `PartoForm` | Data, Sexo da cria, Brinco da cria* | `registrarParto` (cria a cria ligada à mãe e fecha a cobertura aberta) |
+| `SaidaForm` | Tipo (Venda / Morte / Descarte), Data, Observação | `registrarSaida` |
+
+```tsx
+// RegistroForm.tsx: a ficha só faz <RegistroForm tipo={…} animalId={…} touros={…} onClose={…} />
+switch (tipo) {
+  case 'pesagem':   return <PesagemForm animalId={animalId} onClose={onClose} />;
+  case 'cobertura': return <CoberturaForm animalId={animalId} touros={touros} onClose={onClose} />;
+  case 'parto':     return <PartoForm maeId={animalId} onClose={onClose} />;
+  case 'saida':     return <SaidaForm animalId={animalId} onClose={onClose} />;
+}
+
+// useEnvioRegistro.ts: carregando → salva → fecha; se der erro, avisa
+const submit = async () => {
+  setSaving(true);
+  try {
+    await enviar();
+    onClose();
+  } catch {
+    Alert.alert('Não foi possível salvar', 'Tente novamente.');
+  } finally {
+    setSaving(false);
+  }
+};
+
+// PesagemForm.tsx: a única validação é o que não pode faltar
+if (!(parseDecimal(peso) > 0)) {
+  setErro('Informe o peso em kg.');
+  return;
+}
+```
+
+**Por quê**
+- **Um arquivo por formulário + `RegistroForm` que escolhe:** cada formulário fica com 50 a 70 linhas e lê de cima a baixo. A ficha não precisa conhecer os quatro.
+- **Usa só as funções que já existiam em `data/`:** nenhuma regra nova no front. A previsão de parto (cobertura + 283 dias) e a ligação cria ↔ mãe já são feitas pelo `createReproducao` e pelo `registrarParto`.
+- **Renderizado só enquanto aberto (`visible` fixo):** cada abertura monta o formulário de novo, com campos limpos. Não precisa de `reset` nem de `useEffect`.
+- **Validação mínima:** só peso > 0 e brinco da cria preenchido, que são os campos obrigatórios das tabelas. O resto tem valor padrão (data = hoje, tipo = o mais comum) ou é opcional.
+- **`useEnvioRegistro`:** os quatro formulários compartilham o mesmo carregar/fechar/erro em vez de repetir o `try/finally`.
+- **Touro:** na inseminação o rótulo vira "Sêmen / touro". O `OrigemAnimalField` grava `touroId` (touro da fazenda) **ou** `touroDescricao` (de fora/sêmen), nunca os dois.
+- **Data máxima = hoje** em todos: são registros de algo que já aconteceu.
+- **Saída:** "Venda / Morte / Descarte" mapeiam para o status (`vendido`, `morto`, `descarte`). O subtítulo avisa que o histórico fica guardado, porque o produtor pode ter medo de "apagar" o animal.
+
+**Pendente:** ligar o botão "Outros registros" (F6 + F7) na ficha (`AnimalDetalheScreen`, F8 do full-stack). A ficha precisa passar `touros` (machos ativos) e `reprodutiva = ficha.podeReproduzir`.
+
+**Validação:** `tsc` isolado OK.
