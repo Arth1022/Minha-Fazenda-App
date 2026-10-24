@@ -36,7 +36,7 @@ export function FichaResumo({ ficha, alerta }: FichaResumoProps) {
   return (
     <View style={styles.container}>
       <View style={styles.perfil}>
-        <AnimalAvatar size={52} />
+        <AnimalAvatar size={52} variant="mint" />
         <View style={styles.perfilTextos}>
           <Text style={styles.titulo} numberOfLines={1}>
             {titulo}

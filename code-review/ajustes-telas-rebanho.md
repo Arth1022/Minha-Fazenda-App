@@ -168,7 +168,7 @@ Novos ícones no `AppIcon`, todos SVG Feather/Lucide: `clock`, `tag`, `weight`, 
 
 | Onde | Antes | Depois |
 |---|---|---|
-| Avatar da lista e da ficha | 🐮 repetido em 2 arquivos | Componente `AnimalAvatar` (ícone de brinco), usado nos dois |
+| Avatar da lista e da ficha | 🐮 repetido em 2 arquivos | Componente `AnimalAvatar` usado nos dois. A vaquinha 🐮 continua, a pedido do usuário (é a exceção da regra) |
 | Peso / alerta no `AnimalCard` | ⚖ / ⚠ | `weight` / `alert` |
 | Trilha de doses | ✓ | `check` |
 | Fechar do `FormModal` | ✕ | `x` |

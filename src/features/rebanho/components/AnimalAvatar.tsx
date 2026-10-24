@@ -1,27 +1,36 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
-import { AppIcon } from '@/components/ui';
 import { AgroColors } from '@/constants/theme';
 
 export interface AnimalAvatarProps {
   /** Diâmetro do círculo (padrão 44) */
   size?: number;
+  /** Fundo: 'neutro' (cinza, lista) ou 'mint' (verde claro, ficha) */
+  variant?: 'neutro' | 'mint';
 }
 
-/** Círculo com o ícone de brinco que identifica o animal na lista e na ficha. */
-export function AnimalAvatar({ size = 44 }: AnimalAvatarProps) {
+/** Círculo com a vaquinha que identifica o animal na lista e na ficha. */
+export function AnimalAvatar({ size = 44, variant = 'neutro' }: AnimalAvatarProps) {
   return (
-    <View style={[styles.circulo, { width: size, height: size, borderRadius: size / 2 }]}>
-      <AppIcon name="tag" size={Math.round(size * 0.45)} color={AgroColors.primary} />
+    <View
+      style={[
+        styles.circulo,
+        variant === 'mint' && styles.mint,
+        { width: size, height: size, borderRadius: size / 2 },
+      ]}>
+      <Text style={{ fontSize: size / 2 }}>🐮</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   circulo: {
-    backgroundColor: AgroColors.mintBg,
+    backgroundColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  mint: {
+    backgroundColor: AgroColors.mintBg,
   },
 });
