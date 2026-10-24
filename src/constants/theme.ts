@@ -3,8 +3,6 @@
  * Alinhado Pixel Perfect ao protótipo oficial do Figma.
  */
 
-import '@/global.css';
-
 import { Platform, TextStyle, ViewStyle } from 'react-native';
 
 export const AgroColors = {
@@ -19,7 +17,7 @@ export const AgroColors = {
   screenBg: '#F4F6F4',         // Fundo geral das telas (cinza-esverdeado muito claro)
   cardBg: '#FFFFFF',           // Fundo branco puro dos cartões
   mintBg: '#ECFDF5',           // Fundo verde suave (dias de tratamento, seleção ativa)
-  mintSurface: '#F0FDF4',      // Fundo de card selecionado (Brinco #101)
+  mintSurface: '#F0FDF4',      // Fundo de card selecionado
   mintBorder: '#BBF7D0',       // Borda verde suave
   inputBg: '#FFFFFF',          // Fundo de inputs
   subtleBg: '#F9FAFB',         // Fundo secundário neutro
@@ -57,58 +55,6 @@ export const AgroColors = {
   borderStrong: '#D1D5DB',     // Borda de inputs
   divider: '#F3F4F6',          // Linha divisória interna
 } as const;
-
-export const Colors = {
-  light: {
-    text: AgroColors.textPrimary,
-    background: AgroColors.screenBg,
-    backgroundElement: AgroColors.cardBg,
-    backgroundSelected: AgroColors.mintBg,
-    textSecondary: AgroColors.textSecondary,
-    primary: AgroColors.headerGreen,
-    primaryAction: AgroColors.primary,
-    border: AgroColors.border,
-    cardMint: AgroColors.mintBg,
-    warning: AgroColors.warning,
-    danger: AgroColors.danger,
-  },
-  dark: {
-    text: '#ECFDF5',
-    background: '#0C170E',
-    backgroundElement: '#162619',
-    backgroundSelected: '#1E3A24',
-    textSecondary: '#A7F3D0',
-    primary: '#14532D',
-    primaryAction: '#22C55E',
-    border: '#26402B',
-    cardMint: '#1A3320',
-    warning: '#FBBF24',
-    danger: '#F87171',
-  },
-} as const;
-
-export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
-
-export const Fonts = Platform.select({
-  ios: {
-    sans: 'System',
-    serif: 'ui-serif',
-    rounded: 'ui-rounded',
-    mono: 'ui-monospace',
-  },
-  default: {
-    sans: 'sans-serif',
-    serif: 'serif',
-    rounded: 'sans-serif',
-    mono: 'monospace',
-  },
-  web: {
-    sans: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-    serif: 'Georgia, serif',
-    rounded: 'Inter, sans-serif',
-    mono: 'monospace',
-  },
-});
 
 /**
  * Escala tipográfica padronizada conforme o Figma

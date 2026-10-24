@@ -1,98 +1,86 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
-import Ordenha, { PeriodoOrdenha } from '@/entities/Ordenha';
-import { ordenhaRepository } from '@/features/rebanho/OrdenhaRepository';
+import { type Ordenha, type PeriodoOrdenha, useLiveQuery } from '@/database';
+import { salvarOrdenha, todasOrdenhas } from './ordenhas';
 
-import {
-  calculateNotificationTime,
-  configureOrdenhaNotifications,
-  isValidTimeFormat,
-  scheduleOrdenhaReminder,
-} from './ordenhaNotificationService';
+const MINUTES_BEFORE_ORDENHA = 15;
 
-const DEFAULT_HORARIO_MANHA = '05:30';
-const DEFAULT_HORARIO_TARDE = '13:30';
-const DEFAULT_HORARIO_NOITE = '21:00';
+export interface HorarioOrdenha {
+  /** Horário previsto (HH:mm); null enquanto o turno não foi agendado */
+  horario: string | null;
+  /** Horário do alerta (HH:mm); null enquanto o turno não foi agendado */
+  notificacao: string | null;
+}
+
+const pad2 = (value: number) => String(value).padStart(2, '0');
+
+function isValidTimeFormat(time: string): boolean {
+  return /^([01]\d|2[0-3]):([0-5]\d)$/.test(time);
+}
+
+/**
+ * Calcula o horário de alerta (HH:mm) 15 minutos antes do horário previsto.
+ */
+function calculateNotificationTime(horarioPrevisto: string): string {
+  const [hours, minutes] = horarioPrevisto.split(':').map(Number);
+  const totalMinutesInDay = 24 * 60;
+  const alertTotalMinutes =
+    (hours * 60 + minutes - MINUTES_BEFORE_ORDENHA + totalMinutesInDay) %
+    totalMinutesInDay;
+
+  return `${pad2(Math.floor(alertTotalMinutes / 60))}:${pad2(alertTotalMinutes % 60)}`;
+}
+
+/** Hora atual (HH:mm), ponto de partida do seletor para turnos sem agendamento. */
+function currentTime(): string {
+  const now = new Date();
+  return `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+}
+
+/** Registro mais recente de cada turno (a lista já vem do mais recente ao mais antigo). */
+function latestByPeriodo(
+  ordenhas: Ordenha[]
+): Partial<Record<PeriodoOrdenha, Ordenha>> {
+  const latest: Partial<Record<PeriodoOrdenha, Ordenha>> = {};
+  for (const ordenha of ordenhas) {
+    latest[ordenha.periodo] ??= ordenha;
+  }
+  return latest;
+}
+
+function toHorario(ordenha?: Ordenha): HorarioOrdenha {
+  return {
+    horario: ordenha?.horarioPrevisto || null,
+    notificacao: ordenha?.horarioNotificacao || null,
+  };
+}
 
 export function useHomeOrdenha() {
-  const [ordenhas, setOrdenhas] = useState<Ordenha[]>([]);
+  const { data: ordenhas } = useLiveQuery(todasOrdenhas());
   const [modalVisible, setModalVisible] = useState(false);
   const [schedulesModalVisible, setSchedulesModalVisible] = useState(false);
 
   const [periodo, setPeriodo] = useState<PeriodoOrdenha>('manha');
-  const [horarioPrevisto, setHorarioPrevisto] = useState(DEFAULT_HORARIO_MANHA);
+  const [horarioPrevisto, setHorarioPrevisto] = useState(currentTime);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    configureOrdenhaNotifications();
-    const sub = ordenhaRepository.observeAll().subscribe(setOrdenhas);
-    return () => sub.unsubscribe();
-  }, []);
+  const latest = useMemo(() => latestByPeriodo(ordenhas), [ordenhas]);
 
-  const ordenhaManha = useMemo(() => {
-    const list = ordenhas.filter((o) => o.periodo === 'manha');
-    return list[list.length - 1] ?? null;
-  }, [ordenhas]);
-
-  const ordenhaTarde = useMemo(() => {
-    const list = ordenhas.filter((o) => o.periodo === 'tarde');
-    return list[list.length - 1] ?? null;
-  }, [ordenhas]);
-
-  const ordenhaNoite = useMemo(() => {
-    const list = ordenhas.filter((o) => o.periodo === 'noite');
-    return list[list.length - 1] ?? null;
-  }, [ordenhas]);
-
-  const manhaHorario = ordenhaManha?.horarioPrevisto || DEFAULT_HORARIO_MANHA;
-  const manhaNotificacao = useMemo(() => {
-    if (ordenhaManha?.horarioNotificacao) {
-      return ordenhaManha.horarioNotificacao;
-    }
-    return (
-      calculateNotificationTime(manhaHorario)?.horarioNotificacao ?? '05:15'
-    );
-  }, [ordenhaManha, manhaHorario]);
-
-  const tardeHorario = ordenhaTarde?.horarioPrevisto || DEFAULT_HORARIO_TARDE;
-  const tardeNotificacao = useMemo(() => {
-    if (ordenhaTarde?.horarioNotificacao) {
-      return ordenhaTarde.horarioNotificacao;
-    }
-    return (
-      calculateNotificationTime(tardeHorario)?.horarioNotificacao ?? '13:15'
-    );
-  }, [ordenhaTarde, tardeHorario]);
-
-  const noiteHorario = ordenhaNoite?.horarioPrevisto || DEFAULT_HORARIO_NOITE;
-  const noiteNotificacao = useMemo(() => {
-    if (ordenhaNoite?.horarioNotificacao) {
-      return ordenhaNoite.horarioNotificacao;
-    }
-    return (
-      calculateNotificationTime(noiteHorario)?.horarioNotificacao ?? '20:45'
-    );
-  }, [ordenhaNoite, noiteHorario]);
+  const horarios: Record<PeriodoOrdenha, HorarioOrdenha> = useMemo(
+    () => ({
+      manha: toHorario(latest.manha),
+      tarde: toHorario(latest.tarde),
+      noite: toHorario(latest.noite),
+    }),
+    [latest]
+  );
 
   const selectPeriodoInForm = useCallback(
     (targetPeriodo: PeriodoOrdenha) => {
       setPeriodo(targetPeriodo);
-
-      if (targetPeriodo === 'manha') {
-        setHorarioPrevisto(
-          ordenhaManha?.horarioPrevisto || DEFAULT_HORARIO_MANHA
-        );
-      } else if (targetPeriodo === 'tarde') {
-        setHorarioPrevisto(
-          ordenhaTarde?.horarioPrevisto || DEFAULT_HORARIO_TARDE
-        );
-      } else {
-        setHorarioPrevisto(
-          ordenhaNoite?.horarioPrevisto || DEFAULT_HORARIO_NOITE
-        );
-      }
+      setHorarioPrevisto(latest[targetPeriodo]?.horarioPrevisto || currentTime());
     },
-    [ordenhaManha, ordenhaTarde, ordenhaNoite]
+    [latest]
   );
 
   const openOrdenhaModal = useCallback(
@@ -108,57 +96,29 @@ export function useHomeOrdenha() {
   }, []);
 
   const handleSaveOrdenha = useCallback(async () => {
-    const trimmedTime = horarioPrevisto.trim();
-    if (!isValidTimeFormat(trimmedTime)) {
+    const horario = horarioPrevisto.trim();
+    if (!isValidTimeFormat(horario)) {
       return;
     }
 
-    const calc = calculateNotificationTime(trimmedTime);
-    const calculatedAlertTime = calc?.horarioNotificacao ?? trimmedTime;
+    const dados = {
+      periodo,
+      horarioPrevisto: horario,
+      horarioNotificacao: calculateNotificationTime(horario),
+      dataRegistro: new Date(),
+    };
 
     setSaving(true);
     try {
-      const existing =
-        periodo === 'manha'
-          ? ordenhaManha
-          : periodo === 'tarde'
-          ? ordenhaTarde
-          : ordenhaNoite;
-
-      if (existing) {
-        await ordenhaRepository.updateOrdenha(existing.id, {
-          periodo,
-          horarioPrevisto: trimmedTime,
-          horarioNotificacao: calculatedAlertTime,
-          dataRegistro: new Date(),
-        });
-      } else {
-        await ordenhaRepository.createOrdenha({
-          periodo,
-          horarioPrevisto: trimmedTime,
-          horarioNotificacao: calculatedAlertTime,
-          dataRegistro: new Date(),
-        });
-      }
-
-      await scheduleOrdenhaReminder(periodo, trimmedTime);
+      await salvarOrdenha(dados, latest[periodo]?.id);
       setModalVisible(false);
     } finally {
       setSaving(false);
     }
-  }, [horarioPrevisto, periodo, ordenhaManha, ordenhaTarde, ordenhaNoite]);
+  }, [horarioPrevisto, periodo, latest]);
 
   return {
-    ordenhas,
-    ordenhaManha,
-    ordenhaTarde,
-    ordenhaNoite,
-    manhaHorario,
-    manhaNotificacao,
-    tardeHorario,
-    tardeNotificacao,
-    noiteHorario,
-    noiteNotificacao,
+    horarios,
     modalVisible,
     schedulesModalVisible,
     periodo,

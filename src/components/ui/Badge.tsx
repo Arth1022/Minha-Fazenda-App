@@ -27,8 +27,7 @@ export interface BadgeProps {
 }
 
 /**
- * Componente modular de Badge/Tag para status, alertas ("Estoque baixo"),
- * pílulas de mapa ("Fazenda Recanto Verde", "50 m") e indicadores.
+ * Componente modular de Badge/Tag para status, alertas, contadores e indicadores.
  */
 export function Badge({
   label,

@@ -1,117 +1,105 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Tabs } from 'expo-router';
+import { type Href, Tabs, router, usePathname } from 'expo-router';
 
 import { FloatingActionButton } from '@/components/ui/FloatingActionButton';
 import { AgroColors, MaxContentWidth, Shadows } from '@/constants/theme';
 
 interface TabConfig {
-  name: string;
+  href: Href;
   label: string;
   icon: string;
 }
 
+const HOME_HREF: Href = '/';
+
 const LEFT_TABS: TabConfig[] = [
-  { name: 'mapa', label: 'Mapa', icon: '🗺️' },
-  { name: 'rebanho', label: 'Rebanho', icon: '🐮' },
+  { href: '/mapa', label: 'Mapa', icon: '🗺️' },
+  { href: '/rebanho', label: 'Rebanho', icon: '🐮' },
 ];
 
 const RIGHT_TABS: TabConfig[] = [
-  { name: 'estoque', label: 'Estoque', icon: '📦' },
-  { name: 'maquinas', label: 'Máquinas', icon: '🚜' },
+  { href: '/estoque', label: 'Estoque', icon: '📦' },
+  { href: '/maquinas', label: 'Máquinas', icon: '🚜' },
 ];
+
+/**
+ * Barra inferior customizada: abas laterais e Início no botão central.
+ * A aba ativa vem da rota atual (usePathname) e a troca usa o router do Expo Router.
+ */
+function TabBar() {
+  const pathname = usePathname();
+  const isHomeActive = pathname === HOME_HREF;
+
+  const navigateTo = (href: Href) => {
+    if (pathname !== href) {
+      router.navigate(href);
+    }
+  };
+
+  const renderTabButton = (tab: TabConfig) => {
+    const isFocused = pathname === tab.href;
+
+    return (
+      <Pressable
+        key={tab.label}
+        onPress={() => navigateTo(tab.href)}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: isFocused }}
+        style={styles.tabItem}>
+        <Text
+          style={[
+            styles.tabIcon,
+            isFocused ? styles.tabIconActive : styles.tabIconInactive,
+          ]}>
+          {tab.icon}
+        </Text>
+        <Text
+          style={[
+            styles.tabLabel,
+            isFocused ? styles.tabLabelActive : styles.tabLabelInactive,
+          ]}>
+          {tab.label}
+        </Text>
+        {isFocused && <View style={styles.activeDot} />}
+      </Pressable>
+    );
+  };
+
+  return (
+    <View style={styles.outerBarWrapper}>
+      <SafeAreaView edges={['bottom']} style={styles.safeBottom}>
+        <View style={styles.tabBarRow}>
+          <View style={styles.tabGroup}>{LEFT_TABS.map(renderTabButton)}</View>
+
+          {/* Posição Central: Ícone da Home com espaço reservado para futura Logo */}
+          <View style={styles.fabCenterSlot}>
+            <FloatingActionButton
+              isActive={isHomeActive}
+              onPress={() => navigateTo(HOME_HREF)}
+              accessibilityLabel="Ir para o Início (Home)"
+            />
+            <Text
+              style={[
+                styles.tabLabel,
+                styles.centerHomeLabel,
+                isHomeActive ? styles.tabLabelActive : styles.tabLabelInactive,
+              ]}>
+              Início
+            </Text>
+          </View>
+
+          <View style={styles.tabGroup}>{RIGHT_TABS.map(renderTabButton)}</View>
+        </View>
+      </SafeAreaView>
+    </View>
+  );
+}
 
 export default function TabsLayout() {
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-      }}
-      tabBar={({ state, navigation }) => {
-        const currentRouteName = state.routes[state.index]?.name ?? 'index';
-        const isHomeActive = currentRouteName === 'index';
-
-        const navigateToTab = (tabName: string) => {
-          const targetRoute = state.routes.find((r) => r.name === tabName);
-          if (!targetRoute) return;
-
-          const isFocused = currentRouteName === tabName;
-          const event = navigation.emit({
-            type: 'tabPress',
-            target: targetRoute.key,
-            canPreventDefault: true,
-          });
-
-          if (!isFocused && !event.defaultPrevented) {
-            navigation.navigate(tabName);
-          }
-        };
-
-        const renderTabButton = (tab: TabConfig) => {
-          const isFocused = currentRouteName === tab.name;
-
-          return (
-            <Pressable
-              key={tab.name}
-              onPress={() => navigateToTab(tab.name)}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: isFocused }}
-              style={styles.tabItem}>
-              <Text
-                style={[
-                  styles.tabIcon,
-                  isFocused ? styles.tabIconActive : styles.tabIconInactive,
-                ]}>
-                {tab.icon}
-              </Text>
-              <Text
-                style={[
-                  styles.tabLabel,
-                  isFocused ? styles.tabLabelActive : styles.tabLabelInactive,
-                ]}>
-                {tab.label}
-              </Text>
-              {isFocused && <View style={styles.activeDot} />}
-            </Pressable>
-          );
-        };
-
-        return (
-          <View style={styles.outerBarWrapper}>
-            <SafeAreaView edges={['bottom']} style={styles.safeBottom}>
-              <View style={styles.tabBarRow}>
-                <View style={styles.tabGroup}>
-                  {LEFT_TABS.map(renderTabButton)}
-                </View>
-
-                {/* Posição Central: Ícone da Home com espaço reservado para futura Logo */}
-                <View style={styles.fabCenterSlot}>
-                  <FloatingActionButton
-                    isActive={isHomeActive}
-                    onPress={() => navigateToTab('index')}
-                    accessibilityLabel="Ir para o Início (Home)"
-                  />
-                  <Text
-                    style={[
-                      styles.tabLabel,
-                      styles.centerHomeLabel,
-                      isHomeActive
-                        ? styles.tabLabelActive
-                        : styles.tabLabelInactive,
-                    ]}>
-                    Início
-                  </Text>
-                </View>
-
-                <View style={styles.tabGroup}>
-                  {RIGHT_TABS.map(renderTabButton)}
-                </View>
-              </View>
-            </SafeAreaView>
-          </View>
-        );
-      }}>
+    <Tabs screenOptions={{ headerShown: false }} tabBar={() => <TabBar />}>
       <Tabs.Screen name="index" options={{ title: 'Início' }} />
       <Tabs.Screen name="mapa" options={{ title: 'Mapa' }} />
       <Tabs.Screen name="rebanho" options={{ title: 'Rebanho' }} />

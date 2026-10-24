@@ -1,27 +1,10 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { useColorScheme } from 'react-native';
+import React, { useEffect } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import { DatabaseProvider } from '@nozbe/watermelondb/react';
+import * as SplashScreen from 'expo-splash-screen';
 
-import { database } from '@/database';
-import { runDevSeed } from '@/database/seeds/devSeed';
-import { QuickActionProvider } from './QuickActionContext';
-
-export type DatabaseStatus = 'loading' | 'ready' | 'error';
-
-interface DatabaseStatusContextValue {
-  status: DatabaseStatus;
-  error: string | null;
-}
-
-const DatabaseStatusContext = createContext<DatabaseStatusContextValue>({
-  status: 'loading',
-  error: null,
-});
-
-export function useDatabaseStatus(): DatabaseStatusContextValue {
-  return useContext(DatabaseStatusContext);
-}
+import { useDatabaseMigrations } from '@/database';
+import { AgroColors, Spacing, Typography } from '@/constants/theme';
 
 interface AppProvidersProps {
   children: React.ReactNode;
@@ -29,45 +12,60 @@ interface AppProvidersProps {
 
 export function AppProviders({ children }: AppProvidersProps) {
   const colorScheme = useColorScheme();
-  const [status, setStatus] = useState<DatabaseStatus>('loading');
-  const [error, setError] = useState<string | null>(null);
+  const { success, error } = useDatabaseMigrations();
 
+  let content = children;
+  if (error) {
+    content = <DatabaseError message={error.message} />;
+  } else if (!success) {
+    content = <DatabaseLoading />;
+  }
+
+  return (
+    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      {content}
+    </ThemeProvider>
+  );
+}
+
+/** Exibido enquanto as migrations rodam (normalmente coberto pelo splash nativo). */
+function DatabaseLoading() {
+  return (
+    <View style={styles.container}>
+      <ActivityIndicator color={AgroColors.primary} />
+    </View>
+  );
+}
+
+function DatabaseError({ message }: { message: string }) {
+  // O splash só some quando o app renderiza; sem isso o erro ficaria escondido.
   useEffect(() => {
-    let mounted = true;
-
-    async function verifyDatabase() {
-      try {
-        await database.get('talhoes').query().fetchCount();
-        if (__DEV__) {
-          await runDevSeed();
-        }
-        if (mounted) {
-          setStatus('ready');
-        }
-      } catch (err: unknown) {
-        if (mounted) {
-          setError(err instanceof Error ? err.message : 'Erro ao inicializar banco local');
-          setStatus('error');
-        }
-      }
-    }
-
-    verifyDatabase();
-
-    return () => {
-      mounted = false;
-    };
+    SplashScreen.hideAsync();
   }, []);
 
   return (
-    <DatabaseProvider database={database}>
-      <DatabaseStatusContext.Provider value={{ status, error }}>
-        <QuickActionProvider>
-          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-            {children}
-          </ThemeProvider>
-        </QuickActionProvider>
-      </DatabaseStatusContext.Provider>
-    </DatabaseProvider>
+    <View style={styles.container}>
+      <Text style={styles.title}>Não foi possível abrir o banco local</Text>
+      <Text style={styles.message}>{message}</Text>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.two,
+    padding: Spacing.four,
+    backgroundColor: AgroColors.screenBg,
+  },
+  title: {
+    ...Typography.sectionTitle,
+    textAlign: 'center',
+  },
+  message: {
+    ...Typography.caption,
+    textAlign: 'center',
+  },
+});

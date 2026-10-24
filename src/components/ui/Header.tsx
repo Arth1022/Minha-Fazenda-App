@@ -10,8 +10,6 @@ import { useRouter } from 'expo-router';
 
 import { AgroColors, Spacing, Typography } from '@/constants/theme';
 
-export type HeaderOfflineStatus = 'loading' | 'ready' | 'error';
-
 export interface HeaderProps {
   /** Título exibido na barra superior */
   title: string;
@@ -31,8 +29,6 @@ export interface HeaderProps {
   onLeftPress?: () => void;
   /** Callback customizado para o botão direito */
   onRightPress?: () => void;
-  /** Status do banco local */
-  status?: HeaderOfflineStatus;
   /** Estilo customizado */
   style?: ViewStyle;
 }
@@ -125,10 +121,7 @@ export function Header({
               ]}
               accessibilityRole="button"
               accessibilityLabel="Notificações">
-              <View style={styles.bellIconWrapper}>
-                <Text style={styles.bellIcon}>🔔</Text>
-                <View style={styles.notificationDot} />
-              </View>
+              <Text style={styles.bellIcon}>🔔</Text>
             </Pressable>
           ) : null}
 
@@ -225,25 +218,9 @@ const styles = StyleSheet.create({
     color: '#A7F3D0',
     marginTop: 1,
   },
-  bellIconWrapper: {
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   bellIcon: {
     fontSize: 17,
     color: AgroColors.textInverse,
-  },
-  notificationDot: {
-    position: 'absolute',
-    top: 1,
-    right: 1,
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#22C55E',
-    borderWidth: 1,
-    borderColor: AgroColors.headerGreen,
   },
   moreDots: {
     color: AgroColors.textInverse,

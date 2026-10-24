@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@/database": ["./__tests__/support/database.ts"],
+      "@/*": ["./src/*"],
+      "@/assets/*": ["./assets/*"]
+    }
+  }
+}

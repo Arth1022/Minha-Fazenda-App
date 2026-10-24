@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1792809969050,
+      "tag": "0000_tratamentos",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1792810407989,
+      "tag": "0001_rebanho_e_ordenha",
+      "breakpoints": true
+    }
+  ]
+}

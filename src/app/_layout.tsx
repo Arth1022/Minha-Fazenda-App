@@ -1,7 +1,7 @@
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 
-import { AnimatedSplashOverlay } from '@/components/AnimatedIcon';
+import { AnimatedSplashOverlay } from '@/components/AnimatedSplashOverlay';
 import { AppProviders } from '@/providers/AppProviders';
 
 SplashScreen.preventAutoHideAsync();

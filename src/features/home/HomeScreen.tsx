@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
@@ -8,7 +8,6 @@ import {
   FormModal,
   TimeWheelPicker,
 } from '@/components/forms';
-import { ThemedText } from '@/components/ThemedText';
 import {
   AppIcon,
   Badge,
@@ -18,60 +17,33 @@ import {
   ScreenContainer,
   SectionHeader,
 } from '@/components/ui';
-import { Radius, Shadows, Spacing } from '@/constants/theme';
-import { PeriodoOrdenha } from '@/entities/Ordenha';
-import { useQuickAction } from '@/providers/QuickActionContext';
+import { APP_NAME } from '@/constants/app';
+import { AgroColors, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import type { PeriodoOrdenha } from '@/database';
 
 import { OrdenhaCard } from './OrdenhaCard';
+import { PERIODOS, SEM_HORARIO } from './periodos';
 import { useHomeOrdenha } from './useHomeOrdenha';
 
-const PERIODO_OPTIONS: ChipOption<PeriodoOrdenha>[] = [
-  {
-    value: 'manha',
-    label: 'Manhã',
+const PERIODO_OPTIONS: ChipOption<PeriodoOrdenha>[] = PERIODOS.map(
+  (periodo) => ({
+    value: periodo.value,
+    label: periodo.label,
     renderIcon: (selected) => (
       <AppIcon
-        name="sun"
+        name={periodo.icon}
         size={16}
-        color={selected ? '#15803D' : '#D97706'}
+        color={selected ? '#15803D' : periodo.iconColor}
       />
     ),
-  },
-  {
-    value: 'tarde',
-    label: 'Tarde',
-    renderIcon: (selected) => (
-      <AppIcon
-        name="sunset"
-        size={16}
-        color={selected ? '#15803D' : '#EA580C'}
-      />
-    ),
-  },
-  {
-    value: 'noite',
-    label: 'Noite',
-    renderIcon: (selected) => (
-      <AppIcon
-        name="moon"
-        size={16}
-        color={selected ? '#15803D' : '#6366F1'}
-      />
-    ),
-  },
-];
+  })
+);
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { registerQuickAction } = useQuickAction();
 
   const {
-    manhaHorario,
-    manhaNotificacao,
-    tardeHorario,
-    tardeNotificacao,
-    noiteHorario,
-    noiteNotificacao,
+    horarios,
     modalVisible,
     schedulesModalVisible,
     periodo,
@@ -86,27 +58,18 @@ export default function HomeScreen() {
     handleSaveOrdenha,
   } = useHomeOrdenha();
 
-  useEffect(() => {
-    return registerQuickAction('index', () => openOrdenhaModal('manha'));
-  }, [registerQuickAction, openOrdenhaModal]);
+  const editarHorario = (target: PeriodoOrdenha) => {
+    closeSchedulesModal();
+    openOrdenhaModal(target);
+  };
 
   return (
-    <ScreenContainer
-      header={<Header title="Minha Fazenda" status="ready" showNotification />}>
-      <SectionHeader
-        title="Painel Inicial"
-        size="lg"
-        rightElement={<Badge label="Fazenda Recanto Verde" variant="success" dot />}
-      />
+    <ScreenContainer header={<Header title={APP_NAME} showNotification />}>
+      <SectionHeader title="Painel Inicial" size="lg" />
 
       {/* Card de Ordenha Pixel Perfect (Manhã, Tarde, Noite - Estilo Figma) */}
       <OrdenhaCard
-        manhaHorario={manhaHorario}
-        manhaNotificacao={manhaNotificacao}
-        tardeHorario={tardeHorario}
-        tardeNotificacao={tardeNotificacao}
-        noiteHorario={noiteHorario}
-        noiteNotificacao={noiteNotificacao}
+        horarios={horarios}
         onSchedulePress={openOrdenhaModal}
         onViewSchedulesPress={openSchedulesModal}
       />
@@ -117,20 +80,20 @@ export default function HomeScreen() {
           title="Mapeamento & Áreas"
           size="md"
           showChevron
-          onPress={() => router.push('/mapa')}
+          onPress={() => router.navigate('/mapa')}
         />
         <Card
           variant="default"
           padding="three"
-          onPress={() => router.push('/mapa')}>
+          onPress={() => router.navigate('/mapa')}>
           <View style={styles.mapShortcutRow}>
             <View style={styles.mapShortcutInfo}>
-              <ThemedText type="smallBold">
+              <Text style={styles.mapShortcutTitle}>
                 🗺️ Visualizar Áreas e Piquetes
-              </ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
+              </Text>
+              <Text style={styles.mapShortcutText}>
                 Acesse o mapa interativo, piquetes e pontos de água da fazenda.
-              </ThemedText>
+              </Text>
             </View>
             <Badge label="Abrir" variant="neutral" />
           </View>
@@ -167,103 +130,43 @@ export default function HomeScreen() {
         submitLabel="+ Novo / Editar Horário"
         cancelLabel="Fechar"
         onClose={closeSchedulesModal}
-        onSubmit={() => {
-          closeSchedulesModal();
-          openOrdenhaModal('manha');
-        }}>
+        onSubmit={() => editarHorario('manha')}>
         <View style={styles.figmaSchedulesCard}>
           <Text style={styles.figmaCardHeader}>Turnos Configurados</Text>
 
-          {/* Turno Manhã */}
-          <View style={styles.scheduleRow}>
-            <View style={styles.scheduleRowLeft}>
-              <View style={styles.iconBox}>
-                <AppIcon name="sun" size={20} color="#D97706" />
-              </View>
-              <View style={styles.periodCol}>
-                <Text style={styles.periodLabel}>Manhã</Text>
-                <Text style={styles.timeValue}>{manhaHorario}</Text>
-              </View>
-            </View>
+          {PERIODOS.map((item, index) => (
+            <React.Fragment key={item.value}>
+              {index > 0 && <View style={styles.divider} />}
+              <View style={styles.scheduleRow}>
+                <View style={styles.scheduleRowLeft}>
+                  <View style={styles.iconBox}>
+                    <AppIcon name={item.icon} size={20} color={item.iconColor} />
+                  </View>
+                  <View style={styles.periodCol}>
+                    <Text style={styles.periodLabel}>{item.label}</Text>
+                    <Text style={styles.timeValue}>
+                      {horarios[item.value].horario ?? SEM_HORARIO}
+                    </Text>
+                  </View>
+                </View>
 
-            <View style={styles.scheduleRowRight}>
-              <View style={styles.notifCol}>
-                <Text style={styles.notifLabel}>Notificação</Text>
-                <Text style={styles.notifTime}>{manhaNotificacao}</Text>
+                <View style={styles.scheduleRowRight}>
+                  <View style={styles.notifCol}>
+                    <Text style={styles.notifLabel}>Notificação</Text>
+                    <Text style={styles.notifTime}>
+                      {horarios[item.value].notificacao ?? SEM_HORARIO}
+                    </Text>
+                  </View>
+                  <Button
+                    label="Editar"
+                    variant="outline"
+                    size="sm"
+                    onPress={() => editarHorario(item.value)}
+                  />
+                </View>
               </View>
-              <Button
-                label="Editar"
-                variant="outline"
-                size="sm"
-                onPress={() => {
-                  closeSchedulesModal();
-                  openOrdenhaModal('manha');
-                }}
-              />
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Turno Tarde */}
-          <View style={styles.scheduleRow}>
-            <View style={styles.scheduleRowLeft}>
-              <View style={styles.iconBox}>
-                <AppIcon name="sunset" size={20} color="#EA580C" />
-              </View>
-              <View style={styles.periodCol}>
-                <Text style={styles.periodLabel}>Tarde</Text>
-                <Text style={styles.timeValue}>{tardeHorario}</Text>
-              </View>
-            </View>
-
-            <View style={styles.scheduleRowRight}>
-              <View style={styles.notifCol}>
-                <Text style={styles.notifLabel}>Notificação</Text>
-                <Text style={styles.notifTime}>{tardeNotificacao}</Text>
-              </View>
-              <Button
-                label="Editar"
-                variant="outline"
-                size="sm"
-                onPress={() => {
-                  closeSchedulesModal();
-                  openOrdenhaModal('tarde');
-                }}
-              />
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Turno Noite */}
-          <View style={styles.scheduleRow}>
-            <View style={styles.scheduleRowLeft}>
-              <View style={styles.iconBox}>
-                <AppIcon name="moon" size={20} color="#6366F1" />
-              </View>
-              <View style={styles.periodCol}>
-                <Text style={styles.periodLabel}>Noite</Text>
-                <Text style={styles.timeValue}>{noiteHorario}</Text>
-              </View>
-            </View>
-
-            <View style={styles.scheduleRowRight}>
-              <View style={styles.notifCol}>
-                <Text style={styles.notifLabel}>Notificação</Text>
-                <Text style={styles.notifTime}>{noiteNotificacao}</Text>
-              </View>
-              <Button
-                label="Editar"
-                variant="outline"
-                size="sm"
-                onPress={() => {
-                  closeSchedulesModal();
-                  openOrdenhaModal('noite');
-                }}
-              />
-            </View>
-          </View>
+            </React.Fragment>
+          ))}
         </View>
       </FormModal>
     </ScreenContainer>
@@ -283,6 +186,13 @@ const styles = StyleSheet.create({
   mapShortcutInfo: {
     flex: 1,
     gap: 2,
+  },
+  mapShortcutTitle: {
+    ...Typography.bodyBold,
+  },
+  mapShortcutText: {
+    ...Typography.bodyMedium,
+    color: AgroColors.textSecondary,
   },
   figmaSchedulesCard: {
     backgroundColor: '#FFFFFF',

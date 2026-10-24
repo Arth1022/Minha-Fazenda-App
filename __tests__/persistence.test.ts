@@ -1,162 +1,172 @@
-import { Database } from '@nozbe/watermelondb';
-import LokiJSAdapter from '@nozbe/watermelondb/adapters/lokijs';
+import { eq } from 'drizzle-orm';
 
-import { modelClasses } from '../src/entities';
-import { migrations } from '../src/database/migrations';
-import { schema } from '../src/database/schema';
-import { TalhaoRepository } from '../src/features/mapa/TalhaoRepository';
-import { AnimalRepository } from '../src/features/rebanho/AnimalRepository';
-import { TratamentoRepository } from '../src/features/rebanho/TratamentoRepository';
-import { OrdenhaRepository } from '../src/features/rebanho/OrdenhaRepository';
-import { EstoqueRepository } from '../src/features/estoque/EstoqueRepository';
-import { MaquinaRepository } from '../src/features/maquinas/MaquinaRepository';
+// As features importam `@/database`; o tsconfig.test.json aponta esse caminho para
+// ./support/database (sql.js em memória com o mesmo schema e migrations do app).
+import { salvarOrdenha, todasOrdenhas } from '@/features/home/ordenhas';
+import {
+  animalPorId,
+  createAnimal,
+  todosAnimais,
+} from '@/features/rebanho/data/animais';
+import {
+  createTratamento,
+  toggleDiaConfirmado,
+  tratamentosDoAnimal,
+} from '@/features/rebanho/data/tratamentos';
+import {
+  animais,
+  coberturas,
+  db,
+  initTestDatabase,
+  sqlite,
+  tratamentos,
+} from './support/database';
 
-function createTestDatabase(): Database {
-  const testAdapter = new LokiJSAdapter({
-    schema,
-    migrations,
-    useWebWorker: false,
-    useIncrementalIndexedDB: false,
-  });
+const UUID_V4 =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
-  return new Database({
-    adapter: testAdapter,
-    modelClasses,
-  });
+function check(condition: boolean, message: string) {
+  if (!condition) {
+    throw new Error(message);
+  }
+  console.log(`✅ ${message}`);
 }
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function runPersistenceTest() {
   console.log('=========================================================');
-  console.log('🌾 MINHA FAZENDA - TESTE DE PERSISTÊNCIA E TIMESTAMPS');
+  console.log('🌾 MINHA FAZENDA - TESTE DE PERSISTÊNCIA (Drizzle + SQLite)');
   console.log('=========================================================\n');
 
-  const testDb = createTestDatabase();
-  const talhaoRepository = new TalhaoRepository(testDb);
-  const animalRepository = new AnimalRepository(testDb);
-  const tratamentoRepository = new TratamentoRepository(testDb);
-  const ordenhaRepository = new OrdenhaRepository(testDb);
-  const estoqueRepository = new EstoqueRepository(testDb);
-  const maquinaRepository = new MaquinaRepository(testDb);
+  await initTestDatabase();
 
-  const tag = `TEST-${Date.now().toString().slice(-4)}`;
+  // 1. Animal + coberturas numa transação
+  const animal = await createAnimal(
+    { brinco: '#201', nome: 'Mimosa', raca: 'Holandesa', pesoKg: 510 },
+    [
+      { data: new Date(2026, 5, 1), tipo: 'inseminacao', touroSemen: 'Sêmen A' },
+      { data: new Date(2026, 2, 1), tipo: 'monta_natural' },
+    ]
+  );
+  check(UUID_V4.test(animal.id), `id do animal é UUID v4 (${animal.id})`);
+  check(animal.crias === 0, 'crias padrão = 0');
+  check(
+    animal.createdAt instanceof Date && animal.updatedAt instanceof Date,
+    'created_at / updated_at preenchidos como Date'
+  );
 
-  // 1. Criar Talhão e validar created_at / updated_at automáticos do WatermelonDB
-  const talhao = await talhaoRepository.createTalhao({
-    nome: `Talhão ${tag}`,
-    tipo: 'pastagem',
-    areaHa: 14.5,
-    possuiCerca: true,
+  const comRelacoes = await db.query.animais.findFirst({
+    where: eq(animais.id, animal.id),
+    with: { coberturas: true, tratamentos: true },
   });
+  check(comRelacoes?.coberturas.length === 2, 'relação animal → coberturas');
 
-  if (!talhao.createdAt || talhao.createdAt.getTime() <= 0) {
-    throw new Error(`Falha de timestamp: created_at não foi preenchido (${talhao.createdAt})`);
+  // Falha no meio da transação: nada pode ficar gravado
+  let falhou = false;
+  try {
+    await createAnimal({ brinco: '#202' }, [
+      { data: new Date(), tipo: null as unknown as 'inseminacao' },
+    ]);
+  } catch {
+    falhou = true;
   }
-  if (!talhao.updatedAt || talhao.updatedAt.getTime() <= 0) {
-    throw new Error(`Falha de timestamp: updated_at não foi preenchido (${talhao.updatedAt})`);
-  }
-  console.log(`✅ Talhão criado: ${talhao.nome} (created_at=${talhao.createdAt.toISOString()})`);
+  const brinco202 = await db.select().from(animais).where(eq(animais.brinco, '#202'));
+  check(falhou && brinco202.length === 0, 'transação desfeita quando uma cobertura é inválida');
 
-  // 2. Criar Animal vinculado ao Talhão
-  const brinco = `BR-${tag}`;
-  const animal = await animalRepository.createAnimal({
-    brinco,
-    nome: `Mimosa ${tag}`,
-    raca: 'Holandesa',
-    pesoKg: 510,
-    producaoLeiteL: 24.0,
-    talhaoId: talhao.id,
-  });
+  const lido = await animalPorId(animal.id);
+  check(
+    lido?.brinco === '#201' && lido.pesoKg === 510,
+    'animalPorId encontra o animal com os campos mapeados'
+  );
+  check((await todosAnimais()).length === 1, 'todosAnimais lista o rebanho');
 
-  const animalLido = await animalRepository.findByBrinco(brinco);
-  if (!animalLido || animalLido.id !== animal.id) {
-    throw new Error('Falha ao buscar animal por brinco');
-  }
-  console.log(`✅ Animal criado e consultado por índice: ${animalLido.brinco}`);
-
-  // 3. Criar Tratamento, Ordenha, Estoque e Máquina
-  const tratamento = await tratamentoRepository.createTratamento({
+  // 2. Tratamentos
+  const antigo = await createTratamento({
     animalId: animal.id,
-    medicamento: 'Vacina Aftosa',
-    dataInicio: new Date(),
-    diasConfirmados: [1, 2, 3],
-    notificacaoAtiva: true,
+    medicamento: 'Vermífugo',
+    dataInicio: new Date(2026, 9, 1),
+    dataFim: new Date(2026, 9, 5),
   });
+  const recente = await createTratamento({
+    animalId: animal.id,
+    medicamento: 'Antibiótico',
+    dataInicio: new Date(2026, 9, 10),
+    dataFim: new Date(2026, 9, 19),
+  });
+  check(
+    recente.diasConfirmados.length === 0 && recente.notificacaoAtiva,
+    'tratamento começa sem dias confirmados e com notificação ativa'
+  );
 
-  if (!Array.isArray(tratamento.diasConfirmados) || tratamento.diasConfirmados.length !== 3) {
-    throw new Error('Falha no decorator @json: diasConfirmados não foi parseado/sanitizado como array');
+  const doAnimal = await tratamentosDoAnimal(animal.id);
+  check(
+    doAnimal[0].id === recente.id && doAnimal[1].id === antigo.id,
+    'tratamentos ordenados do início mais recente para o mais antigo'
+  );
+
+  await sleep(5);
+  await toggleDiaConfirmado(recente, 3);
+  let [atual] = await tratamentosDoAnimal(animal.id);
+  await toggleDiaConfirmado(atual, 1);
+  [atual] = await tratamentosDoAnimal(animal.id);
+  check(atual.diasConfirmados.join(',') === '1,3', 'marcar dias mantém a lista ordenada');
+  await toggleDiaConfirmado(atual, 3);
+  [atual] = await tratamentosDoAnimal(animal.id);
+  check(atual.diasConfirmados.join(',') === '1', 'desmarcar dia remove da lista');
+  check(
+    atual.updatedAt.getTime() > recente.updatedAt.getTime() &&
+      atual.createdAt.getTime() === recente.createdAt.getTime(),
+    'update renova updated_at e preserva created_at'
+  );
+
+  const [bruto] = sqlite.exec(
+    `select data_inicio, dias_confirmados from tratamentos where id = '${recente.id}'`
+  )[0].values;
+  check(
+    bruto[0] === new Date(2026, 9, 10).getTime() && bruto[1] === '[1]',
+    'datas gravadas em epoch ms e arrays em JSON'
+  );
+
+  let fkRejeitada = false;
+  try {
+    await createTratamento({ animalId: 'nao-existe', medicamento: 'X', dataInicio: new Date() });
+  } catch {
+    fkRejeitada = true;
   }
+  check(fkRejeitada, 'chave estrangeira rejeita tratamento de animal inexistente');
 
-  const ordenha = await ordenhaRepository.createOrdenha({
+  // 3. Ordenha
+  await salvarOrdenha({
     periodo: 'manha',
-    volumeLitros: 24.0,
+    horarioPrevisto: '05:30',
+    horarioNotificacao: '05:15',
     dataRegistro: new Date(),
   });
+  const [ordenha] = await todasOrdenhas();
+  await salvarOrdenha(
+    {
+      periodo: 'manha',
+      horarioPrevisto: '06:00',
+      horarioNotificacao: '05:45',
+      dataRegistro: new Date(),
+    },
+    ordenha.id
+  );
+  const ordenhasSalvas = await todasOrdenhas();
+  check(
+    ordenhasSalvas.length === 1 && ordenhasSalvas[0].horarioPrevisto === '06:00',
+    'salvarOrdenha atualiza o registro existente do turno'
+  );
 
-  const estoque = await estoqueRepository.createItem({
-    categoria: 'insumo',
-    nome: `Ração ${tag}`,
-    quantidade: 200,
-    unidade: 'kg',
-    estoqueMinimo: 50,
-  });
-
-  await estoqueRepository.adjustQuantity(estoque.id, -30);
-  const estoqueAtualizado = await estoqueRepository.getById(estoque.id);
-  if (estoqueAtualizado.quantidade !== 170) {
-    throw new Error(`Saldo incorreto após baixa: esperado 170, obtido ${estoqueAtualizado.quantidade}`);
-  }
-
-  // Validação da regra de negócio: não zerar em silêncio e lançar erro
-  let erroEstoqueLancado = false;
-  try {
-    await estoqueRepository.adjustQuantity(estoque.id, -200);
-  } catch {
-    erroEstoqueLancado = true;
-  }
-  if (!erroEstoqueLancado) {
-    throw new Error('Falha de regra de negócio: adjustQuantity deveria rejeitar saída maior que o saldo em estoque');
-  }
-
-  const maquina = await maquinaRepository.createMaquina({
-    nome: `Trator ${tag}`,
-    statusPercentual: 100,
-    manutencaoDevida: false,
-  });
-
-  console.log('✅ Estoque, Tratamento, Ordenha e Máquina validados com sucesso.');
-
-  // 4. Teste de Exclusão em Cascata (@writer deleteCascade)
-  const cascadeTalhao = await talhaoRepository.createTalhao({
-    nome: `Talhão Cascade ${tag}`,
-    tipo: 'pastagem',
-    areaHa: 10,
-  });
-  const cascadeAnimal = await animalRepository.createAnimal({
-    brinco: `CAS-${tag}`,
-    talhaoId: cascadeTalhao.id,
-  });
-  await tratamentoRepository.createTratamento({
-    animalId: cascadeAnimal.id,
-    medicamento: 'Medicamento Cascata',
-    dataInicio: new Date(),
-  });
-
-  // Apagar animal em cascata deve marcar os tratamentos filhos também
-  await cascadeAnimal.deleteCascade();
-  const tratamentosRestantes = await tratamentoRepository.getByAnimal(cascadeAnimal.id);
-  if (tratamentosRestantes.length > 0) {
-    throw new Error('Falha no deleteCascade: tratamentos filhos não foram apagados em cascata');
-  }
-  await cascadeTalhao.deleteCascade();
-  console.log('✅ Exclusão em cascata (@writer deleteCascade) validada com sucesso.');
-
-  // 5. Exclusão dos registros de teste via delete (soft-delete compatível com sync)
-  await tratamentoRepository.delete(tratamento.id);
-  await ordenhaRepository.delete(ordenha.id);
-  await estoqueRepository.delete(estoque.id);
-  await maquinaRepository.delete(maquina.id);
-  await animalRepository.delete(animal.id);
-  await talhaoRepository.delete(talhao.id);
+  // 4. Exclusão em cascata (ON DELETE CASCADE)
+  await db.delete(animais).where(eq(animais.id, animal.id));
+  const coberturasRestantes = await db.select().from(coberturas);
+  const tratamentosRestantes = await db.select().from(tratamentos);
+  check(
+    coberturasRestantes.length === 0 && tratamentosRestantes.length === 0,
+    'apagar o animal apaga coberturas e tratamentos em cascata'
+  );
 
   console.log('\n🎉 TODOS OS TESTES PASSARAM COM 100% DE SUCESSO!\n');
 }

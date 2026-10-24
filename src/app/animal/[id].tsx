@@ -1,1 +1,1 @@
-export { default } from '@/features/rebanho/AnimalDetalheScreen';
+export { default } from '@/features/rebanho/screens/AnimalDetalheScreen';

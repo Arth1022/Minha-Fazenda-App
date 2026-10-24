@@ -1,33 +1,34 @@
 # Minha Fazenda — App Mobile (Local-First)
 
-Aplicativo mobile de gestão rural desenvolvido com **React Native (Expo Router)**, **TypeScript** e **WatermelonDB (SQLite)**, projetado para operar **100% offline no campo**.
+Aplicativo mobile de gestão rural desenvolvido com **React Native (Expo SDK 58 + Expo Router)**, **TypeScript** e **Drizzle ORM sobre expo-sqlite**, projetado para operar **100% offline no campo**. Plataformas: Android e iOS.
 
 ---
 
 ## 1. Estrutura de Pastas
 
-O projeto adota uma organização por domínio (`features/`), mantendo rotas finas em `src/app/` e entidades do WatermelonDB centralizadas em `src/entities/`:
+O projeto adota uma organização por domínio (`features/`), mantendo rotas finas em `src/app/` e todo o acesso ao banco centralizado em `src/database/`:
 
 ```text
 src/
 ├─ app/                    # Rotas do Expo Router (1 linha cada)
 │  ├─ _layout.tsx          # RootLayout (AppProviders + Stack)
-│  ├─ (tabs)/              # _layout.tsx, index, mapa, rebanho, estoque, maquinas
+│  ├─ (tabs)/              # _layout.tsx (tab bar), index, mapa, rebanho, estoque, maquinas
 │  └─ animal/[id].tsx      # Rota fora das abas (Ficha do animal / QR Code)
-├─ features/               # 1 pasta por domínio, arquivos direto nela
-│  ├─ home/                # HomeScreen.tsx
-│  ├─ mapa/                # MapaScreen.tsx, TalhaoRepository.ts, calculos.ts
-│  ├─ rebanho/             # RebanhoScreen.tsx, AnimalDetalheScreen.tsx,
-│  │                       # AnimalRepository.ts, TratamentoRepository.ts, OrdenhaRepository.ts
-│  ├─ estoque/             # EstoqueScreen.tsx, EstoqueRepository.ts
-│  └─ maquinas/            # MaquinasScreen.tsx, MaquinaRepository.ts
-├─ entities/               # Animal.ts, Talhao.ts, Tratamento.ts, EstoqueItem.ts, Maquina.ts, Ordenha.ts
-├─ database/               # database.ts, schema.ts, migrations.ts, BaseRepository.ts, seeds/
-├─ components/             # UI genérica reutilizável: Header.tsx, AppTabs.tsx, ThemedText.tsx, ThemedView.tsx
-├─ providers/              # AppProviders.tsx (DatabaseProvider oficial do WatermelonDB + ThemeProvider)
-└─ constants/  utils/      # Tema (theme.ts) e formatadores gerais (formatters.ts)
-__tests__/                 # Testes automatizados de persistência e regras
+├─ features/               # 1 pasta por domínio
+│  ├─ home/                # HomeScreen.tsx, OrdenhaCard.tsx, useHomeOrdenha.ts, ordenhas.ts
+│  ├─ rebanho/             # screens/, components/, hooks/, services/ (CategoriaService)
+│  │                       # data/ (animais.ts, tratamentos.ts: consultas e gravações)
+│  ├─ mapa/                # MapaScreen.tsx      (somente front, sem persistência)
+│  ├─ estoque/             # EstoqueScreen.tsx   (somente front, sem persistência)
+│  └─ maquinas/            # MaquinasScreen.tsx  (somente front, sem persistência)
+├─ database/               # schema.ts (fonte única), client.ts, index.ts, id.ts, migrations/
+├─ components/             # UI genérica reutilizável: ui/ (Header, Card, EmptyState...) e forms/
+├─ providers/              # AppProviders.tsx (migrations na abertura + ThemeProvider)
+└─ constants/  utils/      # Tema (theme.ts), formatadores, datas e validadores
+__tests__/                 # Teste de persistência (support/ = banco sql.js para Node)
 ```
+
+Somente **Home** (ordenha) e **Rebanho** têm persistência local. Mapa, Estoque e Máquinas existem apenas como telas (layout e estados vazios).
 
 ---
 
@@ -37,20 +38,27 @@ __tests__/                 # Testes automatizados de persistência e regras
    ```ts
    export { default } from '@/features/mapa/MapaScreen';
    ```
-2. **Fluxo de dependência unidirecional:** `app → features → entities / database`. Uma feature não importa arquivos internos de outra feature; código compartilhado entre domínios deve subir para `components/` ou `utils/`.
-3. **Sem pastas fantasma:** Toda pasta criada no repositório deve conter implementação real e ativa.
+2. **Fluxo de dependência unidirecional:** `app → features → database`. Uma feature não importa arquivos internos de outra feature; código compartilhado entre domínios deve subir para `components/` ou `utils/`.
+3. **Banco só por `@/database`:** telas e features importam `db`, tabelas, tipos e `useLiveQuery` de `@/database`. Trocar o driver fica restrito a essa pasta.
+4. **Sem pastas fantasma:** Toda pasta criada no repositório deve conter implementação real e ativa.
 
 ---
 
-## 3. Execução e Build Nativo (Development Client)
+## 3. Banco Local (Drizzle + expo-sqlite)
 
-O **WatermelonDB** utiliza código nativo C++ e bindings JSI de alto desempenho para o SQLite, garantindo persistência local confiável e operação offline total no campo.
+- **Schema:** `src/database/schema.ts` é a fonte única das tabelas, relações e tipos (`typeof tabela.$inferSelect` / `$inferInsert`).
+- **Migrations:** geradas pelo `drizzle-kit` em `src/database/migrations/` e aplicadas na abertura do app (`useDatabaseMigrations` no `AppProviders`). Depois de alterar o schema:
+  ```bash
+  npx drizzle-kit generate
+  ```
+- **Telas reativas:** `useLiveQuery` reexecuta a consulta quando a tabela principal dela muda.
+- **Convenções (prontas para um sync futuro):** `id` em UUID texto gerado no app, `created_at` / `updated_at` em todas as tabelas (`updated_at` renovado em todo update), datas em epoch ms e arrays em JSON. As chaves estrangeiras (`ON DELETE CASCADE`) são ligadas logo após as migrations.
 
-> [!IMPORTANT]
-> **O app NÃO roda no Expo Go padrão** devido aos módulos nativos do WatermelonDB.
-> A configuração nativa é injetada automaticamente via Config Plugin (`@morrowdigital/watermelondb-expo-plugin`) configurado no [`app.json`](file:///c:/Users/ti/Documents/GitHub/Minha-Fazenda-App/app.json) durante o prebuild do Expo.
-> 
-> Falhas de inicialização do SQLite no aparelho não realizam fallback silencioso para banco volátil em memória; elas disparam um erro visível imediato para proteger a integridade dos dados rurais.
+---
+
+## 4. Execução e Build Nativo (Development Client)
+
+O `expo-sqlite` e o `expo-crypto` são módulos nativos: após instalar ou atualizar dependências nativas, gere uma nova build de desenvolvimento.
 
 ### Executar no Android (Recomendado):
 ```bash
@@ -66,16 +74,11 @@ npx expo run:android
 npx expo run:ios
 ```
 
-### Executar na Web (Simulação com LokiJS/IndexedDB):
-```bash
-npx expo start --web
-```
-
 ### Testes e Verificação:
 ```bash
 # Validação de tipos e ESLint
 npm run lint
 
-# Teste automatizado de persistência e timestamps do WatermelonDB
+# Teste de persistência (schema, migrations, transações, cascata) com SQLite em Node
 npm run test:db
 ```

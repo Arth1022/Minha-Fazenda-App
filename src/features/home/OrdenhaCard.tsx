@@ -3,15 +3,13 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon, Button } from '@/components/ui';
 import { Radius, Shadows } from '@/constants/theme';
-import { PeriodoOrdenha } from '@/entities/Ordenha';
+import type { PeriodoOrdenha } from '@/database';
+
+import { PERIODOS, SEM_HORARIO } from './periodos';
+import { HorarioOrdenha } from './useHomeOrdenha';
 
 export interface OrdenhaCardProps {
-  manhaHorario: string;
-  manhaNotificacao: string;
-  tardeHorario: string;
-  tardeNotificacao: string;
-  noiteHorario: string;
-  noiteNotificacao: string;
+  horarios: Record<PeriodoOrdenha, HorarioOrdenha>;
   onSchedulePress: (periodo?: PeriodoOrdenha) => void;
   onViewSchedulesPress: () => void;
 }
@@ -21,90 +19,53 @@ export interface OrdenhaCardProps {
  * Exibe os turnos Manhã, Tarde e Noite com seus respectivos horários e alertas em verde.
  */
 export function OrdenhaCard({
-  manhaHorario,
-  manhaNotificacao,
-  tardeHorario,
-  tardeNotificacao,
-  noiteHorario,
-  noiteNotificacao,
+  horarios,
   onSchedulePress,
   onViewSchedulesPress,
 }: OrdenhaCardProps) {
   return (
     <View style={styles.container}>
-      {/* Título da Seção */}
       <Text style={styles.sectionTitle}>Ordenha</Text>
 
-      {/* Card Principal Idêntico ao Figma */}
       <View style={styles.card}>
         <Text style={styles.cardHeaderTitle}>Horários de Ordenha</Text>
 
-        {/* Linha 1: Manhã */}
-        <Pressable
-          onPress={() => onSchedulePress('manha')}
-          style={({ pressed }) => [styles.rowItem, pressed && styles.rowPressed]}>
-          <View style={styles.leftGroup}>
-            <View style={styles.iconContainer}>
-              <AppIcon name="sun" size={20} color="#D97706" />
-            </View>
-            <View style={styles.periodCol}>
-              <Text style={styles.periodLabel}>Manhã</Text>
-              <Text style={styles.timeValue}>{manhaHorario}</Text>
-            </View>
-          </View>
+        {PERIODOS.map((periodo, index) => (
+          <React.Fragment key={periodo.value}>
+            {index > 0 && <View style={styles.divider} />}
+            <Pressable
+              onPress={() => onSchedulePress(periodo.value)}
+              style={({ pressed }) => [
+                styles.rowItem,
+                pressed && styles.rowPressed,
+              ]}>
+              <View style={styles.leftGroup}>
+                <View style={styles.iconContainer}>
+                  <AppIcon
+                    name={periodo.icon}
+                    size={20}
+                    color={periodo.iconColor}
+                  />
+                </View>
+                <View style={styles.periodCol}>
+                  <Text style={styles.periodLabel}>{periodo.label}</Text>
+                  <Text style={styles.timeValue}>
+                    {horarios[periodo.value].horario ?? SEM_HORARIO}
+                  </Text>
+                </View>
+              </View>
 
-          <View style={styles.rightGroup}>
-            <Text style={styles.notifLabel}>Notificação</Text>
-            <Text style={styles.notifTime}>{manhaNotificacao}</Text>
-          </View>
-        </Pressable>
-
-        <View style={styles.divider} />
-
-        {/* Linha 2: Tarde */}
-        <Pressable
-          onPress={() => onSchedulePress('tarde')}
-          style={({ pressed }) => [styles.rowItem, pressed && styles.rowPressed]}>
-          <View style={styles.leftGroup}>
-            <View style={styles.iconContainer}>
-              <AppIcon name="sunset" size={20} color="#EA580C" />
-            </View>
-            <View style={styles.periodCol}>
-              <Text style={styles.periodLabel}>Tarde</Text>
-              <Text style={styles.timeValue}>{tardeHorario}</Text>
-            </View>
-          </View>
-
-          <View style={styles.rightGroup}>
-            <Text style={styles.notifLabel}>Notificação</Text>
-            <Text style={styles.notifTime}>{tardeNotificacao}</Text>
-          </View>
-        </Pressable>
-
-        <View style={styles.divider} />
-
-        {/* Linha 3: Noite */}
-        <Pressable
-          onPress={() => onSchedulePress('noite')}
-          style={({ pressed }) => [styles.rowItem, pressed && styles.rowPressed]}>
-          <View style={styles.leftGroup}>
-            <View style={styles.iconContainer}>
-              <AppIcon name="moon" size={20} color="#6366F1" />
-            </View>
-            <View style={styles.periodCol}>
-              <Text style={styles.periodLabel}>Noite</Text>
-              <Text style={styles.timeValue}>{noiteHorario}</Text>
-            </View>
-          </View>
-
-          <View style={styles.rightGroup}>
-            <Text style={styles.notifLabel}>Notificação</Text>
-            <Text style={styles.notifTime}>{noiteNotificacao}</Text>
-          </View>
-        </Pressable>
+              <View style={styles.rightGroup}>
+                <Text style={styles.notifLabel}>Notificação</Text>
+                <Text style={styles.notifTime}>
+                  {horarios[periodo.value].notificacao ?? SEM_HORARIO}
+                </Text>
+              </View>
+            </Pressable>
+          </React.Fragment>
+        ))}
       </View>
 
-      {/* Ações de Agendamento e Consulta no Design System do Figma */}
       <View style={styles.actionsRow}>
         <Button
           label="+ Agendar Notificação"
