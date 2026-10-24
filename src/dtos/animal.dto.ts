@@ -1,5 +1,8 @@
 import type { Animal, Sexo, StatusAnimal } from '@/database';
 
+import type { Reproducao } from './reproducao.dto';
+import type { DoseConfirmada, Tratamento } from './tratamento.dto';
+
 // Linhas da tabela: inferidas pelo Drizzle no schema ($inferSelect/$inferInsert), só reexportadas
 export type { Animal, NovoAnimal, Origem, Sexo, StatusAnimal } from '@/database';
 
@@ -55,6 +58,28 @@ export interface DadosSaida {
   status: StatusSaida;
   data: Date;
   motivo?: string;
+}
+
+export type TipoAlerta = 'carencia' | 'dose' | 'parto' | 'novilha';
+
+/** Saída de `alertaPrincipal`: o alerta mais importante do animal. */
+export interface AlertaAnimal {
+  tipo: TipoAlerta;
+  texto: string;
+  /** Data de referência (fim da carência, hora da dose, previsão de parto); null se não há */
+  data: Date | null;
+}
+
+/** Entrada de `alertaPrincipal`, montada pelo hook com as consultas do animal. */
+export interface DadosAlerta {
+  animal: Pick<Animal, 'dataNascimento'>;
+  fase: Fase;
+  tratamentos: Tratamento[];
+  /** Dias aplicados dos tratamentos (`diasConfirmadosDoAnimal`) */
+  dosesConfirmadas: DoseConfirmada[];
+  /** Cobertura sem parto registrado (null se não há) */
+  coberturaAberta: Pick<Reproducao, 'previsaoParto'> | null;
+  produzLeite: boolean;
 }
 
 /** Linha de `criasPorMae`: quantas crias cada mãe tem. */

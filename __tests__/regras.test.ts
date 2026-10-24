@@ -1,4 +1,6 @@
 import type { Pesagem, Tratamento } from '@/dtos';
+import type { DadosAlerta } from '@/dtos';
+import { alertaPrincipal } from '@/features/rebanho/services/alertas';
 import {
   calcularFase,
   calcularSituacaoLeite,
@@ -120,9 +122,10 @@ check(calcularPesoAtual([]) === null, 'sem pesagens não há peso atual');
 check(formatDataBR(calcularPrevisaoParto(dia(1, 1))) === '11/10/2026', 'previsão de parto = cobertura + 283 dias');
 
 // Carência
-const comCarencia = tratamento({ dataInicio: dia(20, 10), carenciaLeiteDias: 3, carenciaCarneDias: 10 });
+// Dose única = fim igual ao início
+const comCarencia = tratamento({ dataInicio: dia(20, 10), dataFim: dia(20, 10), carenciaLeiteDias: 3, carenciaCarneDias: 10 });
 check(formatDataBR(fimDaCarencia(comCarencia, true)!) === '30/10/2026', 'carência usa o maior prazo (carne 10 dias)');
-const soLeite = tratamento({ dataInicio: dia(20, 10), carenciaLeiteDias: 5 });
+const soLeite = tratamento({ dataInicio: dia(20, 10), dataFim: dia(20, 10), carenciaLeiteDias: 5 });
 check(fimDaCarencia(soLeite, false) === null, 'carência no leite é ignorada em fazenda de corte');
 check(formatDataBR(fimDaCarencia(soLeite, true)!) === '25/10/2026', 'carência no leite conta em fazenda de leite');
 const comFim = tratamento({ dataInicio: dia(10, 10), dataFim: dia(15, 10), carenciaCarneDias: 7 });
@@ -133,8 +136,73 @@ check(
   'alerta mostra a carência mais longa ainda ativa'
 );
 check(
-  carenciaAte([tratamento({ dataInicio: dia(14, 10), carenciaCarneDias: 10 })], false, HOJE) !== null,
+  carenciaAte([tratamento({ dataInicio: dia(14, 10), dataFim: dia(14, 10), carenciaCarneDias: 10 })], false, HOJE) !== null,
   'último dia da carência (hoje) ainda está em carência'
 );
+const continuo = tratamento({ id: 'c', dataInicio: dia(1, 10), carenciaCarneDias: 5 });
+check(formatDataBR(fimDaCarencia(continuo, false, [], HOJE)!) === '29/10/2026', 'sem fim e sem confirmação: conta de hoje (ainda em uso)');
+check(
+  formatDataBR(fimDaCarencia(continuo, false, [dia(10, 10), dia(12, 10)], HOJE)!) === '17/10/2026',
+  'com doses confirmadas: conta da última dose aplicada'
+);
+const comHorario = tratamento({ dataInicio: dia(20, 10), dataFim: dia(20, 10), horario: '06:00', intervaloHoras: 12, carenciaCarneDias: 2 });
+const fimComHora = fimDaCarencia(comHorario, false, [dia(20, 10)], HOJE)!;
+check(fimComHora.getDate() === 22 && fimComHora.getHours() === 18, 'fim da carência no horário da última dose do dia (18h)');
+check(fimDaCarencia(tratamento({ dataInicio: dia(30, 10), carenciaCarneDias: 5 }), false, [], HOJE) === null, 'tratamento que não começou não gera carência');
+check(
+  carenciaAte([continuo], false, HOJE, [{ tratamentoId: 'c', dia: dia(10, 10) }]) === null,
+  'carenciaAte usa as doses confirmadas do tratamento'
+);
+
+// Alerta principal (24/10/2026 é sábado)
+const AGORA = new Date(2026, 9, 24, 10, 0);
+const alerta = (parcial: Partial<DadosAlerta>) =>
+  alertaPrincipal(
+    {
+      animal: { dataNascimento: mesesAtras(60) },
+      fase: 'vaca',
+      tratamentos: [],
+      dosesConfirmadas: [],
+      coberturaAberta: null,
+      produzLeite: true,
+      ...parcial,
+    },
+    AGORA
+  );
+const remedio = (parcial: Partial<Tratamento>) =>
+  tratamento({ id: 'd', medicamento: 'Antibiótico', dataInicio: dia(20, 10), ...parcial });
+
+check(alerta({}) === null, 'sem nada pendente, sem alerta');
+const emCarencia = alerta({
+  tratamentos: [remedio({ horario: '06:00', carenciaLeiteDias: 3 })],
+  coberturaAberta: { previsaoParto: dia(30, 10) },
+});
+check(emCarencia?.tipo === 'carencia' && emCarencia.texto === 'Em carência até 27/10', 'carência vem antes de dose e parto');
+check(
+  alerta({ tratamentos: [remedio({ horario: '06:00', intervaloHoras: 8 })] })?.texto === 'Dose pendente: Antibiótico 14:00',
+  'dose pendente mostra o próximo horário do dia (06, 14, 22 → 14:00)'
+);
+check(alerta({ tratamentos: [remedio({})] })?.texto === 'Dose de hoje: Antibiótico', 'dose sem horário: "Dose de hoje"');
+check(
+  alerta({ tratamentos: [remedio({ horario: '06:00' })] })?.texto === 'Dose pendente: Antibiótico 06:00',
+  'horário já passado continua pendente até confirmar'
+);
+check(
+  alerta({ tratamentos: [remedio({})], dosesConfirmadas: [{ tratamentoId: 'd', dia: dia(24, 10) }] }) === null,
+  'dose de hoje confirmada não gera alerta'
+);
+check(alerta({ tratamentos: [remedio({ diasSemana: [2, 4, 6] })] }) === null, 'sábado fora da agenda seg/qua/sex não tem dose');
+check(
+  alerta({ tratamentos: [remedio({})], coberturaAberta: { previsaoParto: dia(30, 10) } })?.tipo === 'dose',
+  'dose vem antes do parto'
+);
+check(alerta({ coberturaAberta: { previsaoParto: dia(8, 11) } })?.texto === 'Parto previsto 08/11', 'parto previsto em até 15 dias');
+check(alerta({ coberturaAberta: { previsaoParto: dia(9, 11) } }) === null, 'parto a mais de 15 dias não gera alerta');
+check(alerta({ coberturaAberta: { previsaoParto: dia(20, 10) } })?.texto === 'Parto atrasado', 'previsão vencida: parto atrasado');
+check(
+  alerta({ fase: 'novilha', animal: { dataNascimento: mesesAtras(31) } })?.texto === 'Novilha com mais de 30 meses sem parto',
+  'novilha com 31 meses sem parto gera alerta'
+);
+check(alerta({ fase: 'novilha', animal: { dataNascimento: mesesAtras(30) } }) === null, 'novilha com 30 meses ainda não');
 
 console.log('\n🎉 TODAS AS REGRAS PASSARAM!\n');
