@@ -766,6 +766,51 @@ if (!(parseDecimal(peso) > 0)) {
 - **Data máxima = hoje** em todos: são registros de algo que já aconteceu.
 - **Saída:** "Venda / Morte / Descarte" mapeiam para o status (`vendido`, `morto`, `descarte`). O subtítulo avisa que o histórico fica guardado, porque o produtor pode ter medo de "apagar" o animal.
 
-**Pendente:** ligar o botão "Outros registros" (F6 + F7) na ficha (`AnimalDetalheScreen`, F8 do full-stack). A ficha precisa passar `touros` (machos ativos) e `reprodutiva = ficha.podeReproduzir`.
+**Ligação na ficha:** quem liga é o full-stack, dono do `AnimalDetalheScreen` (F8), com o snippet repassado pelo Líder Técnico. `touros = useRebanho().filter(sexo === 'M')` e `reprodutiva = ficha.podeReproduzir`.
+
+**Validação:** `tsc` isolado OK.
+
+**Commit:** `7965910`
+
+## F2 · `FichaResumo`: topo da Ficha Animal
+
+`src/features/rebanho/components/FichaResumo.tsx` (novo) + `ResumoLinha.tsx` (extraído)
+
+```tsx
+export function FichaResumo({ ficha, alerta }: FichaResumoProps) {
+  const { animal, fase, idade, situacaoLeite, peso, ultimoParto, podeReproduzir } = ficha;
+  const titulo = animal.nome ? `${animal.nome} · ${animal.brinco}` : `Brinco ${animal.brinco}`;
+  const subtitulo = [FASE_LABEL[fase], idade, animal.raca].filter(Boolean).join(' · ');
+  // perfil (🐮 + título + "Vaca · 4 anos · Girolando" + badge Em lactação/Seca)
+  // alerta (InfoBanner), se houver
+  // card: Peso (+ ganho), Produção de Leite*, Ração*, Crias**, Último parto*
+}
+
+/** "+12 kg em 30 dias", ou null quando só há uma pesagem. */
+function textoDoGanho(peso: PesoAtual | null): string | null { … }
+```
+\* só quando preenchido · \*\* só para novilha/vaca
+
+**O que foi feito:** o bloco de cima da ficha, com perfil, alerta e um card de números. Ele recebe o `FichaAnimal` pronto (do `useFichaAnimal`, contrato em `@/dtos`) e não faz nenhuma consulta.
+
+**Por quê**
+- **Só exibe:** quem calcula fase, idade, situação do leite e ganho de peso é o `useFichaAnimal`/back-end. O componente fica testável só com props e não duplica regra.
+- **Linhas condicionais:** na ficha (diferente da lista do Rebanho, que precisa de colunas alinhadas), um "—" em leite/ração de um touro só polui. A linha aparece quando há dado, seguindo o comentário do esqueleto da ficha: "Produção de Leite só quando preenchida". Crias aparece só para novilha/vaca (`podeReproduzir`).
+- **Ganho de peso junto do peso:** "+12 kg em 30 dias" em verde e pequeno, embaixo do valor. É a informação que o produtor quer ao pesar, e o `PesoAtual` já traz `ganhoKg` e `diasDesdeAnterior`.
+- **Subtítulo com `filter(Boolean)`:** sem idade ou sem raça, não sobra " ·  · ".
+- **Situação do leite como badge à direita:** "Em lactação" (verde) ou "Seca" (cinza). Só aparece em fazenda de leite e para vaca, porque o `situacaoLeite` já vem `null` nos outros casos.
+- **`alerta` é prop opcional:** o `FichaAnimal` não tem alerta. A ficha passa o mesmo texto de carência da lista, quando houver.
+
+### `ResumoLinha` extraído
+
+```tsx
+export function ResumoLinha({ label, children }: ResumoLinhaProps) {
+  // texto/número vira <Text> em negrito; elemento (ex.: MilkAmount) entra como está
+}
+```
+
+**Por quê:** a linha "rótulo ..... valor" estava dentro do `ResumoAnimalCard` e passou a ser usada também no `FichaResumo`. Ela aceita texto direto (`<ResumoLinha label="Crias">{3}</ResumoLinha>`), o que tirou o `<Text style={styles.value}>` repetido do `ResumoAnimalCard` (−32 linhas, mesmo visual).
+
+**Pendente:** o full-stack troca a "Identificação do Animal" do `AnimalDetalheScreen` por `<FichaResumo ficha={ficha} alerta={…} />` (placeholder "A. F2").
 
 **Validação:** `tsc` isolado OK.
