@@ -21,8 +21,8 @@ const SEM_VALOR = '—';
 
 /**
  * Ficha Animal (tela 3 do Figma, antes "Tratamento Animal").
- * Blocos na ordem do esboço aprovado: resumo, tratamento, reprodução, próximos
- * e histórico. O sub-banner "✓ Tratamento Animal" só aparece com tratamento
+ * Blocos na ordem do esboço aprovado: resumo, tratamento, reprodução e próximos
+ * (o histórico saiu do escopo da Sprint 2). O sub-banner "✓ Tratamento Animal" só aparece com tratamento
  * em andamento. Os blocos marcados com o nome do componente são do front-end e
  * entram quando ele commitar; o Histórico é opcional e pode ficar de fora.
  */
@@ -91,7 +91,6 @@ export default function AnimalDetalheScreen() {
       ) : null}
 
       {/* D. F5 ProximosCard + aviso do limite de notificações (contagemNotificacoes) */}
-      {/* E. F5 LinhaDoTempo (Histórico): opcional, sai primeiro se o prazo apertar */}
 
       <NovoTratamentoForm
         visible={modalVisible}
