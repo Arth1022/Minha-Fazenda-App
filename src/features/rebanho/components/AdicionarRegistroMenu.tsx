@@ -2,13 +2,13 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { FormModal } from '@/components/forms';
-import { AgroColors, Radius, Spacing, Typography } from '@/constants/theme';
+import { AppIcon } from '@/components/ui';
+import { AgroColors, IconSize, Radius, Spacing, Typography } from '@/constants/theme';
 
 export type TipoRegistro = 'pesagem' | 'cobertura' | 'parto' | 'saida';
 
 interface OpcaoRegistro {
   tipo: TipoRegistro;
-  icone: string;
   titulo: string;
   descricao: string;
   /** Só aparece para fêmea em idade reprodutiva (novilha ou vaca) */
@@ -16,25 +16,23 @@ interface OpcaoRegistro {
 }
 
 const OPCOES: OpcaoRegistro[] = [
-  { tipo: 'pesagem', icone: '⚖', titulo: 'Pesagem', descricao: 'Registrar o peso do animal' },
+  { tipo: 'pesagem', titulo: 'Pesagem', descricao: 'Registrar o peso do animal' },
   {
     tipo: 'cobertura',
-    icone: '🐂',
     titulo: 'Cobertura',
     descricao: 'Monta natural ou inseminação',
     reprodutiva: true,
   },
   {
     tipo: 'parto',
-    icone: '🐄',
     titulo: 'Parto',
     descricao: 'Registrar o nascimento da cria',
     reprodutiva: true,
   },
-  { tipo: 'saida', icone: '🚪', titulo: 'Saída', descricao: 'Venda, morte ou descarte' },
+  { tipo: 'saida', titulo: 'Saída', descricao: 'Venda, morte ou descarte' },
 ];
 
-export interface OutrosRegistrosMenuProps {
+export interface AdicionarRegistroMenuProps {
   visible: boolean;
   onClose: () => void;
   /** Fêmea novilha ou vaca: mostra Cobertura e Parto */
@@ -42,31 +40,28 @@ export interface OutrosRegistrosMenuProps {
   onSelect: (tipo: TipoRegistro) => void;
 }
 
-/** Menu "Outros registros" da ficha: Pesagem, Cobertura, Parto e Saída. */
-export function OutrosRegistrosMenu({
+/** Menu "Adicionar" da ficha: Pesagem, Cobertura, Parto e Saída. */
+export function AdicionarRegistroMenu({
   visible,
   onClose,
   reprodutiva,
   onSelect,
-}: OutrosRegistrosMenuProps) {
+}: AdicionarRegistroMenuProps) {
   const opcoes = OPCOES.filter((opcao) => reprodutiva || !opcao.reprodutiva);
 
   return (
-    <FormModal visible={visible} title="Outros registros" onClose={onClose}>
+    <FormModal visible={visible} title="Adicionar" onClose={onClose}>
       {opcoes.map((opcao) => (
         <Pressable
           key={opcao.tipo}
           onPress={() => onSelect(opcao.tipo)}
           accessibilityRole="button"
           style={({ pressed }) => [styles.opcao, pressed && styles.pressed]}>
-          <View style={styles.iconeCircle}>
-            <Text style={styles.icone}>{opcao.icone}</Text>
-          </View>
           <View style={styles.textos}>
             <Text style={styles.titulo}>{opcao.titulo}</Text>
             <Text style={styles.descricao}>{opcao.descricao}</Text>
           </View>
-          <Text style={styles.seta}>›</Text>
+          <AppIcon name="chevronRight" size={IconSize.lg} color={AgroColors.textMuted} />
         </Pressable>
       ))}
     </FormModal>
@@ -87,17 +82,6 @@ const styles = StyleSheet.create({
   pressed: {
     backgroundColor: AgroColors.mintSurface,
   },
-  iconeCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.full,
-    backgroundColor: AgroColors.mintBg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  icone: {
-    fontSize: 18,
-  },
   textos: {
     flex: 1,
     gap: Spacing.half,
@@ -107,9 +91,5 @@ const styles = StyleSheet.create({
   },
   descricao: {
     ...Typography.caption,
-  },
-  seta: {
-    ...Typography.screenTitle,
-    color: AgroColors.textMuted,
   },
 });

@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import DateTimePicker, {
-  DateTimePickerEvent,
+  type DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
 
-import { AgroColors, Radius, Spacing } from '@/constants/theme';
+import { AppIcon } from '@/components/ui/AppIcon';
+import { AgroColors, IconSize, Radius, Spacing, Typography } from '@/constants/theme';
 
 export interface TimeWheelPickerProps {
+  /** Rótulo exibido acima do campo */
+  label?: string;
   /** Valor atual no formato "HH:MM" (ex.: "05:30") */
   value: string;
   /** Callback disparado sempre que hora ou minuto mudam ("HH:MM") */
@@ -27,65 +30,41 @@ function timeStringToDate(value: string): Date {
 }
 
 /**
- * Seletor de horário nativo do sistema operacional (@react-native-community/datetimepicker).
+ * Campo compacto de horário (mesmo visual do DateField): mostra "08:00" e abre o
+ * seletor nativo ao tocar (diálogo no Android, roda abaixo do campo no iOS).
  */
-export function TimeWheelPicker({ value, onChange }: TimeWheelPickerProps) {
-  const [showAndroidPicker, setShowAndroidPicker] = useState(false);
-  const dateValue = timeStringToDate(value);
+export function TimeWheelPicker({ label, value, onChange }: TimeWheelPickerProps) {
+  const [aberto, setAberto] = useState(false);
 
-  const handlePickerChange = (
-    event: DateTimePickerEvent,
-    selectedDate?: Date
-  ) => {
-    if (Platform.OS === 'android') {
-      setShowAndroidPicker(false);
-    }
-
+  const handlePickerChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+    setAberto(Platform.OS === 'ios');
     if (event.type === 'set' && selectedDate) {
-      const nextTime = `${pad2(selectedDate.getHours())}:${pad2(
-        selectedDate.getMinutes()
-      )}`;
-      onChange(nextTime);
+      onChange(`${pad2(selectedDate.getHours())}:${pad2(selectedDate.getMinutes())}`);
     }
   };
 
-  if (Platform.OS === 'ios') {
-    return (
-      <View style={styles.iosContainer}>
-        <DateTimePicker
-          value={dateValue}
-          mode="time"
-          is24Hour
-          display="spinner"
-          onChange={handlePickerChange}
-        />
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      <Text style={styles.fieldLabel}>Horário</Text>
+      {label ? <Text style={styles.label}>{label}</Text> : null}
 
       <Pressable
-        onPress={() => setShowAndroidPicker(true)}
-        style={({ pressed }) => [
-          styles.timeButton,
-          pressed && styles.timeButtonPressed,
-        ]}>
-        <Text style={styles.timeValueText}>{value}</Text>
-        <Text style={styles.changeHintText}>Selecionar horário</Text>
+        onPress={() => setAberto((prev) => !prev)}
+        accessibilityRole="button"
+        accessibilityLabel={label ? `${label}: ${value}` : value}
+        style={({ pressed }) => [styles.botao, pressed && styles.pressed]}>
+        <Text style={styles.valor}>{value}</Text>
+        <AppIcon name="clock" size={IconSize.sm} color={AgroColors.textMuted} />
       </Pressable>
 
-      {showAndroidPicker && (
+      {aberto ? (
         <DateTimePicker
-          value={dateValue}
+          value={timeStringToDate(value)}
           mode="time"
           is24Hour
           display="spinner"
           onChange={handlePickerChange}
         />
-      )}
+      ) : null}
     </View>
   );
 }
@@ -95,38 +74,26 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: Spacing.xs,
   },
-  iosContainer: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fieldLabel: {
-    fontSize: 13,
+  label: {
+    ...Typography.caption,
+    color: AgroColors.textSecondary,
     fontWeight: '600',
-    color: AgroColors.textPrimary,
   },
-  timeButton: {
+  botao: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: AgroColors.mintSurface,
-    borderWidth: 1.5,
-    borderColor: AgroColors.mintBorder,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
     borderRadius: Radius.md,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: AgroColors.borderStrong,
+    backgroundColor: AgroColors.inputBg,
   },
-  timeButtonPressed: {
-    opacity: 0.85,
+  pressed: {
+    opacity: 0.8,
   },
-  timeValueText: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: AgroColors.primaryDark,
-  },
-  changeHintText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: AgroColors.primary,
+  valor: {
+    ...Typography.bodyBold,
   },
 });

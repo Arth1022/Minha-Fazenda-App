@@ -9,6 +9,9 @@ import { adicionarDias, diasEntre, inicioDoDia, parseHorario } from '@/utils/dat
 /** Dias da semana no padrão do expo-notifications: 1 = domingo ... 7 = sábado. */
 export const TODOS_OS_DIAS = [1, 2, 3, 4, 5, 6, 7];
 
+/** O aviso da dose toca sempre 15 minutos antes (não é escolha do produtor). */
+export const AVISO_DOSE_MINUTOS_ANTES = 15;
+
 const MINUTOS_NO_DIA = 24 * 60;
 /** Teto de dias percorridos num tratamento sem fim (evita laço infinito com agenda inválida). */
 const MAX_DIAS_SEM_FIM = 366;

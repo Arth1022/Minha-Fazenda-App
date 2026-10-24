@@ -1,43 +1,30 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { AppIcon } from '@/components/ui/AppIcon';
 import { Card } from '@/components/ui/Card';
 import { MilkAmount } from '@/components/ui/MilkAmount';
-import { AgroColors, Spacing, Typography } from '@/constants/theme';
+import { AgroColors, IconSize, Spacing, Typography } from '@/constants/theme';
 import type { AnimalComFase } from '@/dtos';
 import { formatMedida } from '@/utils/formatters';
+import { AnimalAvatar } from './AnimalAvatar';
 
 export interface AnimalCardProps {
   animal: AnimalComFase;
-  selected?: boolean;
   onPress: () => void;
 }
 
 /**
  * Cartão de animal na lista de "Gerenciamento Rebanho" (Tela 2 do Figma).
- * Exibe avatar circular, título/brinco, raça, peso e produção de leite,
- * destacando com borda verde quando selecionado.
+ * Exibe avatar circular, título/brinco, raça, peso e produção de leite.
  */
-export function AnimalCard({
-  animal,
-  selected = false,
-  onPress,
-}: AnimalCardProps) {
+export function AnimalCard({ animal, onPress }: AnimalCardProps) {
   const displayTitle = animal.nome || `Brinco ${animal.brinco}`;
 
   return (
-    <Card
-      variant={selected ? 'selected' : 'default'}
-      padding="md"
-      onPress={onPress}>
+    <Card padding="md" onPress={onPress}>
       <View style={styles.row}>
-        <View
-          style={[
-            styles.avatarCircle,
-            selected && styles.avatarCircleSelected,
-          ]}>
-          <Text style={styles.avatarEmoji}>🐮</Text>
-        </View>
+        <AnimalAvatar />
 
         <View style={styles.infoCol}>
           <Text style={styles.titleText} numberOfLines={1}>
@@ -49,17 +36,20 @@ export function AnimalCard({
 
           <View style={styles.metricsInline}>
             <View style={styles.metricBadge}>
-              <Text style={styles.scaleIcon}>⚖</Text>
+              <AppIcon name="weight" size={IconSize.sm} color={AgroColors.textSecondary} />
               <Text style={styles.weightText}>
                 {formatMedida(animal.pesoKg, 'kg', 0)}
               </Text>
             </View>
 
-            <MilkAmount liters={animal.producaoLeiteL} />
+            <MilkAmount liters={animal.producaoLeiteL} variant="plain" />
           </View>
 
           {animal.alerta ? (
-            <Text style={styles.alertText}>⚠ {animal.alerta}</Text>
+            <View style={styles.metricBadge}>
+              <AppIcon name="alert" size={IconSize.sm} color={AgroColors.warning} />
+              <Text style={styles.alertText}>{animal.alerta}</Text>
+            </View>
           ) : null}
         </View>
       </View>
@@ -72,20 +62,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
-  },
-  avatarCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarCircleSelected: {
-    backgroundColor: '#DCFCE7',
-  },
-  avatarEmoji: {
-    fontSize: 22,
   },
   infoCol: {
     flex: 1,
@@ -108,9 +84,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.one,
-  },
-  scaleIcon: {
-    ...Typography.micro,
   },
   weightText: {
     ...Typography.captionBold,

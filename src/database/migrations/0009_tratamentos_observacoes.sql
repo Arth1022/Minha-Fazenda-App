@@ -1,0 +1,1 @@
+ALTER TABLE `tratamentos` ADD `observacoes` text;

@@ -7,6 +7,7 @@ import type { FichaAnimal, PesoAtual } from '@/dtos';
 import { formatDataBR } from '@/utils/date';
 import { formatDecimal, formatMedida } from '@/utils/formatters';
 import { FASE_LABEL, SITUACAO_LEITE_LABEL } from '../services/fase';
+import { AnimalAvatar } from './AnimalAvatar';
 import { ResumoLinha } from './ResumoLinha';
 
 /** "+12 kg em 30 dias", ou null quando só há uma pesagem. */
@@ -29,18 +30,17 @@ export interface FichaResumoProps {
 export function FichaResumo({ ficha, alerta }: FichaResumoProps) {
   const { animal, fase, idade, situacaoLeite, peso, ultimoParto, podeReproduzir } = ficha;
   const titulo = animal.nome ? `${animal.nome} · ${animal.brinco}` : `Brinco ${animal.brinco}`;
-  const subtitulo = [FASE_LABEL[fase], idade, animal.raca].filter(Boolean).join(' · ');
+  const subtitulo = [FASE_LABEL[fase], animal.raca].filter(Boolean).join(' · ');
   const ganho = textoDoGanho(peso);
 
   return (
     <View style={styles.container}>
       <View style={styles.perfil}>
-        <View style={styles.avatarCircle}>
-          <Text style={styles.avatarEmoji}>🐮</Text>
-        </View>
+        <AnimalAvatar size={52} />
         <View style={styles.perfilTextos}>
           <Text style={styles.titulo} numberOfLines={1}>
             {titulo}
+            {idade ? <Text style={styles.idade}> · {idade}</Text> : null}
           </Text>
           <Text style={styles.subtitulo}>{subtitulo}</Text>
         </View>
@@ -93,23 +93,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.md,
   },
-  avatarCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: AgroColors.mintBg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarEmoji: {
-    fontSize: 26,
-  },
   perfilTextos: {
     flex: 1,
     gap: Spacing.half,
   },
   titulo: {
     ...Typography.screenTitle,
+  },
+  idade: {
+    color: AgroColors.textSecondary,
+    fontWeight: '600',
   },
   subtitulo: {
     ...Typography.caption,

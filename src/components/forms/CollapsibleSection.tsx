@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { AgroColors, Spacing, Typography } from '@/constants/theme';
+import { AppIcon } from '@/components/ui/AppIcon';
+import { AgroColors, IconSize, Spacing, Typography } from '@/constants/theme';
 
 export interface CollapsibleSectionProps {
   title: string;
@@ -26,7 +27,11 @@ export function CollapsibleSection({
         accessibilityState={{ expanded: open }}
         style={styles.header}>
         <Text style={styles.title}>{title}</Text>
-        <Text style={styles.chevron}>{open ? '▴' : '▾'}</Text>
+        <AppIcon
+          name={open ? 'chevronUp' : 'chevronDown'}
+          size={IconSize.lg}
+          color={AgroColors.primary}
+        />
       </Pressable>
 
       {open ? <View style={styles.content}>{children}</View> : null}
@@ -47,10 +52,6 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
   },
   title: {
-    ...Typography.bodyBold,
-    color: AgroColors.primary,
-  },
-  chevron: {
     ...Typography.bodyBold,
     color: AgroColors.primary,
   },

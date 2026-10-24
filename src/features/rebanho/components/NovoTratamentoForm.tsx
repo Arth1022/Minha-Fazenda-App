@@ -1,10 +1,9 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Controller } from 'react-hook-form';
 
 import {
   AutocompleteInput,
-  AvisoPicker,
   CollapsibleSection,
   ControlledInput,
   DateField,
@@ -14,7 +13,7 @@ import {
   TimeWheelPicker,
   WeekdayPicker,
 } from '@/components/forms';
-import { AgroColors, Radius, Spacing, Typography } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import { useNovoTratamentoForm } from '../hooks/useNovoTratamentoForm';
 
 export interface NovoTratamentoFormProps {
@@ -27,8 +26,8 @@ export interface NovoTratamentoFormProps {
 
 /**
  * Modal "Novo Tratamento": o único formulário de dose (remédio ou vacina).
- * À vista ficam remédio, dose, dias e horário; aviso, período e carência vão
- * em "Mais detalhes". A frase no fim resume a agenda enquanto se preenche.
+ * À vista ficam remédio, dose, dias, horário e carência; período e observações
+ * vão em "Mais detalhes". O aviso é fixo (15 min antes), não aparece aqui.
  */
 export function NovoTratamentoForm({
   visible,
@@ -41,11 +40,9 @@ export function NovoTratamentoForm({
     submit,
     reset,
     saving,
-    produzLeite,
     todoDia,
     comecaEm,
     semFim,
-    resumo,
     placeholderCarencia,
     sugestoes,
   } = useNovoTratamentoForm(animalId, onClose);
@@ -63,7 +60,7 @@ export function NovoTratamentoForm({
       subtitle={`Remédio ou vacina para ${identificacao}`}
       onClose={onClose}
       onSubmit={submit}
-      submitLabel="Salvar Tratamento"
+      submitLabel="SALVAR"
       loading={saving}>
       <Controller
         control={control}
@@ -107,24 +104,24 @@ export function NovoTratamentoForm({
         />
       ) : null}
 
-      <View style={styles.campo}>
-        <Text style={styles.label}>Horário</Text>
-        <Controller
-          control={control}
-          name="horario"
-          render={({ field }) => <TimeWheelPicker value={field.value} onChange={field.onChange} />}
-        />
-      </View>
+      <Controller
+        control={control}
+        name="horario"
+        render={({ field }) => (
+          <TimeWheelPicker label="Horário" value={field.value} onChange={field.onChange} />
+        )}
+      />
+
+      <ControlledInput
+        control={control}
+        name="carenciaDias"
+        label="Carência"
+        placeholder={placeholderCarencia}
+        keyboardType="number-pad"
+        suffix="dias"
+      />
 
       <CollapsibleSection title="Mais detalhes">
-        <Controller
-          control={control}
-          name="avisoMinutosAntes"
-          render={({ field }) => (
-            <AvisoPicker label="Avisar" value={field.value} onChange={field.onChange} />
-          )}
-        />
-
         <View style={styles.duasColunas}>
           <View style={styles.coluna}>
             <Controller
@@ -166,46 +163,21 @@ export function NovoTratamentoForm({
           )}
         />
 
-        <View style={styles.duasColunas}>
-          {produzLeite ? (
-            <ControlledInput
-              control={control}
-              name="carenciaLeiteDias"
-              containerStyle={styles.coluna}
-              label="Carência no leite"
-              placeholder={placeholderCarencia}
-              keyboardType="number-pad"
-              suffix="dias"
-            />
-          ) : null}
-          <ControlledInput
-            control={control}
-            name="carenciaCarneDias"
-            containerStyle={styles.coluna}
-            label="Carência na carne"
-            placeholder={placeholderCarencia}
-            keyboardType="number-pad"
-            suffix="dias"
-          />
-        </View>
+        <ControlledInput
+          control={control}
+          name="observacoes"
+          label="Observações"
+          placeholder="Ex: aplicar no pescoço, lote do frasco"
+          multiline
+          numberOfLines={3}
+          style={styles.observacoes}
+        />
       </CollapsibleSection>
-
-      <View style={styles.resumo}>
-        <Text style={styles.resumoTexto}>{resumo}</Text>
-      </View>
     </FormModal>
   );
 }
 
 const styles = StyleSheet.create({
-  campo: {
-    gap: 5,
-  },
-  label: {
-    ...Typography.caption,
-    color: AgroColors.textSecondary,
-    fontWeight: '600',
-  },
   duasColunas: {
     flexDirection: 'row',
     gap: Spacing.sm,
@@ -213,13 +185,8 @@ const styles = StyleSheet.create({
   coluna: {
     flex: 1,
   },
-  resumo: {
-    backgroundColor: AgroColors.mintBg,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-  },
-  resumoTexto: {
-    ...Typography.bodyMedium,
-    color: AgroColors.primaryDark,
+  observacoes: {
+    minHeight: 72,
+    textAlignVertical: 'top',
   },
 });

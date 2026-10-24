@@ -11,7 +11,22 @@ export type AppIconName =
   | 'edit'
   | 'plus'
   | 'x'
-  | 'milk';
+  | 'milk'
+  | 'clock'
+  | 'tag'
+  | 'weight'
+  | 'alert'
+  | 'check'
+  | 'chevronDown'
+  | 'chevronUp'
+  | 'chevronRight';
+
+/** Setas simples (Feather): um único traço em "V". */
+const CHEVRON_PATH: Record<'chevronDown' | 'chevronUp' | 'chevronRight', string> = {
+  chevronDown: 'M6 9l6 6 6-6',
+  chevronUp: 'M18 15l-6-6-6 6',
+  chevronRight: 'M9 18l6-6-6-6',
+};
 
 export interface AppIconProps {
   name: AppIconName;
@@ -164,6 +179,103 @@ export function AppIcon({ name, size = IconSize.lg, color = '#64748B' }: AppIcon
           <Path d="M8 2h8" />
           <Path d="M9 2v2.789a4 4 0 0 1-.672 2.219l-.656.984A4 4 0 0 0 7 10.212V20a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-9.789a4 4 0 0 0-.672-2.219l-.656-.984A4 4 0 0 1 15 4.788V2" />
           <Path d="M7 15a6.472 6.472 0 0 1 5 0 6.47 6.47 0 0 0 5 0" />
+        </Svg>
+      );
+
+    case 'clock':
+      return (
+        <Svg
+          width={size}
+          height={size}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={color}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round">
+          <Circle cx="12" cy="12" r="10" />
+          <Path d="M12 6v6l4 2" />
+        </Svg>
+      );
+
+    case 'tag':
+      return (
+        <Svg
+          width={size}
+          height={size}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={color}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round">
+          <Path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+          <Line x1="7" y1="7" x2="7.01" y2="7" />
+        </Svg>
+      );
+
+    case 'weight':
+      return (
+        <Svg
+          width={size}
+          height={size}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={color}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round">
+          <Circle cx="12" cy="5" r="3" />
+          <Path d="M6.5 8a2 2 0 0 0-1.905 1.46L2.1 18.5A2 2 0 0 0 4 21h16a2 2 0 0 0 1.925-2.54L19.4 9.5A2 2 0 0 0 17.48 8Z" />
+        </Svg>
+      );
+
+    case 'alert':
+      return (
+        <Svg
+          width={size}
+          height={size}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={color}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round">
+          <Path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+          <Line x1="12" y1="9" x2="12" y2="13" />
+          <Line x1="12" y1="17" x2="12.01" y2="17" />
+        </Svg>
+      );
+
+    case 'check':
+      return (
+        <Svg
+          width={size}
+          height={size}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={color}
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round">
+          <Path d="M20 6L9 17l-5-5" />
+        </Svg>
+      );
+
+    case 'chevronDown':
+    case 'chevronUp':
+    case 'chevronRight':
+      return (
+        <Svg
+          width={size}
+          height={size}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={color}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round">
+          <Path d={CHEVRON_PATH[name]} />
         </Svg>
       );
 

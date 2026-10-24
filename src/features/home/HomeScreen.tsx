@@ -117,6 +117,7 @@ export default function HomeScreen() {
         />
 
         <TimeWheelPicker
+          label="Horário"
           value={horarioPrevisto}
           onChange={setHorarioPrevisto}
         />

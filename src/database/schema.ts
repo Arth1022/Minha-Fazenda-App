@@ -197,6 +197,8 @@ export const tratamentos = sqliteTable(
       .default(true),
     carenciaLeiteDias: integer('carencia_leite_dias'),
     carenciaCarneDias: integer('carencia_carne_dias'),
+    /** Anotação livre do produtor (via de aplicação, lote, veterinário...) */
+    observacoes: text('observacoes'),
     /** Liga os tratamentos aplicados em vários animais de uma vez */
     grupoAplicacaoId: text('grupo_aplicacao_id'),
     criadoPor: criadoPor(),

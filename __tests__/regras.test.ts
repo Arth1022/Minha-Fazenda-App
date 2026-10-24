@@ -43,6 +43,7 @@ function tratamento(parcial: Partial<Tratamento>): Tratamento {
     notificacaoAtiva: true,
     carenciaLeiteDias: null,
     carenciaCarneDias: null,
+    observacoes: null,
     grupoAplicacaoId: null,
     criadoPor: null,
     createdAt: HOJE,

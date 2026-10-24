@@ -10,8 +10,9 @@ import {
   View,
 } from 'react-native';
 
+import { AppIcon } from '@/components/ui/AppIcon';
 import { Button } from '@/components/ui/Button';
-import { AgroColors, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import { AgroColors, IconSize, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 
 export interface FormModalProps {
   visible: boolean;
@@ -65,7 +66,7 @@ export function FormModal({
               style={styles.closeBtn}
               accessibilityRole="button"
               accessibilityLabel="Fechar modal">
-              <Text style={styles.closeText}>✕</Text>
+              <AppIcon name="x" size={IconSize.md} color={AgroColors.textSecondary} />
             </Pressable>
           </View>
 
@@ -146,11 +147,6 @@ const styles = StyleSheet.create({
     backgroundColor: AgroColors.subtleBg,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  closeText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: AgroColors.textSecondary,
   },
   bodyScroll: {
     maxHeight: 380,

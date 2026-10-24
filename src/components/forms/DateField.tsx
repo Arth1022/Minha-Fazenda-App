@@ -4,7 +4,8 @@ import DateTimePicker, {
   type DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
 
-import { AgroColors, Radius, Spacing, Typography } from '@/constants/theme';
+import { AppIcon } from '@/components/ui/AppIcon';
+import { AgroColors, IconSize, Radius, Spacing, Typography } from '@/constants/theme';
 import { diasEntre, formatDataBR } from '@/utils/date';
 
 /** "Hoje", "Ontem" ou a data "DD/MM/AAAA". */
@@ -17,8 +18,13 @@ function textoDaData(data: Date): string {
 
 export interface DateFieldProps {
   label?: string;
-  value: Date;
+  /** Null mostra o `placeholder` (ex.: tratamento sem data de fim) */
+  value: Date | null;
   onChange: (data: Date) => void;
+  /** Texto exibido quando não há data */
+  placeholder?: string;
+  /** Só exibe a data, sem abrir o calendário */
+  disabled?: boolean;
   /** Data máxima permitida (ex.: hoje, para registros que já aconteceram) */
   maximumDate?: Date;
   minimumDate?: Date;
@@ -29,6 +35,8 @@ export function DateField({
   label,
   value,
   onChange,
+  placeholder = '—',
+  disabled = false,
   maximumDate,
   minimumDate,
 }: DateFieldProps) {
@@ -45,15 +53,25 @@ export function DateField({
 
       <Pressable
         onPress={() => setAberto((prev) => !prev)}
+        disabled={disabled}
         accessibilityRole="button"
-        style={({ pressed }) => [styles.botao, pressed && styles.pressed]}>
-        <Text style={styles.valor}>{textoDaData(value)}</Text>
-        <Text style={styles.chevron}>▾</Text>
+        accessibilityState={{ disabled }}
+        style={({ pressed }) => [
+          styles.botao,
+          disabled && styles.botaoDisabled,
+          pressed && styles.pressed,
+        ]}>
+        <Text style={[styles.valor, disabled && styles.valorDisabled]}>
+          {value ? textoDaData(value) : placeholder}
+        </Text>
+        {disabled ? null : (
+          <AppIcon name="chevronDown" size={IconSize.md} color={AgroColors.textMuted} />
+        )}
       </Pressable>
 
       {aberto ? (
         <DateTimePicker
-          value={value}
+          value={value ?? minimumDate ?? new Date()}
           mode="date"
           display={Platform.OS === 'ios' ? 'inline' : 'default'}
           maximumDate={maximumDate}
@@ -86,14 +104,17 @@ const styles = StyleSheet.create({
     borderColor: AgroColors.borderStrong,
     backgroundColor: AgroColors.inputBg,
   },
+  botaoDisabled: {
+    backgroundColor: AgroColors.divider,
+    borderColor: AgroColors.border,
+  },
   pressed: {
     opacity: 0.8,
   },
   valor: {
     ...Typography.bodyBold,
   },
-  chevron: {
-    ...Typography.bodyBold,
+  valorDisabled: {
     color: AgroColors.textMuted,
   },
 });

@@ -7,11 +7,11 @@ import { Spacing } from '@/constants/theme';
 import { FichaResumo } from '../components/FichaResumo';
 import { NovoTratamentoForm } from '../components/NovoTratamentoForm';
 import {
-  OutrosRegistrosMenu,
+  AdicionarRegistroMenu,
   type TipoRegistro,
-} from '../components/OutrosRegistrosMenu';
+} from '../components/AdicionarRegistroMenu';
 import { RegistroForm } from '../components/registros/RegistroForm';
-import { ReproducaoCard } from '../components/ReproducaoCard';
+import { ReproducaoSecao } from '../components/ReproducaoSecao';
 import { TratamentoAtivoCard } from '../components/TratamentoAtivoCard';
 import { confirmarPrenhez } from '../data/reproducoes';
 import { useFichaAnimal } from '../hooks/useFichaAnimal';
@@ -22,8 +22,7 @@ const SEM_VALOR = '—';
 /**
  * Ficha Animal (tela 3 do Figma, antes "Tratamento Animal").
  * Blocos na ordem do esboço aprovado: resumo, tratamento, reprodução e próximos
- * (o histórico saiu do escopo da Sprint 2). O sub-banner "✓ Tratamento Animal"
- * só aparece com tratamento em andamento.
+ * (o histórico saiu do escopo da Sprint 2).
  */
 export default function AnimalDetalheScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -45,11 +44,7 @@ export default function AnimalDetalheScreen() {
     <ScreenContainer
       withTabInset={false}
       header={
-        <Header
-          title="Ficha Animal"
-          subBannerTitle={ativos.length > 0 ? 'Tratamento Animal' : undefined}
-          showBack
-        />
+        <Header title="Ficha Animal" showBack />
       }
       footer={
         <View style={styles.footerActions}>
@@ -61,7 +56,7 @@ export default function AnimalDetalheScreen() {
             onPress={() => setModalVisible(true)}
           />
           <Button
-            label="Outros registros"
+            label="Adicionar"
             variant="outline"
             size="lg"
             fullWidth
@@ -81,7 +76,7 @@ export default function AnimalDetalheScreen() {
 
       {/* C. Reprodução: só novilha e vaca */}
       {ficha?.podeReproduzir ? (
-        <ReproducaoCard
+        <ReproducaoSecao
           reproducao={ficha.reproducao}
           ultimoParto={ficha.ultimoParto}
           touros={touros}
@@ -98,7 +93,7 @@ export default function AnimalDetalheScreen() {
         onClose={() => setModalVisible(false)}
       />
 
-      <OutrosRegistrosMenu
+      <AdicionarRegistroMenu
         visible={menuVisible}
         reprodutiva={ficha?.podeReproduzir ?? false}
         onClose={() => setMenuVisible(false)}

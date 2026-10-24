@@ -3,7 +3,8 @@ import { desc, eq, isNotNull, max, or } from 'drizzle-orm';
 import { db, tratamentos } from '@/database';
 import type { NovoTratamento, Tratamento, UltimoUsoMedicamento } from '@/dtos';
 import { normalizarTexto } from '@/utils';
-import { errosDaAgenda, TODOS_OS_DIAS } from '../services/doses';
+import { inicioDoDia } from '@/utils/date';
+import { AVISO_DOSE_MINUTOS_ANTES, errosDaAgenda, TODOS_OS_DIAS } from '../services/doses';
 
 /** Tratamentos do animal, do início mais recente para o mais antigo. */
 export function tratamentosDoAnimal(animalId: string) {
@@ -85,22 +86,41 @@ export async function ultimoUsoDoMedicamento(
   };
 }
 
-/** Grava o tratamento. Recusa agenda inválida (ver `errosDaAgenda`). */
+/**
+ * Grava o tratamento com o aviso fixo de AVISO_DOSE_MINUTOS_ANTES. Recusa agenda
+ * inválida (ver `errosDaAgenda`).
+ */
 export async function createTratamento(
-  input: NovoTratamento
+  input: Omit<NovoTratamento, 'avisoMinutosAntes'>
 ): Promise<Tratamento> {
+  const valores = { ...input, avisoMinutosAntes: AVISO_DOSE_MINUTOS_ANTES };
   const erros = errosDaAgenda({
-    dataInicio: input.dataInicio,
-    dataFim: input.dataFim ?? null,
-    diasSemana: input.diasSemana ?? TODOS_OS_DIAS,
-    horario: input.horario ?? null,
-    intervaloHoras: input.intervaloHoras ?? null,
-    avisoMinutosAntes: input.avisoMinutosAntes ?? 0,
+    dataInicio: valores.dataInicio,
+    dataFim: valores.dataFim ?? null,
+    diasSemana: valores.diasSemana ?? TODOS_OS_DIAS,
+    horario: valores.horario ?? null,
+    intervaloHoras: valores.intervaloHoras ?? null,
+    avisoMinutosAntes: valores.avisoMinutosAntes,
   });
   if (erros.length > 0) throw new Error(erros.join('; '));
 
-  const [created] = await db.insert(tratamentos).values(input).returning();
+  const [created] = await db.insert(tratamentos).values(valores).returning();
   return created;
+}
+
+/**
+ * Muda o último dia do tratamento (estender ou encerrar antes). Recusa fim antes
+ * do início ou período sem nenhum dia de dose.
+ */
+export async function alterarFimDoTratamento(
+  tratamento: Tratamento,
+  dataFim: Date
+): Promise<void> {
+  const fim = inicioDoDia(dataFim);
+  const erros = errosDaAgenda({ ...tratamento, dataFim: fim });
+  if (erros.length > 0) throw new Error(erros.join('; '));
+
+  await db.update(tratamentos).set({ dataFim: fim }).where(eq(tratamentos.id, tratamento.id));
 }
 
 /**

@@ -3,11 +3,7 @@ import { useEffect, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { z } from 'zod';
 
-import {
-  TODOS_OS_DIAS,
-  type AvisoMinutos,
-  type IntervaloHoras,
-} from '@/components/forms';
+import { TODOS_OS_DIAS, type IntervaloHoras } from '@/components/forms';
 import type { DiaSemana, UltimoUsoMedicamento } from '@/dtos';
 import { MEDICAMENTOS_SUGERIDOS } from '@/constants/medicamentos';
 import { useFazenda } from '@/providers/FazendaProvider';
@@ -18,21 +14,12 @@ import {
   nomesDeMedicamentos,
   ultimoUsoDoMedicamento,
 } from '../data/tratamentos';
-import {
-  resumoDaAgenda,
-  temDoseNoPeriodo,
-  UMA_VEZ_POR_DIA,
-} from '../services/resumoTratamento';
+import { temDoseNoPeriodo, UMA_VEZ_POR_DIA } from '../services/agendaEmEdicao';
 
 export const HORARIO_PADRAO = '08:00';
 const DICA_BULA = 'Confira na bula';
 /** Espera o produtor parar de digitar antes de buscar o último uso do remédio. */
 const ESPERA_BUSCA_MS = 400;
-
-const diasDeCarencia = z
-  .string()
-  .trim()
-  .refine((v) => v === '' || isInteiro(v), 'Informe os dias em número inteiro.');
 
 export const novoTratamentoSchema = z
   .object({
@@ -41,12 +28,14 @@ export const novoTratamentoSchema = z
     diasSemana: z.array(z.custom<DiaSemana>()).min(1, 'Marque ao menos um dia.'),
     horario: z.string().regex(/^\d{2}:\d{2}$/, 'Escolha o horário.'),
     intervaloHoras: z.custom<IntervaloHoras>(),
-    avisoMinutosAntes: z.custom<AvisoMinutos>(),
     comecaEm: z.date(),
     ate: z.date(),
     semFim: z.boolean(),
-    carenciaLeiteDias: diasDeCarencia,
-    carenciaCarneDias: diasDeCarencia,
+    carenciaDias: z
+      .string()
+      .trim()
+      .refine((v) => v === '' || isInteiro(v), 'Informe os dias em número inteiro.'),
+    observacoes: z.string().trim(),
   })
   .refine(temDoseNoPeriodo, {
     path: ['diasSemana'],
@@ -55,7 +44,7 @@ export const novoTratamentoSchema = z
 
 export type NovoTratamentoFormValues = z.infer<typeof novoTratamentoSchema>;
 
-/** Padrões do formulário: dose única hoje às 08:00, aviso na hora. */
+/** Padrões do formulário: dose única hoje às 08:00. */
 function valoresIniciais(): NovoTratamentoFormValues {
   const hoje = inicioDoDia(new Date());
   return {
@@ -64,25 +53,26 @@ function valoresIniciais(): NovoTratamentoFormValues {
     diasSemana: [...TODOS_OS_DIAS],
     horario: HORARIO_PADRAO,
     intervaloHoras: UMA_VEZ_POR_DIA,
-    avisoMinutosAntes: 0,
     comecaEm: hoje,
     ate: hoje,
     semFim: false,
-    carenciaLeiteDias: '',
-    carenciaCarneDias: '',
+    carenciaDias: '',
+    observacoes: '',
   };
 }
-
-const diasOuNull = (valor: string) => (valor ? Number(valor) : null);
 
 /** Remédio novo: confira na bula. Já usado: o campo vazio quer dizer sem carência. */
 const placeholderDaCarencia = (uso: UltimoUsoMedicamento | null) =>
   uso ? 'Sem carência' : DICA_BULA;
 
+/** Carência do último uso: a da carne, ou a do leite se só ela foi informada. */
+const carenciaDoUso = (uso: UltimoUsoMedicamento) =>
+  (uso.carenciaCarneDias ?? uso.carenciaLeiteDias)?.toString() ?? '';
+
 /**
  * Estado, validação e envio do formulário "Novo Tratamento" (remédio ou vacina
- * com agenda de doses). Ao reconhecer um remédio já usado, preenche a dose e as
- * carências que estiverem vazias.
+ * com agenda de doses). Ao reconhecer um remédio já usado, preenche a dose e a
+ * carência que estiverem vazias.
  */
 export function useNovoTratamentoForm(animalId: string | undefined, onSaved: () => void) {
   const { produzLeite } = useFazenda();
@@ -103,12 +93,11 @@ export function useNovoTratamentoForm(animalId: string | undefined, onSaved: () 
       if (cancelado) return;
       setUltimoUso(uso);
       if (!uso) return;
-      const preencher = (campo: 'dose' | 'carenciaLeiteDias' | 'carenciaCarneDias', valor: string) => {
+      const preencher = (campo: 'dose' | 'carenciaDias', valor: string) => {
         if (!form.getValues(campo)) form.setValue(campo, valor);
       };
       preencher('dose', uso.dose ?? '');
-      preencher('carenciaLeiteDias', uso.carenciaLeiteDias?.toString() ?? '');
-      preencher('carenciaCarneDias', uso.carenciaCarneDias?.toString() ?? '');
+      preencher('carenciaDias', carenciaDoUso(uso));
     }, ESPERA_BUSCA_MS);
     return () => {
       cancelado = true;
@@ -131,6 +120,8 @@ export function useNovoTratamentoForm(animalId: string | undefined, onSaved: () 
   const submit = form.handleSubmit(async (v) => {
     if (!animalId) return;
     const todoDia = v.diasSemana.length === TODOS_OS_DIAS.length;
+    // Carência genérica: o mesmo prazo vale para a carne e, se a fazenda tira leite, para o leite
+    const carencia = v.carenciaDias ? Number(v.carenciaDias) : null;
 
     await createTratamento({
       animalId,
@@ -143,9 +134,9 @@ export function useNovoTratamentoForm(animalId: string | undefined, onSaved: () 
       horario: v.horario,
       // Repetir no dia só vale com todos os dias marcados
       intervaloHoras: todoDia && v.intervaloHoras < UMA_VEZ_POR_DIA ? v.intervaloHoras : null,
-      avisoMinutosAntes: v.avisoMinutosAntes,
-      carenciaLeiteDias: produzLeite ? diasOuNull(v.carenciaLeiteDias) : null,
-      carenciaCarneDias: diasOuNull(v.carenciaCarneDias),
+      carenciaLeiteDias: produzLeite ? carencia : null,
+      carenciaCarneDias: carencia,
+      observacoes: v.observacoes || null,
       notificacaoAtiva: true,
     });
 
@@ -158,11 +149,9 @@ export function useNovoTratamentoForm(animalId: string | undefined, onSaved: () 
     submit,
     reset,
     saving: form.formState.isSubmitting,
-    produzLeite,
     todoDia: valores.diasSemana.length === TODOS_OS_DIAS.length,
     comecaEm,
     semFim,
-    resumo: resumoDaAgenda(valores),
     placeholderCarencia: placeholderDaCarencia(ultimoUso),
     sugestoes,
   };

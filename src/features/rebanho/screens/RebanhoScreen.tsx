@@ -84,13 +84,10 @@ export default function RebanhoScreen() {
     filteredAnimais[0] ??
     null;
 
-  // 1º toque seleciona o animal; 2º toque no selecionado abre a ficha
+  // Um toque abre a ficha; o resumo abaixo da lista fica com o último aberto
   const handleAnimalPress = (animal: Animal) => {
-    if (selectedAnimal?.id === animal.id) {
-      router.push({ pathname: '/animal/[id]', params: { id: animal.id } });
-    } else {
-      setSelectedId(animal.id);
-    }
+    setSelectedId(animal.id);
+    router.push({ pathname: '/animal/[id]', params: { id: animal.id } });
   };
 
   const handleAnimalCreated = (animal: Animal) => {
@@ -155,11 +152,7 @@ export default function RebanhoScreen() {
                   ? (e) => setCardHeight(e.nativeEvent.layout.height)
                   : undefined
               }>
-              <AnimalCard
-                animal={animal}
-                selected={selectedAnimal?.id === animal.id}
-                onPress={() => handleAnimalPress(animal)}
-              />
+              <AnimalCard animal={animal} onPress={() => handleAnimalPress(animal)} />
             </View>
           ))}
         </ScrollView>

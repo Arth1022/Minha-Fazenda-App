@@ -22,7 +22,7 @@ export function ResumoAnimalCard({ animal }: ResumoAnimalCardProps) {
       <View style={styles.list}>
         <ResumoLinha label="Peso">{formatMedida(animal.pesoKg, 'kg', 0)}</ResumoLinha>
         <ResumoLinha label="Produção de Leite">
-          <MilkAmount liters={animal.producaoLeiteL} />
+          <MilkAmount liters={animal.producaoLeiteL} variant="plain" />
         </ResumoLinha>
         <ResumoLinha label="Crias">{animal.crias}</ResumoLinha>
         <ResumoLinha label="Ração Concentrado">

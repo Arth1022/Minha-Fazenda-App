@@ -64,6 +64,13 @@
       "when": 1792820914111,
       "tag": "0008_copia_dias_confirmados",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1792863613251,
+      "tag": "0009_tratamentos_observacoes",
+      "breakpoints": true
     }
   ]
 }

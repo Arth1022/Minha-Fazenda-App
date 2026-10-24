@@ -1,7 +1,7 @@
 import React from 'react';
 
 import type { Animal } from '@/dtos';
-import type { TipoRegistro } from '../OutrosRegistrosMenu';
+import type { TipoRegistro } from '../AdicionarRegistroMenu';
 import { CoberturaForm } from './CoberturaForm';
 import { PartoForm } from './PartoForm';
 import { PesagemForm } from './PesagemForm';

@@ -6,7 +6,7 @@ import {
   diasConfirmados,
   diasConfirmadosDoAnimal,
 } from '@/features/rebanho/data/doses';
-import { createTratamento } from '@/features/rebanho/data/tratamentos';
+import { alterarFimDoTratamento, createTratamento } from '@/features/rebanho/data/tratamentos';
 import {
   diasComDose,
   ehDiaDeDose,
@@ -144,7 +144,7 @@ async function runDosesTest() {
   });
   check(tratamento.diasSemana.join() === '2,4,6' && tratamento.horario === '07:00', 'createTratamento grava a agenda');
   const padrao = await createTratamento({ animalId: vaca.id, medicamento: 'Vermífugo', dataInicio: dia(19) });
-  check(padrao.diasSemana.length === 7 && padrao.avisoMinutosAntes === 0, 'sem agenda: todos os dias, aviso na hora');
+  check(padrao.diasSemana.length === 7 && padrao.avisoMinutosAntes === 15, 'sem agenda: todos os dias, aviso 15 min antes');
 
   const antes = (await db.select().from(tratamentos)).length;
   check(
@@ -154,6 +154,16 @@ async function runDosesTest() {
     'createTratamento recusa agenda inválida'
   );
   check((await db.select().from(tratamentos)).length === antes, 'e não grava nada');
+
+  const fimDe = async (id: string) =>
+    (await db.select().from(tratamentos)).find((t) => t.id === id)?.dataFim?.getTime();
+  await alterarFimDoTratamento(padrao, dia(25, 10, 15));
+  check((await fimDe(padrao.id)) === dia(25).getTime(), 'alterarFimDoTratamento grava a meia-noite do novo fim');
+  check(
+    await rejeita(() => alterarFimDoTratamento(padrao, dia(18))),
+    'alterarFimDoTratamento recusa fim antes do início'
+  );
+  check((await fimDe(padrao.id)) === dia(25).getTime(), 'e mantém o fim anterior');
 
   await confirmarDia(tratamento.id, dia(21, 10, 9));
   await confirmarDia(tratamento.id, dia(21, 10, 18));
