@@ -1,7 +1,7 @@
 import React, { Fragment } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { Badge, SectionHeader } from '@/components/ui';
+import { SectionHeader } from '@/components/ui';
 import { AgroColors, Spacing, Typography } from '@/constants/theme';
 import type { TratamentoAtivo } from '@/dtos';
 import { TratamentoAtivoCard } from './TratamentoAtivoCard';
@@ -21,7 +21,7 @@ export function TratamentosSecao({ ativos }: TratamentosSecaoProps) {
     <View style={styles.secao}>
       <SectionHeader
         title="Tratamentos"
-        rightElement={ativos.length > 0 ? <Badge label={contagem} variant="success" /> : undefined}
+        rightElement={ativos.length > 0 ? <Text style={styles.contagem}>{contagem}</Text> : undefined}
       />
 
       {ativos.length === 0 ? (
@@ -41,6 +41,10 @@ export function TratamentosSecao({ ativos }: TratamentosSecaoProps) {
 const styles = StyleSheet.create({
   secao: {
     gap: Spacing.md,
+  },
+  contagem: {
+    ...Typography.captionBold,
+    color: AgroColors.warning,
   },
   divisor: {
     height: 1,

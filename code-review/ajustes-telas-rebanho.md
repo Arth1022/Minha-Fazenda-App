@@ -220,7 +220,7 @@ Teste novo em `__tests__/persistence.test.ts`: `crias_anteriores` começa em 0 e
 
 Com mais de um tratamento em andamento, um bloco emendava no outro e não dava para ver onde cada um começava.
 
-- O componente novo `TratamentosSecao` tem o título "Tratamentos", com um selo da contagem ("2 em andamento"), e põe uma linha divisória entre um tratamento e outro. Segue o padrão da `ReproducaoSecao`: título e conteúdo direto na tela, sem card.
+- O componente novo `TratamentosSecao` tem o título "Tratamentos", com a contagem ("2 em andamento") em texto amarelo, sem chip, e põe uma linha divisória entre um tratamento e outro. Segue o padrão da `ReproducaoSecao`: título e conteúdo direto na tela, sem card.
 - O `TratamentoAtivoCard` ganhou uma faixa verde de 4px à esquerda do nome do remédio, que marca o início de cada bloco.
 - Sem tratamento, aparece o texto "Nenhum tratamento em andamento." no lugar do `EmptyState` em card, no mesmo estilo do "Nenhuma cobertura em aberto." da reprodução.
 - O `AnimalDetalheScreen` agora só chama `<TratamentosSecao ativos={ativos} />`. O loop e o estado vazio ficam na seção.
