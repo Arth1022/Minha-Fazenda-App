@@ -14,7 +14,7 @@ import { AgroColors, Radius, Spacing } from '@/constants/theme';
 import type { Tratamento } from '@/dtos';
 import { formatDataBR, maskDataBR, parseDataBR } from '@/utils';
 import { createTratamento, toggleDiaConfirmado } from '../data/tratamentos';
-import { useAnimal, useAnimalTratamentos } from '../hooks/useRebanho';
+import { useFichaAnimal } from '../hooks/useFichaAnimal';
 
 const MS_POR_DIA = 24 * 60 * 60 * 1000;
 const SEM_VALOR = '—';
@@ -50,16 +50,18 @@ function formatDataHora(date: Date): string {
 }
 
 /**
- * Tela 3 do Figma: "Tratamento Animal"
- * Exibe cabeçalho duplo (barra escura + sub-banner "✓ Tratamento Animal"),
- * identificação do animal, período do tratamento mais recente, calendário
- * de doses com marcação verde, card de Notificações e botão "Novo Tratamento".
+ * Ficha Animal (tela 3 do Figma, antes "Tratamento Animal").
+ * Blocos na ordem do esboço aprovado: resumo, tratamento, reprodução, próximos
+ * e histórico. O sub-banner "✓ Tratamento Animal" só aparece com tratamento.
+ * Os blocos marcados com o nome do componente são do front-end e entram
+ * quando ele commitar; o Histórico é opcional e pode ficar de fora.
  */
 export default function AnimalDetalheScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const animal = useAnimal(id);
-  const tratamentos = useAnimalTratamentos(id);
-  const activeTratamento = tratamentos[0] ?? null;
+  const ficha = useFichaAnimal(id);
+  const animal = ficha?.animal ?? null;
+  // TODO(F3a): trocar pelo tratamentosAtivos do back-end
+  const activeTratamento = ficha?.tratamentos[0] ?? null;
 
   // Estado para modal de "Novo Tratamento"
   const [modalVisible, setModalVisible] = useState(false);
@@ -129,20 +131,24 @@ export default function AnimalDetalheScreen() {
       withTabInset={false}
       header={
         <Header
-          title="Tratamento Animal"
-          subBannerTitle="Tratamento Animal"
+          title="Ficha Animal"
+          subBannerTitle={activeTratamento ? 'Tratamento Animal' : undefined}
           showBack
         />
       }
       footer={
-        <Button
-          label="Novo Tratamento"
-          variant="primary"
-          size="lg"
-          fullWidth
-          onPress={openModal}
-        />
+        <View style={styles.footerActions}>
+          <Button
+            label="Novo Tratamento"
+            variant="primary"
+            size="lg"
+            fullWidth
+            onPress={openModal}
+          />
+          {/* F6 "Outros registros" (outline): Pesagem, Cobertura, Parto (se ficha.podeReproduzir) e Saída */}
+        </View>
       }>
+      {/* A. F2 FichaResumo: substitui a identificação abaixo (inclui "Produção de Leite" só quando preenchida) */}
       {/* Identificação do Animal e Medicamento Ativo */}
       <View style={styles.animalProfileRow}>
         <View style={styles.avatarCircle}>
@@ -156,6 +162,7 @@ export default function AnimalDetalheScreen() {
         </View>
       </View>
 
+      {/* B. Tratamento: F3a TratamentoAtivoCard substitui este bloco */}
       {activeTratamento ? (
         <>
           {/* Período do tratamento mais recente */}
@@ -236,6 +243,10 @@ export default function AnimalDetalheScreen() {
         <EmptyState message="Nenhum tratamento registrado para este animal." />
       )}
 
+      {/* C. F4 ReproducaoCard (só se ficha.podeReproduzir) */}
+      {/* D. F5 ProximosCard + aviso do limite de notificações (contagemNotificacoes) */}
+      {/* E. F5 LinhaDoTempo (Histórico): opcional, sai primeiro se o prazo apertar */}
+
       {/* Modal de Formulário para Novo Tratamento */}
       <FormModal
         visible={modalVisible}
@@ -293,6 +304,9 @@ export default function AnimalDetalheScreen() {
 }
 
 const styles = StyleSheet.create({
+  footerActions: {
+    gap: Spacing.two,
+  },
   animalProfileRow: {
     flexDirection: 'row',
     alignItems: 'center',
