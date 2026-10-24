@@ -893,3 +893,52 @@ function textoDaPrevisao(previsao: Date): string { … }
 `<ReproducaoCard reproducao={ficha.reproducao} ultimoParto={ficha.ultimoParto} touros={machos} onConfirmarPrenhez={confirmarPrenhez} />`
 
 **Validação:** `tsc` isolado OK.
+
+**Commit:** `2b3cd7b`
+
+## F5 · `ProximosCard` e `LinhaDoTempo`
+
+Os dois só exibem dados. Os cálculos vêm do back-end: `calcularLembretes` e `contagemNotificacoes()` no B4, e os eventos do histórico no B1. Quem liga na ficha é o full-stack (F8, placeholders "D" e "E").
+
+### `ProximosCard`
+
+```tsx
+export interface ProximosCardProps {
+  /** Próximos lembretes (quem chama já ordena e corta nos 3 primeiros) */
+  lembretes: Lembrete[];
+  /** O celular chegou ao limite de lembretes agendados */
+  limiteAtingido: boolean;
+}
+
+const ICONE: Partial<Record<TipoLembrete, string>> = { dose: '💊', fim_carencia: '⏳', parto: '🐄' };
+const ICONE_PADRAO = '🔔';
+
+/** "Hoje", "Amanhã", "Em 5 dias · 12/10". */
+function quandoTexto(data: Date): string { … }
+```
+
+**Por quê**
+- **"Hoje / Amanhã / Em N dias":** o produtor pensa em "quando", não em data. A data aparece junto só quando falta mais de um dia.
+- **O aviso de limite fica dentro do card** (`InfoBanner`): é o lugar onde ele explica por que um lembrete pode não tocar. Quem decide se o limite foi atingido é quem chama (`contagemNotificacoes() ≥ LIMITE_NOTIFICACOES`, 60).
+- **Mapa de ícones parcial com ícone padrão:** o `TipoLembrete` atual ainda tem `'vacina'`, que sai no B4 (vacina virou dose). Com `Partial` + `🔔`, o componente compila antes e depois do B4, sem quebrar o build no commit do back-end.
+- **Ordenar e cortar em 3 fica com quem chama:** o card não decide quantos mostrar nem em que ordem.
+
+### `LinhaDoTempo`: Histórico
+
+```tsx
+// TODO(B1): trocar pelo EventoTimeline de @/dtos quando o back-end publicar
+export interface EventoLinhaDoTempo {
+  tipo: string;
+  data: Date;
+  titulo: string;
+  detalhe?: string;
+}
+```
+
+**Por quê**
+- **Trilho vertical** (ícone + linha ligando os eventos), o formato clássico de histórico. Data pequena em cima, título em negrito e detalhe opcional.
+- **Tipo provisório no próprio componente:** o contrato `EventoTimeline` é do B1 (back-end), que ainda não saiu. O formato `{ tipo, data, titulo, detalhe? }` foi combinado com o Líder Técnico e, quando o B1 publicar em `@/dtos`, a troca é só o import.
+- **`tipo: string` com ícone padrão `•`:** um tipo novo de evento aparece sem quebrar a tela.
+- **É o primeiro a sair se o prazo apertar** (decisão do usuário). Por isso é um componente isolado, que a ficha pode simplesmente não renderizar.
+
+**Validação:** `tsc` isolado OK.
