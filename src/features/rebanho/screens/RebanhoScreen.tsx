@@ -169,6 +169,7 @@ export default function RebanhoScreen() {
 
       <NovoAnimalForm
         visible={modalVisible}
+        animais={rebanho}
         onClose={() => setModalVisible(false)}
         onCreated={handleAnimalCreated}
       />

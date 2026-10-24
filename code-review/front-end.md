@@ -814,3 +814,45 @@ export function ResumoLinha({ label, children }: ResumoLinhaProps) {
 **Pendente:** o full-stack troca a "Identificação do Animal" do `AnimalDetalheScreen` por `<FichaResumo ficha={ficha} alerta={…} />` (placeholder "A. F2").
 
 **Validação:** `tsc` isolado OK.
+
+**Commit:** `75b74a7`
+
+## F9 · Cadastro novo (modal "Novo Animal")
+
+`NovoAnimalForm.tsx` + `useNovoAnimalForm.ts` + `RebanhoScreen.tsx` (passa `animais={rebanho}`)
+
+**Antes × agora**
+
+| Sempre à vista | "Mais detalhes" (recolhido) |
+|---|---|
+| Brinco*, Nome, **Sexo** (Fêmea/Macho), Idade, Raça, **Já pariu?** (só fêmea adulta) | **Peso atual**, **Produção de leite** e **Ração** (só fêmea), **Mãe** (`AnimalPicker`, fêmeas), **Pai** (`OrigemAnimalField`, machos ou de fora/sêmen) |
+
+```ts
+// useNovoAnimalForm.ts
+const [sexo, idadeAnos, idadeMeses] = form.watch(['sexo', 'idadeAnos', 'idadeMeses']);
+const idade = idadeTotalMeses(idadeAnos, idadeMeses);
+const femea = sexo === 'F';
+// "Já pariu?" só faz sentido para fêmea adulta (sem idade, tratamos como adulta)
+const mostrarJaPariu = femea && (idade === null || idade >= IDADE_FIM_CRIA_MESES);
+
+// envio
+jaPariu: ehFemea && values.jaPariu,
+producaoLeiteL: ehFemea ? decimalOuNull(values.producaoLeiteL) : null,
+racaoKgDia: ehFemea ? decimalOuNull(values.racaoKgDia) : null,
+maeId: values.maeId,
+paiId: values.pai.id,
+paiDescricao: values.pai.descricao,
+```
+
+**Por quê**
+- **Corrige o bug do sexo** (Sprint 1): o modal agora pergunta, com padrão Fêmea (a maior parte do rebanho leiteiro). Um touro cadastrado deixa de virar novilha e a aba Machos passa a funcionar para animais criados no app.
+- **"Já pariu?" condicional:** aparece só para fêmea com 12 meses ou mais, ou sem idade informada, que tratamos como adulta, igual ao `calcularFase`. Resolve a vaca comprada adulta, que antes ficava como novilha.
+- **Macho não leva leite, ração nem "já pariu"** (decisão do usuário): os campos somem da tela **e** o envio força `null`/`false`. Se o produtor digitar leite e depois trocar para Macho, o valor não vai para o banco.
+- **"Mais detalhes" fechado:** o modal continua com 6 campos à vista, como o usuário pediu ("sem perder a simplicidade"). Quem quer completar abre a seção.
+- **Mãe e pai pelo id:** grava `mae_id`/`pai_id` (FK) em vez do texto `mae_brinco`/`pai_brinco` de antes. Pai de fora ou sêmen vai em `pai_descricao`.
+- **`decimalOuNull`:** campo vazio vira `null`, nunca `0`. Leite/ração vazios aparecem como "—" na lista, sem inventar valor.
+- **Sem modo edição:** decisão do usuário. Não haverá "Editar dados" na ficha, então o cadastro existe só neste modal.
+
+**Pendente (B5):** o **peso atual** já está no formulário, mas só vai ser gravado quando o back-end entregar o `cadastrarAnimal` (animal + 1ª pesagem na mesma transação). O Líder Técnico pediu para não chamar `createPesagem` depois do `createAnimal`, porque se der erro no meio fica animal sem pesagem. Está marcado com `TODO(B5)` no hook; a troca é uma linha.
+
+**Validação:** `tsc` isolado OK.
