@@ -18,6 +18,15 @@ export function listarAnimais({ incluirInativos = false } = {}) {
   return incluirInativos ? query : query.where(eq(animais.status, 'ativo'));
 }
 
+/** Machos ativos do rebanho (touros para cobertura e parto). */
+export function listarTouros() {
+  return db
+    .select()
+    .from(animais)
+    .where(and(eq(animais.status, 'ativo'), eq(animais.sexo, 'M')))
+    .orderBy(asc(animais.createdAt));
+}
+
 export function animalPorId(id: string) {
   return db.query.animais.findFirst({ where: eq(animais.id, id) });
 }

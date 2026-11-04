@@ -1,4 +1,4 @@
-import type { Animal, Fase, SituacaoLeite } from './animal.dto';
+import type { AlertaAnimal, Animal, Fase, SituacaoLeite } from './animal.dto';
 import type { Pesagem, PesoAtual } from './pesagem.dto';
 import type { Reproducao } from './reproducao.dto';
 import type { DiaDeDose, DosePendente, Tratamento } from './tratamento.dto';
@@ -57,4 +57,6 @@ export interface FichaAnimal {
   tratamentos: Tratamento[];
   /** Tratamentos em andamento hoje, com a trilha de doses */
   tratamentosAtivos: TratamentoAtivo[];
+  /** Alerta mais importante do animal (carência, dose, parto ou novilha); null se não há */
+  alerta: AlertaAnimal | null;
 }

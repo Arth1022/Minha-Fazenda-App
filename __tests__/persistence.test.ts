@@ -10,6 +10,7 @@ import {
   criasDe,
   criasPorMae,
   listarAnimais,
+  listarTouros,
   registrarParto,
   registrarSaida,
   ultimosPartos,
@@ -200,7 +201,9 @@ async function runPersistenceTest() {
 
   // 7. Saída: muda o status, nunca apaga
   const vendido = await createAnimal({ brinco: '#202', sexo: 'M' });
+  check((await listarTouros()).some((a) => a.id === vendido.id), 'listarTouros traz os machos ativos');
   await registrarSaida(vendido.id, { status: 'vendido', data: dia(23, 10), motivo: 'Venda para recria' });
+  check(!(await listarTouros()).some((a) => a.id === vendido.id), 'listarTouros ignora machos inativos');
   const ativos = await listarAnimais();
   const todos = await listarAnimais({ incluirInativos: true });
   check(!ativos.some((a) => a.id === vendido.id) && todos.some((a) => a.id === vendido.id), 'lista padrão mostra só ativos; o vendido continua gravado');
