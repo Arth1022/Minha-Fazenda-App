@@ -85,6 +85,13 @@
       "when": 1793763512035,
       "tag": "0011_indices_status_ordenha",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1793828232240,
+      "tag": "0012_talhoes",
+      "breakpoints": true
     }
   ]
 }

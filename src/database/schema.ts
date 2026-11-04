@@ -367,3 +367,52 @@ export type NovaDoseAplicada = typeof dosesAplicadas.$inferInsert;
 export type Ordenha = typeof ordenhas.$inferSelect;
 export type NovaOrdenha = typeof ordenhas.$inferInsert;
 export type NotificacaoAgendadaRow = typeof notificacoesAgendadas.$inferSelect;
+
+
+export const TIPOS_TALHAO = ["pasto", "lavoura", "reserva", "outro"] as const;
+export type TipoTalhao = (typeof TIPOS_TALHAO)[number];
+
+export const STATUS_SYNC = ["created", "updated", "synced", "deleted"] as const;
+export type StatusSync = (typeof STATUS_SYNC)[number];
+
+export interface GeometriaPoligono {
+  type: "Polygon";
+  coordinates: number[][][];
+}
+
+export const talhoes = sqliteTable(
+  "talhoes",
+  {
+    id: id(),
+    nome: text("nome").notNull(),
+    tipo: text("tipo", { enum: TIPOS_TALHAO }).notNull().default("pasto"),
+    cor: text("cor").notNull(),
+    areaHectares: real("area_hectares").notNull(),
+    geometriaJson: text("geometria_json", { mode: "json" })
+      .$type<GeometriaPoligono>()
+      .notNull(),
+    centroLat: real("centro_lat").notNull(),
+    centroLng: real("centro_lng").notNull(),
+    minLat: real("min_lat").notNull(),
+    maxLat: real("max_lat").notNull(),
+    minLng: real("min_lng").notNull(),
+    maxLng: real("max_lng").notNull(),
+    syncStatus: text("sync_status", { enum: STATUS_SYNC })
+      .notNull()
+      .default("created"),
+    criadoPor: criadoPor(),
+    ...timestamps,
+  },
+  (table) => [
+    index("talhoes_bbox_idx").on(
+      table.minLat,
+      table.maxLat,
+      table.minLng,
+      table.maxLng,
+    ),
+    index("talhoes_sync_status_idx").on(table.syncStatus),
+  ],
+);
+
+export type Talhao = typeof talhoes.$inferSelect;
+export type NovoTalhao = typeof talhoes.$inferInsert;
