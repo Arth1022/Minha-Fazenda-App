@@ -17,6 +17,17 @@ allprojects {
     google()
     mavenCentral()
     maven { url 'https://www.jitpack.io' }
+    maven {
+      url 'https://api.mapbox.com/downloads/v2/releases/maven'
+      def token = project.properties['MAPBOX_DOWNLOADS_TOKEN'] ?: System.getenv('RNMAPBOX_MAPS_DOWNLOAD_TOKEN')
+      if (token) {
+        authentication { basic(BasicAuthentication) }
+        credentials {
+          username = 'mapbox'
+          password = token
+        }
+      }
+    }
   }
 }
 

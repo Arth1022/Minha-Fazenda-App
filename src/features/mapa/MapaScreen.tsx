@@ -1,5 +1,6 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 
 import {
   EmptyState,
@@ -9,54 +10,83 @@ import {
   StatActionCard,
 } from '@/components/ui';
 import { APP_NAME } from '@/constants/app';
-import { AgroColors, Radius, Shadows, Spacing } from '@/constants/theme';
+import { AgroColors, Spacing } from '@/constants/theme';
+import { MapaBase } from './components/MapaBase';
 
-const SEM_DADOS = '—';
+function CalcularAreaIcon() {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+      <Rect
+        x="3"
+        y="5"
+        width="18"
+        height="14"
+        rx="2"
+        stroke={AgroColors.primary}
+        strokeWidth={2}
+        strokeDasharray="3 3"
+      />
+      <Path
+        d="M8 14L12 10L16 14"
+        stroke={AgroColors.primary}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
 
-/**
- * Tela de Mapeamento & Áreas (somente front, sem persistência local).
- */
+function CercasIcon() {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+      <Line x1="8" y1="3" x2="8" y2="21" stroke={AgroColors.primary} strokeWidth={2} strokeLinecap="round" />
+      <Line x1="16" y1="3" x2="16" y2="21" stroke={AgroColors.primary} strokeWidth={2} strokeLinecap="round" />
+      <Line x1="3" y1="8" x2="21" y2="8" stroke={AgroColors.primary} strokeWidth={2} strokeLinecap="round" />
+      <Line x1="3" y1="16" x2="21" y2="16" stroke={AgroColors.primary} strokeWidth={2} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+function SementesIcon() {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M7 7C7 5.34315 8.34315 4 10 4H14C15.6569 4 17 5.34315 17 7L19 18C19 19.6569 17.6569 21 16 21H8C6.34315 21 5 19.6569 5 18L7 7Z"
+        stroke={AgroColors.primary}
+        strokeWidth={2}
+        strokeLinejoin="round"
+      />
+      <Circle cx="12" cy="14" r="2" fill={AgroColors.primary} />
+    </Svg>
+  );
+}
+
 export default function MapaScreen() {
   return (
     <ScreenContainer
       header={<Header title={APP_NAME} showMenu showNotification />}>
       <SectionHeader title="Mapeamento & Áreas" size="lg" />
 
-      {/* Área reservada para o mapa satélite dos talhões */}
-      <View style={styles.mapCard}>
-        <View style={styles.terrainBandTop} />
-        <View style={styles.terrainBandBottom} />
-
-        <View style={styles.mapControlsCol}>
-          <View style={styles.mapControlBtn}>
-            <Text style={styles.mapControlIcon}>❖</Text>
-          </View>
-          <View style={styles.mapControlBtn}>
-            <Text style={styles.mapControlIcon}>⊕</Text>
-          </View>
-        </View>
-
-        <Text style={styles.mapEmptyText}>Nenhuma área mapeada</Text>
-      </View>
+      <MapaBase nomeFazenda="Fazenda Recanto Verde" totalHectares={0} />
 
       <EmptyState message="Nenhum talhão cadastrado." />
 
-      {/* Ferramentas de cálculo rápido (Calcular Área | Cercas | Kg Sementes) */}
       <View style={styles.quickCardsRow}>
         <StatActionCard
-          icon={<View style={styles.areaDashedIcon} />}
+          icon={<CalcularAreaIcon />}
           title="Calcular Área"
-          subtitle={SEM_DADOS}
+          subtitle="Medir talhão"
         />
         <StatActionCard
-          icon={<Text style={styles.greenIconText}>#</Text>}
+          icon={<CercasIcon />}
           title="Cercas"
-          subtitle={SEM_DADOS}
+          subtitle="3,5 km planejados"
         />
         <StatActionCard
-          icon={<Text style={styles.greenIconText}>🌱</Text>}
+          icon={<SementesIcon />}
           title="Kg Sementes"
-          subtitle={SEM_DADOS}
+          subtitle="820 kg necessários"
         />
       </View>
     </ScreenContainer>
@@ -64,81 +94,8 @@ export default function MapaScreen() {
 }
 
 const styles = StyleSheet.create({
-  mapCard: {
-    width: '100%',
-    height: 190,
-    backgroundColor: AgroColors.mapTerrainBg,
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: Spacing.sm,
-    position: 'relative',
-    ...Shadows.sm,
-  },
-  terrainBandTop: {
-    position: 'absolute',
-    top: -30,
-    right: -20,
-    width: 220,
-    height: 110,
-    borderRadius: 60,
-    backgroundColor: 'rgba(110, 145, 85, 0.35)',
-    transform: [{ rotate: '-12deg' }],
-  },
-  terrainBandBottom: {
-    position: 'absolute',
-    bottom: -35,
-    left: -20,
-    width: 260,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(55, 82, 46, 0.45)',
-    transform: [{ rotate: '8deg' }],
-  },
-  mapControlsCol: {
-    position: 'absolute',
-    top: Spacing.sm,
-    right: Spacing.sm,
-    gap: 6,
-  },
-  mapControlBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: Radius.xs,
-    backgroundColor: 'rgba(255, 255, 255, 0.94)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Shadows.sm,
-  },
-  mapControlIcon: {
-    fontSize: 14,
-    color: AgroColors.textPrimary,
-    fontWeight: '700',
-  },
-  mapEmptyText: {
-    color: AgroColors.textInverse,
-    fontSize: 13,
-    fontWeight: '700',
-    textShadowColor: 'rgba(0, 0, 0, 0.35)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
   quickCardsRow: {
     flexDirection: 'row',
     gap: Spacing.sm,
-  },
-  areaDashedIcon: {
-    width: 16,
-    height: 16,
-    borderWidth: 1.8,
-    borderStyle: 'dashed',
-    borderColor: AgroColors.primary,
-    borderRadius: 3,
-  },
-  greenIconText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: AgroColors.primary,
   },
 });
