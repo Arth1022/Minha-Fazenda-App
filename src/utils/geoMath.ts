@@ -49,6 +49,32 @@ export function calcularAreaHectares(coordenadas: Coordenada[]): number {
   return Number((metrosQuadrados / 10000).toFixed(2));
 }
 
+const RAIO_TERRA_KM = 6371.0088;
+const paraRad = (graus: number) => (graus * Math.PI) / 180;
+
+/** Calcula o perímetro geodésico (Haversine) do anel fechado em quilômetros com 2 casas decimais. */
+export function calcularPerimetroKm(coordenadas: Coordenada[]): number {
+  if (coordenadas.length < 2) return 0;
+  const anel =
+    coordenadas.length >= 3 ? fecharAnelLinear(coordenadas) : coordenadas;
+  let totalKm = 0;
+
+  for (let i = 0; i < anel.length - 1; i++) {
+    const [lng1, lat1] = anel[i];
+    const [lng2, lat2] = anel[i + 1];
+    const dLat = paraRad(lat2 - lat1);
+    const dLng = paraRad(lng2 - lng1);
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(paraRad(lat1)) *
+        Math.cos(paraRad(lat2)) *
+        Math.sin(dLng / 2) ** 2;
+    totalKm += 2 * RAIO_TERRA_KM * Math.asin(Math.sqrt(a));
+  }
+
+  return Number(totalKm.toFixed(2));
+}
+
 /** Valida se o polígono possui vértices suficientes e não apresenta linhas cruzadas (autointerseção). */
 export function validarPoligono(coordenadas: Coordenada[]): ValidacaoPoligono {
   const anel = fecharAnelLinear(coordenadas);

@@ -9,6 +9,7 @@ import {
 import {
   type Coordenada,
   calcularAreaHectares,
+  calcularPerimetroKm,
   extrairMetadadosEspaciais,
   fecharAnelLinear,
   validarPoligono,
@@ -67,6 +68,11 @@ async function runTalhoesTest() {
   check(
     Math.abs(area1Ha - 1.0) <= 0.02,
     `cálculo geodésico de quadrado 100m x 100m retorna ~1.00 ha (${area1Ha} ha)`,
+  );
+  const perimetroQuadradoKm = calcularPerimetroKm(quadrado1Ha);
+  check(
+    Math.abs(perimetroQuadradoKm - 0.4) <= 0.02,
+    `cálculo de perímetro de quadrado 100m x 100m retorna ~0.40 km (${perimetroQuadradoKm} km)`,
   );
   check(
     calcularAreaHectares([

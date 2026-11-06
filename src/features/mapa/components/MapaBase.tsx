@@ -19,11 +19,14 @@ import type { Coordenada } from '@/utils/geoMath';
 // Centro padrão no coração agrícola do Brasil caso o GPS ainda não tenha sido autorizado
 const COORDENADA_INICIAL_PADRAO: Coordenada = [-47.9292, -15.7801];
 const ZOOM_FAZENDA_PADRAO = 15;
+const ZOOM_MINIMO = 3;
+const ZOOM_MAXIMO = 20;
 
 export interface MapaBaseProps {
   nomeFazenda?: string;
   totalHectares?: number;
   coordenadaInicial?: Coordenada;
+  coordenadaFoco?: Coordenada | null;
   zoomInicial?: number;
   onMapPress?: (coordenada: Coordenada) => void;
   style?: StyleProp<ViewStyle>;
@@ -33,7 +36,7 @@ export interface MapaBaseProps {
 /** Ícone de camadas (satélite / mapa) fiel ao protótipo do Figma. */
 function LayersIcon({ color = AgroColors.headerGreen }: { color?: string }) {
   return (
-    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
       <Path
         d="M12 2L2 7L12 12L22 7L12 2Z"
         stroke={color}
@@ -55,7 +58,7 @@ function LayersIcon({ color = AgroColors.headerGreen }: { color?: string }) {
 /** Ícone de mira do GPS fiel ao protótipo do Figma. */
 function GpsTargetIcon({ color = AgroColors.headerGreen }: { color?: string }) {
   return (
-    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
       <Circle cx="12" cy="12" r="6" stroke={color} strokeWidth={2} />
       <Circle cx="12" cy="12" r="2" fill={color} />
       <Line x1="12" y1="2" x2="12" y2="6" stroke={color} strokeWidth={2} strokeLinecap="round" />
@@ -66,16 +69,35 @@ function GpsTargetIcon({ color = AgroColors.headerGreen }: { color?: string }) {
   );
 }
 
+function ZoomIcon({
+  sinal,
+  color = AgroColors.headerGreen,
+}: {
+  sinal: 'mais' | 'menos';
+  color?: string;
+}) {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+      <Line x1="5" y1="12" x2="19" y2="12" stroke={color} strokeWidth={2.2} strokeLinecap="round" />
+      {sinal === 'mais' && (
+        <Line x1="12" y1="5" x2="12" y2="19" stroke={color} strokeWidth={2.2} strokeLinecap="round" />
+      )}
+    </Svg>
+  );
+}
+
 export function MapaBase({
   nomeFazenda = 'Fazenda Recanto Verde',
   totalHectares,
   coordenadaInicial = COORDENADA_INICIAL_PADRAO,
+  coordenadaFoco,
   zoomInicial = ZOOM_FAZENDA_PADRAO,
   onMapPress,
   style,
   children,
 }: MapaBaseProps) {
   const cameraRef = useRef<Mapbox.Camera>(null);
+  const zoomAtualRef = useRef<number>(zoomInicial);
   const [modoSatelite, setModoSatelite] = useState(true);
   const [buscandoGps, setBuscandoGps] = useState(false);
   const [permissaoGps, setPermissaoGps] = useState(false);
@@ -99,6 +121,7 @@ export function MapaBase({
         posicao.coords.latitude,
       ];
 
+      zoomAtualRef.current = 16;
       cameraRef.current?.setCamera({
         centerCoordinate: novaCoordenada,
         zoomLevel: 16,
@@ -115,6 +138,34 @@ export function MapaBase({
     centralizarNoGps(true);
   }, [centralizarNoGps]);
 
+  useEffect(() => {
+    if (!coordenadaFoco) return;
+    zoomAtualRef.current = Math.max(zoomAtualRef.current, 16);
+    cameraRef.current?.setCamera({
+      centerCoordinate: coordenadaFoco,
+      zoomLevel: zoomAtualRef.current,
+      animationDuration: 700,
+    });
+  }, [coordenadaFoco]);
+
+  const alterarZoom = useCallback((delta: number) => {
+    const novoZoom = Math.min(
+      ZOOM_MAXIMO,
+      Math.max(ZOOM_MINIMO, zoomAtualRef.current + delta),
+    );
+    zoomAtualRef.current = novoZoom;
+    cameraRef.current?.zoomTo(novoZoom, 250);
+  }, []);
+
+  const handleCameraChanged = useCallback(
+    (state: { properties?: { zoom?: number } }) => {
+      if (typeof state?.properties?.zoom === 'number') {
+        zoomAtualRef.current = state.properties.zoom;
+      }
+    },
+    [],
+  );
+
   const handlePress = useCallback(
     (feature: GeoJSON.Feature) => {
       if (!onMapPress) return;
@@ -128,7 +179,7 @@ export function MapaBase({
 
   const hectaresFormatados =
     totalHectares !== undefined
-      ? `${Number(totalHectares.toFixed(1))} Ha`
+      ? `${Number(totalHectares.toFixed(totalHectares > 0 && totalHectares < 10 ? 2 : 1))} Ha`
       : null;
 
   return (
@@ -142,6 +193,7 @@ export function MapaBase({
         attributionEnabled={false}
         compassEnabled={false}
         scaleBarEnabled={false}
+        onCameraChanged={handleCameraChanged}
         onPress={handlePress}>
         <Mapbox.Camera
           ref={cameraRef}
@@ -167,7 +219,7 @@ export function MapaBase({
         </View>
       ) : null}
 
-      {/* Botões flutuantes de Camada e GPS (canto superior direito) */}
+      {/* Botões flutuantes: Camada, GPS, Zoom + e Zoom - (canto superior direito) */}
       <View style={styles.controlsCol}>
         <Pressable
           style={({ pressed }) => [
@@ -195,6 +247,28 @@ export function MapaBase({
             <GpsTargetIcon />
           )}
         </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.controlBtn,
+            pressed && styles.controlBtnPressed,
+          ]}
+          onPress={() => alterarZoom(1)}
+          accessibilityRole="button"
+          accessibilityLabel="Aumentar zoom">
+          <ZoomIcon sinal="mais" />
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.controlBtn,
+            pressed && styles.controlBtnPressed,
+          ]}
+          onPress={() => alterarZoom(-1)}
+          accessibilityRole="button"
+          accessibilityLabel="Diminuir zoom">
+          <ZoomIcon sinal="menos" />
+        </Pressable>
       </View>
 
       {/* Pílula totalizadora de Hectares (canto inferior direito) */}
@@ -210,7 +284,7 @@ export function MapaBase({
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-    height: 220,
+    height: 240,
     backgroundColor: AgroColors.mapTerrainBg,
     borderRadius: Radius.lg,
     overflow: 'hidden',
@@ -238,13 +312,13 @@ const styles = StyleSheet.create({
   },
   controlsCol: {
     position: 'absolute',
-    top: Spacing.md,
-    right: Spacing.md,
-    gap: Spacing.xs,
+    top: Spacing.sm,
+    right: Spacing.sm,
+    gap: 5,
   },
   controlBtn: {
-    width: 38,
-    height: 38,
+    width: 34,
+    height: 34,
     borderRadius: Radius.md,
     backgroundColor: AgroColors.cardBg,
     alignItems: 'center',
@@ -270,4 +344,5 @@ const styles = StyleSheet.create({
     color: AgroColors.textPrimary,
   },
 });
+
 export default MapaBase;
