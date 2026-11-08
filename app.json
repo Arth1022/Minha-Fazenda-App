@@ -54,14 +54,6 @@
           "recordAudioAndroid": false
         }
       ],
-      [
-        "expo-media-library",
-        {
-          "photosPermission": "O Minha Fazenda usa suas fotos para salvar os QR Codes.",
-          "savePhotosPermission": "O Minha Fazenda salva os QR Codes na sua galeria.",
-          "isAccessMediaLocationEnabled": false
-        }
-      ],
       "./plugins/withModeloOcr",
       [
         "expo-image-picker",

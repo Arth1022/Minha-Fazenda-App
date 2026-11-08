@@ -57,6 +57,16 @@ Somente **Home** (ordenha) e **Rebanho** têm persistência local. Mapa, Estoque
 - **Seed de desenvolvimento:** opcional. Com `EXPO_PUBLIC_DEV_SEED=1` no `.env`, um banco vazio recebe um rebanho de exemplo ao abrir o app em modo dev.
 - **Convenções (prontas para um sync futuro):** `id` em UUID texto gerado no app, `created_at` / `updated_at` em todas as tabelas (`updated_at` renovado em todo update), datas em epoch ms e arrays em JSON. As chaves estrangeiras (`ON DELETE CASCADE`) são ligadas logo após as migrations.
 
+### Planejado: fazenda em grupo (sincronização na nuvem)
+
+Vários celulares da mesma fazenda vão compartilhar os dados pela nuvem. Pontos já levantados:
+
+- **QR Code impresso precisa valer em todos os celulares do grupo.** Hoje o QR do animal é `minhafazenda://animal/<id>` e o da máquina, `minhafazenda://maquina/<id>`. O `id` é UUID gerado no aparelho, então já é único entre celulares: **o sync nunca pode trocar o `id` de um registro** (o servidor aceita o id que veio do app). Assim a etiqueta impressa num celular abre o mesmo animal em qualquer outro.
+- **Avaliar uma coluna própria para o QR** (ex.: `codigo_qr`, começando igual ao `id`), se for preciso reimprimir ou trocar a etiqueta sem trocar o animal, ou ligar etiquetas impressas antes do cadastro.
+- **Códigos curtos colidem entre celulares:** o ID da máquina (`TR-01`) é numerado em cada aparelho e tem índice único (`maquinas_codigo_idx`). Dois celulares podem criar o mesmo código, então o sync precisa de uma regra (gerar no servidor, prefixo do aparelho ou renumerar no conflito). O mesmo vale para brinco repetido quando o mesmo animal é cadastrado em dois celulares: precisa de uma regra para juntar os dois registros.
+- **Estado do sync:** só `talhoes` tem `sync_status` hoje; animais, máquinas e os registros deles vão precisar do mesmo controle.
+- **O PDF/imagem do QR não vai para a nuvem:** é refeito a partir do `id` a qualquer momento.
+
 ---
 
 ## 4. Execução e Build Nativo (Development Client)

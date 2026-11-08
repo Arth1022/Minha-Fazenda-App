@@ -10,4 +10,10 @@ export {
 } from './LeitorQrCodeProvider';
 export { LeitorQrCodeModal, type LeitorQrCodeModalProps, type ModoLeitor } from './LeitorQrCodeModal';
 export { BotaoLerQrCode, type BotaoLerQrCodeProps } from './BotaoLerQrCode';
-export { salvarPngNaGaleria } from './salvarNaGaleria';
+export { compartilharPdf } from './compartilharPdf';
+export {
+  htmlDaEtiqueta,
+  svgDoQrCode,
+  type DadosEtiqueta,
+  type OpcoesSvgQrCode,
+} from './etiquetaQrCode';

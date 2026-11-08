@@ -9,6 +9,8 @@ import {
   numerosLidos,
 } from '@/features/rebanho/services/leituraBrinco';
 import { areaNaFoto, larguraParaLeitura } from '@/services/fotos/recorte';
+import { htmlDaEtiqueta, svgDoQrCode } from '@/services/qrcode/etiquetaQrCode';
+import { create as criarQrCode } from 'qrcode';
 import { diasComDose, proximaDosePendente } from '@/features/rebanho/services/doses';
 import {
   dosesParaHoje,
@@ -448,5 +450,34 @@ check(
   larguraParaLeitura(600) === 1280 && larguraParaLeitura(1500) === null && larguraParaLeitura(5000) === 2048,
   'recorte é ampliado ou reduzido para o tamanho que o leitor lê melhor'
 );
+
+// Etiqueta do QR Code em PDF (QR vetorial)
+const linkAnimal = conteudoQrAnimal('3f2a9c1e-7b4d-4e8a-9f10-2c3d4e5f6a7b');
+const svgQr = svgDoQrCode(linkAnimal);
+const matrizQr = criarQrCode(linkAnimal, { errorCorrectionLevel: 'M' }).modules;
+const ladoSvg = Number(/viewBox="0 0 (\d+) \1"/.exec(svgQr)?.[1]);
+check(ladoSvg === matrizQr.size + 8, 'SVG do QR tem a margem branca de 4 módulos em cada lado');
+const desenhado = new Set<string>();
+for (const [, x, y, largura] of svgQr.matchAll(/M(\d+) (\d+)h(\d+)v1h-\d+z/g)) {
+  for (let i = 0; i < Number(largura); i++) desenhado.add(`${Number(y) - 4},${Number(x) - 4 + i}`);
+}
+let modulosIguais = true;
+for (let linha = 0; linha < matrizQr.size; linha++) {
+  for (let coluna = 0; coluna < matrizQr.size; coluna++) {
+    if (Boolean(matrizQr.get(linha, coluna)) !== desenhado.has(`${linha},${coluna}`)) modulosIguais = false;
+  }
+}
+check(modulosIguais, 'SVG desenha exatamente os módulos escuros do QR Code');
+const etiqueta = htmlDaEtiqueta({ conteudo: linkAnimal, titulo: '#104', subtitulo: 'Mimosa <b>&</b>' });
+check(etiqueta.includes(svgQr) && etiqueta.includes('#104'), 'etiqueta leva o QR vetorial e o brinco');
+check(
+  etiqueta.includes('Mimosa &lt;b&gt;&amp;&lt;/b&gt;') && !etiqueta.includes('<b>'),
+  'nome do animal é escapado no HTML da etiqueta'
+);
+check(
+  !htmlDaEtiqueta({ conteudo: linkAnimal, titulo: '#104', subtitulo: null }).includes('class="subtitulo"'),
+  'sem nome, a etiqueta não tem a linha do subtítulo'
+);
+check(etiqueta.includes('width: 5cm; height: 5cm'), 'QR impresso com 5 cm de lado');
 
 console.log('\n🎉 TODAS AS REGRAS PASSARAM!\n');

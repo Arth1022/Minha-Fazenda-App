@@ -1,19 +1,14 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 
 import { FormModal } from '@/components/forms';
 import { AgroColors, Radius, Spacing, Typography } from '@/constants/theme';
 import type { Animal } from '@/dtos';
-import { salvarPngNaGaleria } from '@/services/qrcode';
+import { compartilharPdf, htmlDaEtiqueta } from '@/services/qrcode';
 import { conteudoQrAnimal } from '../../services/qrCode';
 
 const LADO_QR = 220;
-/** Imagem baixada em alta resolução, boa para imprimir */
-const LADO_IMAGEM = 1024;
-
-/** O que o QRCode entrega no getRef: o <Svg> do react-native-svg. */
-type SvgDoQr = { toDataURL: (callback: (base64: string) => void, options?: object) => void };
 
 export interface QrCodeAnimalModalProps {
   visible: boolean;
@@ -21,31 +16,28 @@ export interface QrCodeAnimalModalProps {
   onClose: () => void;
 }
 
-/** QR Code do animal para imprimir e prender no brinco ou na coleira; "Baixar" salva na galeria. */
+/**
+ * QR Code do animal para imprimir e prender no brinco ou na coleira. "Baixar" gera
+ * um PDF (QR vetorial, tamanho certo para imprimir) e abre o compartilhar: a
+ * pessoa escolhe onde salvar ou para quem enviar.
+ */
 export function QrCodeAnimalModal({ visible, animal, onClose }: QrCodeAnimalModalProps) {
-  const svgRef = useRef<SvgDoQr | null>(null);
   const [baixando, setBaixando] = useState(false);
 
-  const baixar = () => {
-    const svg = svgRef.current;
-    if (!svg) return;
+  const baixar = async () => {
     setBaixando(true);
-    svg.toDataURL(
-      async (base64) => {
-        try {
-          await salvarPngNaGaleria(base64, `qrcode-animal-${animal.brinco}`);
-          Alert.alert('QR Code salvo', 'A imagem está na galeria do celular, pronta para imprimir.');
-        } catch (error) {
-          Alert.alert(
-            'Não foi possível salvar',
-            error instanceof Error ? error.message : String(error)
-          );
-        } finally {
-          setBaixando(false);
-        }
-      },
-      { width: LADO_IMAGEM, height: LADO_IMAGEM }
-    );
+    try {
+      const html = htmlDaEtiqueta({
+        conteudo: conteudoQrAnimal(animal.id),
+        titulo: animal.brinco,
+        subtitulo: animal.nome,
+      });
+      await compartilharPdf(html, `qrcode-animal-${animal.brinco}`, 'Salvar QR Code do animal');
+    } catch (error) {
+      Alert.alert('Não foi possível baixar', error instanceof Error ? error.message : String(error));
+    } finally {
+      setBaixando(false);
+    }
   };
 
   return (
@@ -62,16 +54,8 @@ export function QrCodeAnimalModal({ visible, animal, onClose }: QrCodeAnimalModa
         {/* Só desenha o QR com o modal aberto: a ficha não paga esse custo */}
         {visible ? (
           <View style={styles.moldura}>
-            {/* quietZone: margem branca na imagem baixada, sem ela a leitura falha impressa */}
-            <QRCode
-              value={conteudoQrAnimal(animal.id)}
-              size={LADO_QR}
-              ecl="M"
-              quietZone={12}
-              getRef={(svg: SvgDoQr | null) => {
-                svgRef.current = svg;
-              }}
-            />
+            {/* Só a prévia na tela; o PDF baixado tem o próprio QR vetorial */}
+            <QRCode value={conteudoQrAnimal(animal.id)} size={LADO_QR} ecl="M" quietZone={12} />
           </View>
         ) : null}
         <Text style={styles.brinco}>{animal.brinco}</Text>
