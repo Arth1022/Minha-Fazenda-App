@@ -72,7 +72,11 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Permitir que o Minha Fazenda acesse sua localização para mapear áreas e piquetes."
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true,
+          "isIosBackgroundLocationEnabled": true,
+          "locationWhenInUsePermission": "O Minha Fazenda usa sua localização para mapear áreas e piquetes e para registrar o uso das máquinas.",
+          "locationAlwaysAndWhenInUsePermission": "O Minha Fazenda usa sua localização enquanto uma máquina está em uso, mesmo com o app fechado, para registrar tempo, KM e talhões."
         }
       ],
       "@rnmapbox/maps"

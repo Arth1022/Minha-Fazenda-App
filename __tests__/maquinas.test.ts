@@ -8,10 +8,17 @@ import {
 } from '@/features/maquinas/data/maquinas';
 import {
   encerrarUso,
+  gravarPontos,
   iniciarUso,
+  pausarUso,
+  pontosDoUso,
+  registrarContinua,
+  registrarUsoManual,
   tempoTotalRegistrado,
+  usoAbertoDoOperador,
   usosDaMaquinaDesde,
   usosEmAberto,
+  usosRecentes,
 } from '@/features/maquinas/data/usos';
 import { chaveDaMarca } from '@/features/maquinas/marcas/chave';
 import { buscarMaquinas } from '@/features/maquinas/services/busca';
@@ -24,7 +31,21 @@ import {
   somarDuracoes,
   usoPorDia,
 } from '@/features/maquinas/services/uso';
-import { db, initTestDatabase, maquinas, sqlite, usosMaquina } from './support/database';
+import { registrarAbastecimento } from '@/features/maquinas/data/abastecimentos';
+import { leiturasDaMaquina } from '@/features/maquinas/data/horimetro';
+import { problemasAbertos, registrarProblema, resolverProblema } from '@/features/maquinas/data/ocorrencias';
+import { condicaoDaMaquina } from '@/features/maquinas/services/registros';
+import {
+  abastecimentos,
+  db,
+  initTestDatabase,
+  maquinas,
+  paradasUso,
+  pontosGps,
+  sqlite,
+  talhoes,
+  usosMaquina,
+} from './support/database';
 
 function check(condition: boolean, message: string) {
   if (!condition) throw new Error(message);
@@ -49,8 +70,16 @@ async function runMaquinasTest() {
   console.log('=========================================================\n');
 
   // Regras puras
-  check(formatarDuracao(0) === '0min' && formatarDuracao(45 * 60000) === '45min', 'duração abaixo de 1h em minutos');
-  check(formatarDuracao(2 * HORA + 5 * 60000) === '2h 05min', 'duração com horas e minutos (2h 05min)');
+  check(formatarDuracao(0) === '0 min' && formatarDuracao(45 * 60000) === '45 min', 'duração abaixo de 1h em minutos');
+  check(formatarDuracao(2 * HORA + 5 * 60000) === '2h 05 min', 'duração com horas e minutos (2h 05 min)');
+  check(
+    formatarDuracao(30000) === '<1 min' && formatarDuracao(30000, { curto: true }) === '<1m',
+    'menos de 1 min é "<1 min" (topo e gráfico iguais)'
+  );
+  check(
+    formatarDuracao(0, { curto: true }) === '' && formatarDuracao(2.5 * HORA, { curto: true }) === '2,5h',
+    'formato curto do gráfico'
+  );
   check(formatarCronometro(26 * HORA + 61000) === '26:01:01', 'cronômetro passa de 24h sem zerar');
 
   const agora = em(6, 10);
@@ -123,7 +152,7 @@ async function runMaquinasTest() {
   );
   check((await rejeita(() => cadastrarMaquina({ codigo: '  ', nome: 'X' }))) !== null, 'ID vazio é recusado');
 
-  const uso = await iniciarUso(trator.id, em(6, 7));
+  const uso = await iniciarUso(trator.id, {}, em(6, 7));
   check(uso.fim === null && uso.inicio.getTime() === em(6, 7).getTime(), 'ligar abre um uso sem fim');
   check((await usosEmAberto()).length === 1, 'máquina ligada aparece entre as em uso');
   check((await rejeita(() => iniciarUso(trator.id))) === 'A máquina já está em uso', 'não liga duas vezes');
@@ -140,20 +169,24 @@ async function runMaquinasTest() {
   check((await buscarMaquinaPorReferencia({ tipo: 'codigo', codigo: 'TR-01' }))?.id === trator.id, 'QR com ID curto acha a máquina');
   check((await buscarMaquinaPorReferencia({ tipo: 'id', id: 'nao-existe' })) === undefined, 'QR de máquina apagada não acha nada');
 
-  const encerrado = await encerrarUso(trator.id, em(6, 9, 30));
-  check(encerrado.fim?.getTime() === em(6, 9, 30).getTime(), 'desligar fecha o uso no horário informado');
+  const encerrado = await encerrarUso(trator.id, { fim: em(6, 9, 30) });
+  check(encerrado.uso?.fim?.getTime() === em(6, 9, 30).getTime(), 'desligar fecha o uso no horário informado');
+  check(
+    encerrado.uso?.operador === 'Beta' && encerrado.uso.fimMotivo === 'manual',
+    'uso guarda quem operou (usuário do celular) e como terminou'
+  );
   check((await usosEmAberto()).length === 0, 'depois de desligar não há uso aberto');
   check((await rejeita(() => encerrarUso(trator.id))) === 'A máquina não está em uso', 'não desliga máquina parada');
 
-  await iniciarUso(trator.id, em(6, 10));
-  await encerrarUso(trator.id, em(6, 11));
+  await iniciarUso(trator.id, {}, em(6, 10));
+  await encerrarUso(trator.id, { fim: em(6, 11) });
   const [{ totalMs }] = await tempoTotalRegistrado(trator.id);
   check(totalMs === 3.5 * HORA, 'tempo total registrado soma os usos encerrados (3h30)');
 
-  await iniciarUso(trator.id, em(6, 12));
+  await iniciarUso(trator.id, {}, em(6, 12));
   const janela = await usosDaMaquinaDesde(trator.id, em(6, 9));
   check(janela.length === 3, 'consulta da semana traz usos que terminam na janela e o aberto');
-  await encerrarUso(trator.id, em(6, 13));
+  await encerrarUso(trator.id, { fim: em(6, 13) });
 
   const inativa = await cadastrarMaquina({ codigo: 'CM-01', nome: 'Caminhão velho', status: 'inativa' });
   check((await rejeita(() => iniciarUso(inativa.id))) === 'Máquina inativa não pode ser ligada', 'máquina inativa não liga');
@@ -162,7 +195,14 @@ async function runMaquinasTest() {
 
   const semId = await cadastrarMaquina({ nome: 'Trator novo', tipo: 'trator' });
   const outroSemId = await cadastrarMaquina({ nome: 'Carreta', tipo: 'implemento' });
-  check(semId.codigo === 'TR-02' && outroSemId.codigo === 'IM-01', 'sem ID informado, o cadastro gera pelo tipo'); 
+  check(semId.codigo === 'TR-02' && outroSemId.codigo === 'IM-01', 'sem ID informado, o cadastro gera pelo tipo');
+  check(
+    outroSemId.categoria === 'implemento' && outroSemId.combustivel === null && !outroSemId.possuiHorimetro,
+    'implemento é cadastrado sem combustível nem horímetro'
+  );
+  check(semId.categoria === 'motorizada' && semId.possuiHorimetro, 'trator é motorizado e tem horímetro');
+
+  await auditoria(trator.id, semId.id);
 
   await criarAnotacao(trator.id, '  Troca de óleo  ');
   const [anotacao] = await anotacoesDaMaquina(trator.id);
@@ -170,9 +210,162 @@ async function runMaquinasTest() {
   check((await rejeita(() => criarAnotacao(trator.id, '   '))) !== null, 'anotação vazia é recusada');
 
   await db.delete(maquinas).where(eq(maquinas.id, trator.id));
-  check((await db.select().from(usosMaquina)).length === 0, 'apagar a máquina apaga os usos (cascade)');
+  check(
+    (await db.select().from(usosMaquina).where(eq(usosMaquina.maquinaId, trator.id))).length === 0,
+    'apagar a máquina apaga os usos (cascade)'
+  );
 
   console.log('\n🎉 Máquinas: tudo certo!');
+}
+
+/** Auditoria de máquinas no banco: ligar com implemento, assumir, descarte, rastro, registros. */
+async function auditoria(tratorId: string, outroTratorId: string) {
+  const SEG = 1000;
+  const MIN = 60 * SEG;
+  const joao = { id: 'usuario-joao', nome: 'João' };
+  const T = em(7, 7).getTime();
+
+  const plantadeira = await cadastrarMaquina({ nome: 'Plantadeira 7 linhas', tipo: 'plantadeira', larguraTrabalhoM: 3.5 });
+  check(plantadeira.categoria === 'implemento' && plantadeira.larguraTrabalhoM === 3.5, 'plantadeira é implemento com largura');
+  check((await rejeita(() => iniciarUso(plantadeira.id))) !== null, 'implemento não liga sozinho');
+
+  // Talhão de 2 km x 2 km em volta do ponto de partida
+  const [lat0, lng0] = [-22, -47];
+  const mLat = 1 / 110_574;
+  const mLng = 1 / (111_320 * Math.cos((lat0 * Math.PI) / 180));
+  const canto = (x: number, y: number) => [lng0 + x * mLng, lat0 + y * mLat];
+  await db.insert(talhoes).values({
+    nome: 'Talhão do Rio',
+    cor: '#3B873E',
+    areaHectares: 400,
+    geometriaJson: {
+      type: 'Polygon',
+      coordinates: [[canto(-100, -1000), canto(1900, -1000), canto(1900, 1000), canto(-100, 1000), canto(-100, -1000)]],
+    },
+    centroLat: lat0,
+    centroLng: lng0,
+    minLat: lat0 - 1000 * mLat,
+    maxLat: lat0 + 1000 * mLat,
+    minLng: lng0 - 100 * mLng,
+    maxLng: lng0 + 1900 * mLng,
+  });
+
+  // Ligar com implemento e atividade, com GPS
+  const uso = await iniciarUso(
+    tratorId,
+    { implementoId: plantadeira.id, atividade: 'plantio', rastreado: true, posicao: { lat: lat0, lng: lng0 } },
+    new Date(T)
+  );
+  check(
+    uso.implementoId === plantadeira.id && uso.atividade === 'plantio' && uso.operadorId === 'usuario-beta',
+    'ligar guarda implemento, atividade e operador'
+  );
+  check(
+    (await rejeita(() => iniciarUso(outroTratorId, { implementoId: plantadeira.id, operador: joao })))?.includes('engatad') ??
+      false,
+    'implemento engatado não vai para outra máquina'
+  );
+  check(
+    (await rejeita(() => iniciarUso(outroTratorId)))?.startsWith('Você está usando') ?? false,
+    'a mesma pessoa não usa duas máquinas ao mesmo tempo'
+  );
+  check((await usoAbertoDoOperador('usuario-beta'))[0]?.id === uso.id, 'uso aberto da pessoa é encontrado');
+
+  // 1 km a 2 m/s dentro do talhão, um ponto a cada 5 s
+  await gravarPontos(
+    uso.id,
+    Array.from({ length: 101 }, (_, i) => ({
+      lat: lat0,
+      lng: lng0 + i * 10 * mLng,
+      precisaoM: 5,
+      velocidadeMs: 2,
+      simulado: false,
+      em: T + i * 5 * SEG,
+    }))
+  );
+  check((await pontosDoUso(uso.id)).length === 101, 'pontos do GPS ficam no banco durante o uso');
+  await pausarUso(uso.id, new Date(T + 500 * SEG));
+  const fechado = await encerrarUso(tratorId, { fim: new Date(T + 20 * MIN) });
+  const u = fechado.uso!;
+  check(
+    Math.abs((u.kmTotal ?? 0) - 1) < 0.02 && Math.abs((u.areaEstimadaHa ?? 0) - 0.35) < 0.01,
+    'ao desligar: KM pelo GPS e área com a largura da plantadeira'
+  );
+  check(u.talhoes?.[0]?.nome === 'Talhão do Rio', 'ao desligar: talhão trabalhado sai do mapa, sem escolher');
+  check((u.segPausa ?? 0) >= 690 && u.segTrabalhando === 500, 'pausa não conta como trabalho');
+  check((await db.select().from(pontosGps)).length === 0, 'pontos do GPS são apagados ao encerrar (fica o rastro simplificado)');
+  check((u.rastro?.length ?? 0) === 2, 'rastro simplificado guardado no uso');
+  check((await db.select().from(paradasUso)).every((p) => p.fim !== null), 'pausa aberta é fechada ao encerrar');
+
+  // Ligou sem querer: descartado
+  await iniciarUso(tratorId, {}, new Date(T + 30 * MIN));
+  const descartado = await encerrarUso(tratorId, { fim: new Date(T + 30 * MIN + 30 * SEG) });
+  check(descartado.descartado && descartado.uso === null, 'ligou sem querer (30 s): uso descartado');
+  check((await usosRecentes(tratorId, 1))[0]?.id === u.id, 'uso descartado não aparece nos últimos usos');
+
+  // Troca de turno: Beta assume o uso do João
+  const doJoao = await iniciarUso(outroTratorId, { operador: joao }, new Date(T + 40 * MIN));
+  check(
+    (await rejeita(() => iniciarUso(outroTratorId, {}, new Date(T + 50 * MIN)))) === 'A máquina já está em uso',
+    'sem assumir, não liga máquina em uso por outro'
+  );
+  const assumido = await iniciarUso(outroTratorId, { assumir: true }, new Date(T + 50 * MIN));
+  const antigo = (await db.select().from(usosMaquina).where(eq(usosMaquina.id, doJoao.id)))[0];
+  check(
+    antigo.fim?.getTime() === T + 50 * MIN && antigo.fimMotivo === 'assumida' && assumido.operador === 'Beta',
+    'assumir fecha o uso do João naquela hora e abre o novo'
+  );
+  await registrarContinua(assumido.id, new Date(T + 3 * 60 * MIN), new Date(T + 60 * MIN));
+  const comContinua = (await db.select().from(usosMaquina).where(eq(usosMaquina.id, assumido.id)))[0];
+  check(comContinua.continuaAte?.getTime() === T + 3 * 60 * MIN, '"Continua" fica registrado e adia a pergunta');
+  await encerrarUso(outroTratorId, { fim: new Date(T + 70 * MIN) });
+
+  // Uso esquecido
+  const manual = await registrarUsoManual(tratorId, { inicio: em(5, 8), fim: em(5, 10), atividade: 'transporte' }, em(7, 12));
+  check(manual.origem === 'manual' && manual.fim?.getTime() === em(5, 10).getTime(), 'uso esquecido entra marcado como manual');
+  check(
+    (await rejeita(() => registrarUsoManual(tratorId, { inicio: em(5, 9), fim: em(5, 11) }, em(7, 12)))) ===
+      'Já há uso registrado nesse horário',
+    'uso esquecido não sobrepõe outro'
+  );
+  check(
+    (await rejeita(() => registrarUsoManual(tratorId, { inicio: em(7, 11), fim: em(7, 13) }, em(7, 12)))) !== null,
+    'uso esquecido não termina no futuro'
+  );
+
+  // Abastecimento com horímetro
+  await registrarAbastecimento({
+    maquinaId: tratorId,
+    litros: 80,
+    tanqueCheio: true,
+    origem: 'fazenda',
+    horimetroH: 1250,
+    horimetroEstimadoH: 1249,
+  });
+  const [leitura] = await leiturasDaMaquina(tratorId, 1);
+  check(
+    (await db.select().from(abastecimentos)).length === 1 && leitura?.origem === 'abastecimento' && leitura.valorH === 1250,
+    'abastecimento com horímetro também grava a leitura'
+  );
+  check(
+    (await rejeita(() => registrarAbastecimento({ maquinaId: tratorId, litros: 0, tanqueCheio: true, origem: 'posto' }))) !== null,
+    'abastecimento sem litros é recusado'
+  );
+
+  // Problema muda a situação da máquina até ser resolvido
+  const problema = await registrarProblema({ maquinaId: tratorId, categoria: 'hidraulico', podeUsar: false, descricao: ' vazando ' });
+  const trator = (await db.select().from(maquinas).where(eq(maquinas.id, tratorId)))[0];
+  check(
+    condicaoDaMaquina(trator, await problemasAbertos(tratorId)) === 'paradaPorProblema' && problema.descricao === 'vazando',
+    'problema "não dá para usar" deixa a máquina parada por problema'
+  );
+  await resolverProblema(problema.id);
+  check(condicaoDaMaquina(trator, await problemasAbertos(tratorId)) === 'ok', 'problema resolvido libera a máquina (o registro fica)');
+
+  // Apagar o implemento não apaga o uso de quem o puxou
+  await db.delete(maquinas).where(eq(maquinas.id, plantadeira.id));
+  const semImplemento = (await db.select().from(usosMaquina).where(eq(usosMaquina.id, u.id)))[0];
+  check(semImplemento !== undefined && semImplemento.implementoId === null, 'apagar o implemento mantém o uso do trator (set null)');
 }
 
 runMaquinasTest().catch((erro) => {

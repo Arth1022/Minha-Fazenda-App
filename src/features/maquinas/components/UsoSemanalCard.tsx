@@ -4,8 +4,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Card, SectionHeader } from '@/components/ui';
 import { AgroColors, Radius, Spacing, Typography } from '@/constants/theme';
 import type { UsoDoDia } from '@/dtos';
-import { formatDecimal } from '@/utils/formatters';
-import { formatarDuracao, msParaHoras } from '../services/uso';
+import { formatNumero } from '@/utils/formatters';
+import { formatarDuracao } from '../services/uso';
 
 /** Rótulo pelo índice de Date.getDay() (0 = domingo) */
 const DIA_DA_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -16,20 +16,17 @@ const ALTURA_MINIMA = 4;
 export interface UsoSemanalCardProps {
   dias: UsoDoDia[];
   totalMs: number;
-}
-
-/** Rótulo curto acima da barra: "35m" abaixo de 1h, senão "2,5h"; vazio sem uso. */
-function rotuloHoras(ms: number): string {
-  if (ms === 0) return '';
-  const horas = msParaHoras(ms);
-  return horas < 1 ? `${Math.max(1, Math.round(ms / 60000))}m` : `${formatDecimal(horas)}h`;
+  /** KM na semana (só usos com GPS) */
+  km?: number | null;
+  /** Hectares estimados na semana (com implemento) */
+  ha?: number | null;
 }
 
 /**
  * Histórico de uso semanal: uma barra por dia dos últimos 7 dias (hoje à direita)
  * e o total da semana. Feito com Views, sem biblioteca de gráfico.
  */
-export function UsoSemanalCard({ dias, totalMs }: UsoSemanalCardProps) {
+export function UsoSemanalCard({ dias, totalMs, km = null, ha = null }: UsoSemanalCardProps) {
   const maior = Math.max(...dias.map((d) => d.duracaoMs), 1);
   const ultimo = dias.length - 1;
 
@@ -37,7 +34,17 @@ export function UsoSemanalCard({ dias, totalMs }: UsoSemanalCardProps) {
     <View style={styles.secao}>
       <SectionHeader
         title="Uso na semana"
-        rightElement={<Text style={styles.total}>{formatarDuracao(totalMs)}</Text>}
+        rightElement={
+          <Text style={styles.total}>
+            {[
+              formatarDuracao(totalMs),
+              km !== null ? `${formatNumero(km, 1)} km` : null,
+              ha !== null ? `${formatNumero(ha, 1)} ha` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </Text>
+        }
       />
       <Card padding="three">
         <View
@@ -49,7 +56,7 @@ export function UsoSemanalCard({ dias, totalMs }: UsoSemanalCardProps) {
               d.duracaoMs === 0 ? 0 : Math.max(ALTURA_MINIMA, (d.duracaoMs / maior) * ALTURA_GRAFICO);
             return (
               <View key={d.dia.getTime()} style={styles.coluna}>
-                <Text style={styles.valor}>{rotuloHoras(d.duracaoMs)}</Text>
+                <Text style={styles.valor}>{formatarDuracao(d.duracaoMs, { curto: true })}</Text>
                 <View style={styles.trilho}>
                   <View
                     style={[styles.barra, i === ultimo && styles.barraHoje, { height: altura }]}

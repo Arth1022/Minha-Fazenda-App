@@ -4,7 +4,7 @@ import { Alert } from 'react-native';
 import { criarAnotacao } from '../data/anotacoes';
 
 /** Texto, envio e erro do mini-formulário de anotação da máquina. */
-export function useNovaAnotacao(maquinaId: string, onSaved: () => void) {
+export function useNovaAnotacao(maquinaId: string, onSaved: () => void, usoId: string | null = null) {
   const [texto, setTexto] = useState('');
   const [erro, setErro] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
@@ -21,7 +21,7 @@ export function useNovaAnotacao(maquinaId: string, onSaved: () => void) {
     }
     setSaving(true);
     try {
-      await criarAnotacao(maquinaId, texto);
+      await criarAnotacao(maquinaId, texto, usoId);
       setTexto('');
       onSaved();
     } catch {

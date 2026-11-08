@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 
 import {
+  atualizarTalhao,
   criarTalhao,
   deletarTalhao,
   listarTalhoesAtivos,
@@ -12,8 +13,17 @@ import {
   calcularPerimetroKm,
   extrairMetadadosEspaciais,
   fecharAnelLinear,
+  pontoDentroDoPoligono,
   validarPoligono,
 } from '@/utils/geoMath';
+import {
+  calcularCerca,
+  calcularSementes,
+  formatarDistancia,
+  formatarNumero,
+  lerNumero,
+  paraCampo,
+} from '@/features/mapa/services/calculos';
 import { db, initTestDatabase, talhoes } from './support/database';
 
 const UUID_V4 =
@@ -226,6 +236,80 @@ async function runTalhoesTest() {
   check(
     registroDeletado?.syncStatus === 'deleted',
     'deletarTalhao mantém o registro no banco com sync_status = deleted para sincronização',
+  );
+
+  // Edição de talhão (nome, tipo, cor e contorno) num único UPDATE
+  const editavel = await criarTalhao({ nome: 'Pasto Velho', cor: '#22C55E', coordenadas: quadrado1Ha });
+  await atualizarTalhao(editavel.id, { nome: '  Pasto Novo ', tipo: 'lavoura', cor: '#EAB308' });
+  const [aposEdicao] = await db.select().from(talhoes).where(eq(talhoes.id, editavel.id));
+  check(
+    aposEdicao.nome === 'Pasto Novo' && aposEdicao.tipo === 'lavoura' && aposEdicao.cor === '#EAB308',
+    'atualizarTalhao grava nome (sem espaços), tipo e cor',
+  );
+  check(
+    aposEdicao.syncStatus === 'created',
+    'atualizarTalhao mantém sync_status = created em talhão que ainda não subiu',
+  );
+
+  const retanguloMaior: Coordenada[] = [
+    [-47.0, 0.0],
+    [-47.0 + ladoGraus * 2, 0.0],
+    [-47.0 + ladoGraus * 2, ladoGraus],
+    [-47.0, ladoGraus],
+  ];
+  await db.update(talhoes).set({ syncStatus: 'synced' }).where(eq(talhoes.id, editavel.id));
+  await atualizarTalhao(editavel.id, { coordenadas: retanguloMaior });
+  const [aposContorno] = await db.select().from(talhoes).where(eq(talhoes.id, editavel.id));
+  check(
+    Math.abs(aposContorno.areaHectares - 2.0) <= 0.04 &&
+      aposContorno.maxLng > aposEdicao.maxLng &&
+      aposContorno.nome === 'Pasto Novo',
+    `atualizarTalhao com contorno novo recalcula área e BBOX (${aposContorno.areaHectares} ha)`,
+  );
+  check(
+    aposContorno.syncStatus === 'updated',
+    'atualizarTalhao marca sync_status = updated em talhão já sincronizado',
+  );
+  check(
+    await rejeita(() => atualizarTalhao(editavel.id, { nome: '   ' })),
+    'atualizarTalhao recusa nome em branco',
+  );
+
+  // Cantos do talhão dentro da divisa da fazenda
+  const divisa = fecharAnelLinear(retanguloMaior);
+  check(
+    pontoDentroDoPoligono([-47.0 + ladoGraus, ladoGraus / 2], divisa) &&
+      !pontoDentroDoPoligono([-47.0 + ladoGraus * 3, ladoGraus / 2], divisa),
+    'pontoDentroDoPoligono separa canto dentro e fora da divisa',
+  );
+
+  // Calculadoras da tela de Mapa (valores do protótipo)
+  const sementes = calcularSementes(lerNumero('15,2'), 12, 20);
+  check(
+    sementes.totalKg === 182.4 && sementes.sacos === 10,
+    'calcularSementes: 15,2 ha de braquiária a 12 kg/ha = 182,4 kg em 10 sacos de 20 kg',
+  );
+  check(calcularSementes(0, 12, 20).sacos === 0, 'calcularSementes: sem área, nenhum saco');
+
+  const cerca = calcularCerca(lerNumero('2,4'), 5, 3);
+  check(
+    cerca.metrosArame === 12000 && cerca.rolos === 24 && cerca.mouroes === 801,
+    'calcularCerca: 2,4 km com 5 fios a cada 3 m = 12.000 m, 24 rolos e 801 mourões',
+  );
+  check(calcularCerca(0, 5, 3).mouroes === 0, 'calcularCerca: sem comprimento, nenhum mourão');
+
+  check(
+    lerNumero('1.200,5') === 1200.5 && lerNumero('abc') === 0 && lerNumero('-3') === 0,
+    'lerNumero aceita vírgula e milhar e ignora texto inválido ou negativo',
+  );
+  check(
+    formatarNumero(12000) === '12.000' && formatarNumero(182.4) === '182,4',
+    'formatarNumero usa milhar com ponto e decimal com vírgula',
+  );
+  check(paraCampo(15.234, 2) === '15,23' && paraCampo(0) === '', 'paraCampo preenche o campo sem milhar');
+  check(
+    formatarDistancia(0.42) === '420 m' && formatarDistancia(2.4) === '2,4 km',
+    'formatarDistancia mostra metros abaixo de 1 km',
   );
 
   console.log('\n🎉 TODOS OS TESTES DE TALHÕES PASSARAM!');

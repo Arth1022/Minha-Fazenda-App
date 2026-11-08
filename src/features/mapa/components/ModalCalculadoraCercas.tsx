@@ -1,133 +1,159 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { ChipSelector, CustomInput, FormModal, type ChipOption } from '@/components/forms';
-import { AgroColors, Radius, Spacing } from '@/constants/theme';
+import { BottomSheet } from '@/components/ui';
+import type { Talhao } from '@/database';
+import { calcularPerimetroKm, type Coordenada } from '@/utils/geoMath';
+import {
+  ESPACAMENTOS_MOUROES,
+  METROS_POR_ROLO,
+  ORDEM_TIPOS_CERCA,
+  TIPOS_CERCA,
+  calcularCerca,
+  formatarNumero,
+  lerNumero,
+  paraCampo,
+  type TipoCerca,
+} from '../services/calculos';
+import {
+  CaixaResultado,
+  CampoMapa,
+  CoresTexto,
+  GradeOpcoes,
+  LinkMapa,
+  RotuloCampo,
+  SeletorTalhao,
+} from './elementos';
 
-type OpcaoFios = '4' | '5' | '1' | '2';
-type OpcaoEspacamento = '2.5' | '3' | '4';
+const OPCOES_TIPO = ORDEM_TIPOS_CERCA.map((valor) => ({ valor, rotulo: TIPOS_CERCA[valor].rotulo }));
 
-const OPCOES_FIOS: ChipOption<OpcaoFios>[] = [
-  { label: '4 fios', value: '4' },
-  { label: '5 fios', value: '5' },
-  { label: 'Elétrica (1 fio)', value: '1' },
-  { label: 'Elétrica (2 fios)', value: '2' },
-];
+const OPCOES_ESPACAMENTO = ESPACAMENTOS_MOUROES.map((m) => ({
+  valor: String(m),
+  rotulo: `${formatarNumero(m)} m`,
+}));
 
-const OPCOES_ESPACAMENTO: ChipOption<OpcaoEspacamento>[] = [
-  { label: '2,5 m', value: '2.5' },
-  { label: '3,0 m', value: '3' },
-  { label: '4,0 m', value: '4' },
-];
+function perimetroKm(talhao: Talhao): number {
+  return calcularPerimetroKm((talhao.geometriaJson.coordinates[0] ?? []) as Coordenada[]);
+}
 
 export interface ModalCalculadoraCercasProps {
   visible: boolean;
-  perimetroInicialKm: number;
-  nomeTalhao?: string | null;
+  talhoes: Talhao[];
   onClose: () => void;
 }
 
-export function ModalCalculadoraCercas({
-  visible,
-  perimetroInicialKm,
-  nomeTalhao,
-  onClose,
-}: ModalCalculadoraCercasProps) {
+/** "Calculadora de cerca": comprimento × fios → rolos de arame e mourões. */
+export function ModalCalculadoraCercas({ visible, talhoes, onClose }: ModalCalculadoraCercasProps) {
   const [kmTexto, setKmTexto] = useState('');
-  const [fios, setFios] = useState<OpcaoFios>('5');
-  const [espacamento, setEspacamento] = useState<OpcaoEspacamento>('3');
+  const [tipo, setTipo] = useState<TipoCerca>('arame5');
+  const [espacamento, setEspacamento] = useState('3');
+  const [escolhendoTalhao, setEscolhendoTalhao] = useState(false);
 
-  useEffect(() => {
-    if (visible) {
-      setKmTexto(perimetroInicialKm > 0 ? String(perimetroInicialKm) : '');
-    }
-  }, [visible, perimetroInicialKm]);
+  // Reabrir a calculadora fecha a lista de talhões (ajuste no render, sem efeito)
+  const [abertaAntes, setAbertaAntes] = useState(visible);
+  if (visible !== abertaAntes) {
+    setAbertaAntes(visible);
+    if (visible) setEscolhendoTalhao(false);
+  }
 
-  const km = Math.max(0, Number(kmTexto.replace(',', '.')) || 0);
-  const metrosCerca = Math.round(km * 1000);
-  const metrosArame = metrosCerca * Number(fios);
-  const rolos500m = metrosArame > 0 ? Math.ceil(metrosArame / 500) : 0;
-  const qtdMouroes = metrosCerca > 0 ? Math.ceil(metrosCerca / Number(espacamento)) : 0;
+  const espacamentoM = Number(espacamento);
+  const { metrosArame, rolos, mouroes } = calcularCerca(
+    lerNumero(kmTexto),
+    TIPOS_CERCA[tipo].fios,
+    espacamentoM,
+  );
 
   return (
-    <FormModal
+    <BottomSheet
       visible={visible}
-      title="Calculadora de Cercas"
-      subtitle={
-        nomeTalhao
-          ? `Cálculo focado no talhão: ${nomeTalhao}`
-          : 'Estimativa de arame e mourões da fazenda'
-      }
+      title="Calculadora de cerca"
+      subtitle="Arame e mourões para comprar"
+      alturaMaxima={0.72}
       onClose={onClose}>
-      <CustomInput
-        label="Extensão da cerca"
-        placeholder="Ex.: 2.4"
-        keyboardType="decimal-pad"
-        suffix="km"
-        value={kmTexto}
-        onChangeText={setKmTexto}
-        helperText={
-          perimetroInicialKm > 0
-            ? `${nomeTalhao ? `Perímetro de ${nomeTalhao}` : 'Soma dos talhões'}: ${perimetroInicialKm} km (${Math.round(perimetroInicialKm * 1000)} m)`
-            : 'Selecione um talhão ou digite a distância acima'
-        }
-      />
-
-      <ChipSelector
-        label="Tipo de Cerca / Quantidade de Fios"
-        options={OPCOES_FIOS}
-        value={fios}
-        onChange={setFios}
-      />
-
-      <ChipSelector
-        label="Espaçamento entre Mourões / Estacas"
-        options={OPCOES_ESPACAMENTO}
-        value={espacamento}
-        onChange={setEspacamento}
-      />
-
-      <View style={styles.resumoBox}>
-        <Text style={styles.resumoTitulo}>Materiais Estimados para Compra</Text>
-        <View style={styles.resumoGrid}>
-          <View style={styles.metricaCard}>
-            <Text style={styles.metricaValor}>{rolos500m} rolos</Text>
-            <Text style={styles.metricaSub}>
-              {metrosArame.toLocaleString('pt-BR')} m de arame (500m/rolo)
-            </Text>
-          </View>
-          <View style={styles.metricaCard}>
-            <Text style={styles.metricaValor}>{qtdMouroes} un.</Text>
-            <Text style={styles.metricaSub}>
-              Mourões / lascas a cada {espacamento.replace('.', ',')} m
-            </Text>
-          </View>
+      <View style={estilos.conteudo}>
+        <View style={estilos.bloco}>
+          <RotuloCampo
+            titulo="Comprimento da cerca"
+            acao={
+              <LinkMapa
+                rotulo="Usar um talhão"
+                icone="pentagon"
+                onPress={() => setEscolhendoTalhao((atual) => !atual)}
+              />
+            }
+          />
+          {escolhendoTalhao ? (
+            <SeletorTalhao
+              talhoes={talhoes}
+              medida={(t) => `${formatarNumero(perimetroKm(t), 2)} km`}
+              onEscolher={(t) => {
+                setKmTexto(paraCampo(perimetroKm(t), 2));
+                setEscolhendoTalhao(false);
+              }}
+            />
+          ) : null}
+          <CampoMapa
+            valor={kmTexto}
+            onChange={setKmTexto}
+            unidade="km"
+            placeholder="0"
+            acessibilidade="Comprimento da cerca em quilômetros"
+          />
         </View>
+
+        <View style={estilos.bloco}>
+          <RotuloCampo titulo="Tipo de cerca" />
+          <GradeOpcoes opcoes={OPCOES_TIPO} selecionado={tipo} onChange={setTipo} />
+        </View>
+
+        <View style={estilos.bloco}>
+          <RotuloCampo titulo="Distância entre mourões" />
+          <GradeOpcoes
+            opcoes={OPCOES_ESPACAMENTO}
+            selecionado={espacamento}
+            onChange={setEspacamento}
+            colunas={3}
+          />
+        </View>
+
+        <CaixaResultado>
+          <View style={estilos.linha}>
+            <View style={estilos.linhaTextos}>
+              <Text style={estilos.item}>Arame</Text>
+              <Text style={estilos.itemDetalhe}>
+                {formatarNumero(metrosArame)} m, em rolos de {METROS_POR_ROLO} m
+              </Text>
+            </View>
+            <Text style={estilos.valor}>
+              {rolos} {rolos === 1 ? 'rolo' : 'rolos'}
+            </Text>
+          </View>
+          <View style={estilos.divisor} />
+          <View style={estilos.linha}>
+            <View style={estilos.linhaTextos}>
+              <Text style={estilos.item}>Mourões ou estacas</Text>
+              <Text style={estilos.itemDetalhe}>1 a cada {formatarNumero(espacamentoM)} m</Text>
+            </View>
+            <Text style={estilos.valor}>{formatarNumero(mouroes)}</Text>
+          </View>
+        </CaixaResultado>
       </View>
-    </FormModal>
+    </BottomSheet>
   );
 }
 
-const styles = StyleSheet.create({
-  resumoBox: {
-    backgroundColor: AgroColors.mintBg,
-    borderWidth: 1,
-    borderColor: AgroColors.mintBorder,
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
-    gap: Spacing.sm,
+const estilos = StyleSheet.create({
+  conteudo: { gap: 22, paddingTop: 4 },
+  bloco: { gap: 10 },
+  linha: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 8,
   },
-  resumoTitulo: { fontSize: 12, fontWeight: '700', color: AgroColors.headerGreen },
-  resumoGrid: { flexDirection: 'row', gap: Spacing.sm },
-  metricaCard: {
-    flex: 1,
-    backgroundColor: AgroColors.cardBg,
-    borderRadius: Radius.md,
-    padding: Spacing.sm,
-    borderWidth: 1,
-    borderColor: AgroColors.mintBorder,
-    gap: 2,
-  },
-  metricaValor: { fontSize: 16, fontWeight: '800', color: AgroColors.primaryDark },
-  metricaSub: { fontSize: 11, fontWeight: '500', color: AgroColors.textSecondary },
+  linhaTextos: { flex: 1, gap: 2 },
+  item: { fontSize: 16, lineHeight: 21, fontWeight: '700', color: CoresTexto.escuro },
+  itemDetalhe: { fontSize: 14, lineHeight: 19, color: CoresTexto.suave },
+  valor: { fontSize: 26, lineHeight: 32, fontWeight: '800', color: CoresTexto.escuro },
+  divisor: { height: 1, backgroundColor: '#DEE3DF' },
 });

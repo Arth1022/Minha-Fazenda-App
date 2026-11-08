@@ -1,14 +1,24 @@
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq, ne } from 'drizzle-orm';
 
 import { db, maquinas } from '@/database';
 import type { Maquina, NovaMaquina } from '@/dtos';
 import { gerarCodigo } from '../services/codigo';
+import { categoriaDoTipo } from '../services/padroes';
 import type { ReferenciaMaquina } from '../services/qrCode';
 import { normalizarCodigo } from '../services/uso';
 
 /** Frota em ordem alfabética pelo nome. */
 export function listarMaquinas() {
   return db.select().from(maquinas).orderBy(asc(maquinas.nome));
+}
+
+/** Implementos ativos (plantadeira, grade, carreta) para engatar ao ligar. */
+export function listarImplementos() {
+  return db
+    .select()
+    .from(maquinas)
+    .where(and(eq(maquinas.categoria, 'implemento'), ne(maquinas.status, 'inativa')))
+    .orderBy(asc(maquinas.nome));
 }
 
 export function maquinaPorId(id: string) {
@@ -49,6 +59,16 @@ export async function cadastrarMaquina(nova: DadosNovaMaquina): Promise<Maquina>
       throw new Error(`Já existe uma máquina com a identificação ${informado}`);
     }
     const codigo = informado ?? gerarCodigo(nova.tipo ?? 'outro', usados);
-    return tx.insert(maquinas).values({ ...nova, codigo, nome }).returning().get();
+    const categoria = categoriaDoTipo(nova.tipo ?? 'outro');
+    // Implemento não tem motor: sem combustível, horímetro, tanque nem potência
+    const semMotor =
+      categoria === 'implemento'
+        ? { combustivel: null, possuiHorimetro: false, horimetroInicial: null, tanqueLitros: null, potenciaCv: null }
+        : { larguraTrabalhoM: null };
+    return tx
+      .insert(maquinas)
+      .values({ ...nova, ...semMotor, categoria, codigo, nome })
+      .returning()
+      .get();
   });
 }

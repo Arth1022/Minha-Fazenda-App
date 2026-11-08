@@ -7,6 +7,7 @@ import { useDatabaseMigrations } from '@/database';
 import { AgroColors, Spacing, Typography } from '@/constants/theme';
 import { LeitorQrCodeProvider } from '@/services/qrcode';
 import { FazendaProvider } from './FazendaProvider';
+import { InicializacaoDoApp } from './InicializacaoDoApp';
 
 interface AppProvidersProps {
   children: React.ReactNode;
@@ -18,6 +19,7 @@ export function AppProviders({ children }: AppProvidersProps) {
 
   let content = (
     <FazendaProvider>
+      <InicializacaoDoApp />
       <LeitorQrCodeProvider>{children}</LeitorQrCodeProvider>
     </FazendaProvider>
   );

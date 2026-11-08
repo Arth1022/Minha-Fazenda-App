@@ -14,6 +14,12 @@ export interface ResultadoDesenhoTalhao {
 
 export interface UseDesenhoTalhaoOptions {
   onConcluir?: (resultado: ResultadoDesenhoTalhao) => void;
+  /** Usado nas mensagens de erro: "do talhão", "da divisa" */
+  doQue?: string;
+  /** Regra extra sobre os cantos (ex.: ficar dentro da fazenda); devolve o erro ou null */
+  restricao?: (pontos: Coordenada[]) => string | null;
+  /** Abre já no modo de desenho (ex.: atalho "Desenhar talhão" da tela anterior) */
+  comecarDesenhando?: boolean;
 }
 
 const impact = (style = Haptics.ImpactFeedbackStyle.Light) =>
@@ -24,16 +30,20 @@ const notify = (type: Haptics.NotificationFeedbackType) =>
 
 export function useDesenhoTalhao(options?: UseDesenhoTalhaoOptions) {
   const [pontos, setPontos] = useState<Coordenada[]>([]);
-  const [modoDesenho, setModoDesenho] = useState(false);
+  const [modoDesenho, setModoDesenho] = useState(options?.comecarDesenhando ?? false);
+
+  const doQue = options?.doQue ?? 'do talhão';
+  const restricao = options?.restricao;
 
   const { areaAtualHa, erroTopologico } = useMemo(() => {
-    if (pontos.length < 3) return { areaAtualHa: 0, erroTopologico: null };
-    const { isValid, error } = validarPoligono(pontos);
+    const erroRestricao = pontos.length > 0 ? (restricao?.(pontos) ?? null) : null;
+    if (pontos.length < 3) return { areaAtualHa: 0, erroTopologico: erroRestricao };
+    const { isValid } = validarPoligono(pontos);
     return {
       areaAtualHa: calcularAreaHectares(pontos),
-      erroTopologico: isValid ? null : (error ?? 'As linhas do talhão não podem se cruzar.'),
+      erroTopologico: isValid ? erroRestricao : `As linhas ${doQue} não podem se cruzar.`,
     };
-  }, [pontos]);
+  }, [pontos, restricao, doQue]);
 
   useEffect(() => {
     if (erroTopologico) notify(Haptics.NotificationFeedbackType.Error);
@@ -44,6 +54,18 @@ export function useDesenhoTalhao(options?: UseDesenhoTalhaoOptions) {
   const alternarModo = useCallback(() => {
     impact(Haptics.ImpactFeedbackStyle.Medium);
     setModoDesenho((atual) => !atual);
+  }, []);
+
+  /** Entra no modo de desenho mantendo os cantos já marcados (ex.: voltar do "Salvar") */
+  const iniciar = useCallback(() => {
+    impact(Haptics.ImpactFeedbackStyle.Medium);
+    setModoDesenho(true);
+  }, []);
+
+  /** Sai do desenho e descarta os cantos marcados */
+  const cancelar = useCallback(() => {
+    setModoDesenho(false);
+    setPontos([]);
   }, []);
 
   const adicionarPonto = useCallback(
@@ -84,6 +106,8 @@ export function useDesenhoTalhao(options?: UseDesenhoTalhaoOptions) {
     erroTopologico,
     podeConcluir,
     alternarModo,
+    iniciar,
+    cancelar,
     adicionarPonto,
     desfazerPonto,
     limpar,

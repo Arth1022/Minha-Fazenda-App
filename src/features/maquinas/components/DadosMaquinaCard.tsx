@@ -41,6 +41,15 @@ export function DadosMaquinaCard({ ficha }: DadosMaquinaCardProps) {
           {maquina.dataAquisicao ? (
             <LinhaDado label="Aquisição">{formatDataBR(maquina.dataAquisicao)}</LinhaDado>
           ) : null}
+          {maquina.tanqueLitros !== null ? (
+            <LinhaDado label="Tanque">{formatMedida(maquina.tanqueLitros, 'L', 0)}</LinhaDado>
+          ) : null}
+          {maquina.larguraTrabalhoM !== null ? (
+            <LinhaDado label="Largura de trabalho">{formatMedida(maquina.larguraTrabalhoM, 'm')}</LinhaDado>
+          ) : null}
+          {maquina.categoria === 'motorizada' && !maquina.possuiHorimetro ? (
+            <LinhaDado label="Horímetro">Sem horímetro (usa as horas do app)</LinhaDado>
+          ) : null}
           {horimetroAtual !== null ? (
             <LinhaDado label="Horímetro (estimado)">{formatMedida(horimetroAtual, 'h')}</LinhaDado>
           ) : null}

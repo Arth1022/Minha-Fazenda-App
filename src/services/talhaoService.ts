@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, lte, ne } from 'drizzle-orm';
+import { and, asc, eq, gte, lte, ne, sql } from 'drizzle-orm';
 
 import { db, talhoes, type Talhao, type TipoTalhao } from '@/database';
 import { type Coordenada, extrairMetadadosEspaciais } from '@/utils/geoMath';
@@ -72,6 +72,51 @@ export function listarTalhoesNoViewport(limites: LimitesViewport) {
       ),
     )
     .orderBy(asc(talhoes.createdAt));
+}
+
+export interface DadosAtualizarTalhao {
+  nome?: string;
+  tipo?: TipoTalhao;
+  cor?: string;
+  /** Novo contorno: recalcula área, centróide e BBOX */
+  coordenadas?: Coordenada[];
+}
+
+/**
+ * Edita um talhão num único UPDATE (sem ler antes). Trocar o contorno recalcula os
+ * metadados espaciais. Quem ainda não subiu fica 'created'; o resto vira 'updated'.
+ */
+export async function atualizarTalhao(id: string, dados: DadosAtualizarTalhao): Promise<void> {
+  const mudancas: Partial<typeof talhoes.$inferInsert> = {};
+
+  if (dados.nome !== undefined) {
+    const nomeLimpo = dados.nome.trim();
+    if (!nomeLimpo) throw new Error('O nome do talhão é obrigatório.');
+    mudancas.nome = nomeLimpo;
+  }
+  if (dados.tipo !== undefined) mudancas.tipo = dados.tipo;
+  if (dados.cor !== undefined) mudancas.cor = dados.cor;
+  if (dados.coordenadas !== undefined) {
+    const meta = extrairMetadadosEspaciais(dados.coordenadas);
+    Object.assign(mudancas, {
+      areaHectares: meta.areaHectares,
+      geometriaJson: meta.geometriaJson,
+      centroLat: meta.centroLat,
+      centroLng: meta.centroLng,
+      minLat: meta.minLat,
+      maxLat: meta.maxLat,
+      minLng: meta.minLng,
+      maxLng: meta.maxLng,
+    });
+  }
+
+  await db
+    .update(talhoes)
+    .set({
+      ...mudancas,
+      syncStatus: sql`CASE WHEN ${talhoes.syncStatus} = 'created' THEN 'created' ELSE 'updated' END`,
+    })
+    .where(eq(talhoes.id, id));
 }
 
 /** Exclusão lógica (soft delete) para manter o registro na fila de sincronização com o PostGIS. */

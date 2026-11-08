@@ -1,141 +1,144 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { ChipSelector, CustomInput, FormModal, type ChipOption } from '@/components/forms';
-import { AgroColors, Radius, Spacing } from '@/constants/theme';
+import { BottomSheet } from '@/components/ui';
+import type { Talhao } from '@/database';
+import {
+  CULTURAS,
+  ORDEM_CULTURAS,
+  calcularSementes,
+  formatarNumero,
+  lerNumero,
+  paraCampo,
+  type CulturaSemente,
+} from '../services/calculos';
+import {
+  CaixaResultado,
+  CampoMapa,
+  CoresTexto,
+  GradeOpcoes,
+  LinkMapa,
+  RotuloCampo,
+  SeletorTalhao,
+} from './elementos';
 
-export type CulturaSemente = 'braquiaria' | 'mombaca' | 'milho' | 'outro';
-
-export const CONFIG_CULTURAS: Record<
-  Exclude<CulturaSemente, 'outro'>,
-  { taxaKgHa: number; sacoKg: number }
-> = {
-  braquiaria: { taxaKgHa: 12, sacoKg: 20 },
-  mombaca: { taxaKgHa: 5, sacoKg: 5 },
-  milho: { taxaKgHa: 20, sacoKg: 20 },
-};
-
-const OPCOES_CULTURA: ChipOption<CulturaSemente>[] = [
-  { label: 'Braquiária (12 kg/ha)', value: 'braquiaria' },
-  { label: 'Mombaça (5 kg/ha)', value: 'mombaca' },
-  { label: 'Milho Silagem (20 kg/ha)', value: 'milho' },
-  { label: 'Outro', value: 'outro' },
-];
+const OPCOES_CULTURA = ORDEM_CULTURAS.map((valor) => ({ valor, rotulo: CULTURAS[valor].rotulo }));
 
 export interface ModalCalculadoraSementesProps {
   visible: boolean;
-  areaInicialHa: number;
-  nomeTalhao?: string | null;
+  talhoes: Talhao[];
   onClose: () => void;
 }
 
-export function ModalCalculadoraSementes({
-  visible,
-  areaInicialHa,
-  nomeTalhao,
-  onClose,
-}: ModalCalculadoraSementesProps) {
+/** "Calculadora de sementes": área × taxa de semeadura → kg e sacos para comprar. */
+export function ModalCalculadoraSementes({ visible, talhoes, onClose }: ModalCalculadoraSementesProps) {
   const [areaTexto, setAreaTexto] = useState('');
   const [cultura, setCultura] = useState<CulturaSemente>('braquiaria');
-  const [taxaManual, setTaxaManual] = useState('15');
+  const [taxaTexto, setTaxaTexto] = useState(String(CULTURAS.braquiaria.taxaKgHa));
+  const [escolhendoTalhao, setEscolhendoTalhao] = useState(false);
 
-  useEffect(() => {
-    if (visible) {
-      setAreaTexto(areaInicialHa > 0 ? String(areaInicialHa) : '');
-    }
-  }, [visible, areaInicialHa]);
+  // Reabrir a calculadora fecha a lista de talhões (ajuste no render, sem efeito)
+  const [abertaAntes, setAbertaAntes] = useState(visible);
+  if (visible !== abertaAntes) {
+    setAbertaAntes(visible);
+    if (visible) setEscolhendoTalhao(false);
+  }
 
-  const hectares = Math.max(0, Number(areaTexto.replace(',', '.')) || 0);
-  const taxaKgHa =
-    cultura === 'outro'
-      ? Math.max(0, Number(taxaManual.replace(',', '.')) || 0)
-      : CONFIG_CULTURAS[cultura].taxaKgHa;
-  const sacoKg = cultura === 'outro' ? 20 : CONFIG_CULTURAS[cultura].sacoKg;
+  const trocarCultura = (nova: CulturaSemente) => {
+    setCultura(nova);
+    const sugerida = CULTURAS[nova].taxaKgHa;
+    setTaxaTexto(sugerida === null ? '' : String(sugerida));
+  };
 
-  const totalKg = Number((hectares * taxaKgHa).toFixed(1));
-  const totalSacos = totalKg > 0 ? Math.ceil(totalKg / sacoKg) : 0;
+  const config = CULTURAS[cultura];
+  const { totalKg, sacos, sacoKg } = calcularSementes(
+    lerNumero(areaTexto),
+    lerNumero(taxaTexto),
+    config.sacoKg,
+  );
 
   return (
-    <FormModal
+    <BottomSheet
       visible={visible}
-      title="Calculadora de Sementes"
-      subtitle={
-        nomeTalhao
-          ? `Cálculo focado no talhão: ${nomeTalhao}`
-          : 'Planejamento de plantio da fazenda'
-      }
+      title="Calculadora de sementes"
+      subtitle="Quanto comprar para plantar"
+      alturaMaxima={0.72}
       onClose={onClose}>
-      <CustomInput
-        label="Área para plantio"
-        placeholder="Ex.: 15.2"
-        keyboardType="decimal-pad"
-        suffix="Ha"
-        value={areaTexto}
-        onChangeText={setAreaTexto}
-        helperText={
-          areaInicialHa > 0
-            ? `${nomeTalhao ? `Área de ${nomeTalhao}` : 'Soma de Pasto e Lavoura'}: ${areaInicialHa} Ha`
-            : 'Selecione um talhão ou informe os hectares acima'
-        }
-      />
-
-      <ChipSelector
-        label="Cultura / Forrageira"
-        options={OPCOES_CULTURA}
-        value={cultura}
-        onChange={setCultura}
-      />
-
-      {cultura === 'outro' ? (
-        <CustomInput
-          label="Taxa de semeadura recomendada"
-          placeholder="Ex.: 15"
-          keyboardType="decimal-pad"
-          suffix="kg/ha"
-          value={taxaManual}
-          onChangeText={setTaxaManual}
-        />
-      ) : null}
-
-      <View style={styles.resumoBox}>
-        <Text style={styles.resumoTitulo}>Recomendação para Compra</Text>
-        <View style={styles.resumoGrid}>
-          <View style={styles.metricaCard}>
-            <Text style={styles.metricaValor}>{totalKg} kg</Text>
-            <Text style={styles.metricaSub}>Taxa aplicada: {taxaKgHa} kg/ha</Text>
-          </View>
-          <View style={styles.metricaCard}>
-            <Text style={styles.metricaValor}>
-              {totalSacos} {totalSacos === 1 ? 'saco' : 'sacos'}
-            </Text>
-            <Text style={styles.metricaSub}>Sacos fechados de {sacoKg} kg</Text>
-          </View>
+      <View style={estilos.conteudo}>
+        <View style={estilos.bloco}>
+          <RotuloCampo
+            titulo="Área para plantio"
+            acao={
+              <LinkMapa
+                rotulo="Usar um talhão"
+                icone="pentagon"
+                onPress={() => setEscolhendoTalhao((atual) => !atual)}
+              />
+            }
+          />
+          {escolhendoTalhao ? (
+            <SeletorTalhao
+              talhoes={talhoes}
+              medida={(t) => `${formatarNumero(t.areaHectares, 2)} ha`}
+              onEscolher={(t) => {
+                setAreaTexto(paraCampo(t.areaHectares, 2));
+                setEscolhendoTalhao(false);
+              }}
+            />
+          ) : null}
+          <CampoMapa
+            valor={areaTexto}
+            onChange={setAreaTexto}
+            unidade="ha"
+            placeholder="0"
+            acessibilidade="Área para plantio em hectares"
+          />
         </View>
+
+        <View style={estilos.bloco}>
+          <RotuloCampo titulo="Cultura ou forrageira" />
+          <GradeOpcoes opcoes={OPCOES_CULTURA} selecionado={cultura} onChange={trocarCultura} />
+        </View>
+
+        <View style={estilos.bloco}>
+          <RotuloCampo titulo="Taxa de semeadura" />
+          <CampoMapa
+            valor={taxaTexto}
+            onChange={setTaxaTexto}
+            unidade="kg/ha"
+            placeholder="0"
+            acessibilidade="Taxa de semeadura em quilos por hectare"
+          />
+          <Text style={estilos.ajuda}>
+            {config.taxaKgHa === null
+              ? 'Informe a taxa indicada na embalagem da semente.'
+              : `Sugestão para ${config.rotulo}. Ajuste conforme a embalagem da semente.`}
+          </Text>
+        </View>
+
+        <CaixaResultado>
+          <Text style={estilos.valorGrande}>{formatarNumero(totalKg)} kg</Text>
+          <Text style={estilos.valorDetalhe}>
+            {totalKg > 0
+              ? `${sacos} ${sacos === 1 ? 'saco' : 'sacos'} de ${sacoKg} kg`
+              : 'Informe a área e a taxa para calcular'}
+          </Text>
+        </CaixaResultado>
       </View>
-    </FormModal>
+    </BottomSheet>
   );
 }
 
-const styles = StyleSheet.create({
-  resumoBox: {
-    backgroundColor: AgroColors.mintBg,
-    borderWidth: 1,
-    borderColor: AgroColors.mintBorder,
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
-    gap: Spacing.sm,
+const estilos = StyleSheet.create({
+  conteudo: { gap: 22, paddingTop: 4 },
+  bloco: { gap: 10 },
+  ajuda: { fontSize: 13.5, lineHeight: 19, color: CoresTexto.suave },
+  valorGrande: {
+    fontSize: 30,
+    lineHeight: 38,
+    fontWeight: '800',
+    color: CoresTexto.escuro,
+    letterSpacing: -0.5,
   },
-  resumoTitulo: { fontSize: 12, fontWeight: '700', color: AgroColors.headerGreen },
-  resumoGrid: { flexDirection: 'row', gap: Spacing.sm },
-  metricaCard: {
-    flex: 1,
-    backgroundColor: AgroColors.cardBg,
-    borderRadius: Radius.md,
-    padding: Spacing.sm,
-    borderWidth: 1,
-    borderColor: AgroColors.mintBorder,
-    gap: 2,
-  },
-  metricaValor: { fontSize: 16, fontWeight: '800', color: AgroColors.primaryDark },
-  metricaSub: { fontSize: 11, fontWeight: '500', color: AgroColors.textSecondary },
+  valorDetalhe: { fontSize: 15, lineHeight: 20, color: CoresTexto.suave },
 });

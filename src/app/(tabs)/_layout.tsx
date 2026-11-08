@@ -4,6 +4,7 @@ import { Alert, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'r
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { type Href, Tabs, router, usePathname } from 'expo-router';
 
+import { AppIcon, type AppIconName } from '@/components/ui/AppIcon';
 import { FloatingActionButton } from '@/components/ui/FloatingActionButton';
 import { AgroColors, MaxContentWidth, Shadows, Spacing } from '@/constants/theme';
 import { AcoesMaquinaModal, useQrCodeMaquina } from '@/features/maquinas';
@@ -13,19 +14,19 @@ import { BotaoLerQrCode } from '@/services/qrcode';
 interface TabConfig {
   href: Href;
   label: string;
-  icon: string;
+  icon: AppIconName;
 }
 
 const HOME_HREF: Href = '/';
 
 const LEFT_TABS: TabConfig[] = [
-  { href: '/mapa', label: 'Mapa', icon: '🗺️' },
-  { href: '/rebanho', label: 'Rebanho', icon: '🐮' },
+  { href: '/mapa', label: 'Mapa', icon: 'map' },
+  { href: '/rebanho', label: 'Rebanho', icon: 'cow' },
 ];
 
 const RIGHT_TABS: TabConfig[] = [
-  { href: '/estoque', label: 'Estoque', icon: '📦' },
-  { href: '/maquinas', label: 'Máquinas', icon: '🚜' },
+  { href: '/estoque', label: 'Estoque', icon: 'package' },
+  { href: '/maquinas', label: 'Máquinas', icon: 'tractor' },
 ];
 
 /**
@@ -52,13 +53,14 @@ function TabBar() {
         accessibilityRole="tab"
         accessibilityState={{ selected: isFocused }}
         style={styles.tabItem}>
-        <Text
-          style={[
-            styles.tabIcon,
-            isFocused ? styles.tabIconActive : styles.tabIconInactive,
-          ]}>
-          {tab.icon}
-        </Text>
+        {/* Aba ativa: ícone dentro de uma pílula verde-clara (protótipo) */}
+        <View style={[styles.iconPill, isFocused && styles.iconPillActive]}>
+          <AppIcon
+            name={tab.icon}
+            size={22}
+            color={isFocused ? AgroColors.forest : AgroColors.textMuted}
+          />
+        </View>
         <Text
           style={[
             styles.tabLabel,
@@ -66,7 +68,6 @@ function TabBar() {
           ]}>
           {tab.label}
         </Text>
-        {isFocused && <View style={styles.activeDot} />}
       </Pressable>
     );
   };
@@ -109,7 +110,7 @@ function TabBar() {
 }
 
 /** Altura da linha de abas (tabBarRow), sem a área segura de baixo */
-const TAB_BAR_HEIGHT = 62;
+const TAB_BAR_HEIGHT = 66;
 
 /** QR Code que nenhum fluxo reconheceu: só mostra o que foi lido. */
 function mostrarQrCodeLido(valor: string) {
@@ -191,8 +192,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    height: 62,
-    paddingHorizontal: 8,
+    height: TAB_BAR_HEIGHT,
+    paddingHorizontal: 4,
   },
   tabGroup: {
     flex: 1,
@@ -221,35 +222,26 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     gap: 2,
   },
-  tabIcon: {
-    fontSize: 18,
-    lineHeight: 22,
+  iconPill: {
+    width: 52,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  tabIconActive: {
-    color: AgroColors.primary,
-    opacity: 1,
-  },
-  tabIconInactive: {
-    color: AgroColors.textMuted,
-    opacity: 0.7,
+  iconPillActive: {
+    backgroundColor: AgroColors.forestTint,
   },
   tabLabel: {
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 12,
+    lineHeight: 15,
   },
   tabLabelActive: {
-    color: AgroColors.primary,
+    color: AgroColors.forest,
     fontWeight: '700',
   },
   tabLabelInactive: {
     color: AgroColors.textMuted,
     fontWeight: '500',
-  },
-  activeDot: {
-    width: 16,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: AgroColors.primaryLight,
-    marginTop: 1,
   },
 });

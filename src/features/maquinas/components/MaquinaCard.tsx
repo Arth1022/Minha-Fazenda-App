@@ -4,7 +4,9 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Button, Card } from '@/components/ui';
 import { AgroColors, Spacing, Typography } from '@/constants/theme';
 import type { MaquinaComUso } from '@/dtos';
-import { STATUS_MAQUINA_LABEL, TIPO_MAQUINA_LABEL } from '../constants';
+import { CONDICAO_LABEL, TIPO_MAQUINA_LABEL } from '../constants';
+import { ehImplemento } from '../services/padroes';
+import type { CondicaoMaquina } from '../services/registros';
 import { BotaoLigarMaquina } from './BotaoLigarMaquina';
 import { MaquinaAvatar } from './MaquinaAvatar';
 import { TempoDecorrido } from './TempoDecorrido';
@@ -17,6 +19,10 @@ export interface MaquinaCardProps {
   onCodigoPress: (maquina: MaquinaComUso) => void;
   /** Gravando o uso desta máquina */
   ocupada?: boolean;
+  /** Situação pelos problemas em aberto */
+  condicao?: CondicaoMaquina;
+  /** O uso aberto é de outra pessoa: mostra o nome e não oferece Desligar */
+  deOutraPessoa?: boolean;
 }
 
 /** "Massey Ferguson · MF 4275", ou o tipo quando não há marca/modelo. */
@@ -34,9 +40,13 @@ export const MaquinaCard = React.memo(function MaquinaCard({
   onAbrir,
   onCodigoPress,
   ocupada = false,
+  condicao = 'ok',
+  deOutraPessoa = false,
 }: MaquinaCardProps) {
   const { usoAtual } = maquina;
   const inativa = maquina.status === 'inativa';
+  const implemento = ehImplemento(maquina);
+  const alerta = condicao === 'atencao' || condicao === 'paradaPorProblema' || condicao === 'manutencao';
   const abrir = () => onAbrir(maquina);
   const alternarUso = () => onCodigoPress(maquina);
 
@@ -56,29 +66,33 @@ export const MaquinaCard = React.memo(function MaquinaCard({
           {usoAtual ? (
             <View style={styles.situacao}>
               <View style={[styles.ponto, styles.pontoEmUso]} />
-              <Text style={styles.emUso}>Em uso · </Text>
+              <Text style={styles.emUso}>
+                {deOutraPessoa ? `Em uso por ${usoAtual.operador ?? 'outra pessoa'} · ` : 'Em uso · '}
+              </Text>
               <TempoDecorrido desde={usoAtual.inicio} style={styles.emUso} />
             </View>
           ) : (
             <View style={styles.situacao}>
-              <View style={[styles.ponto, maquina.status === 'manutencao' && styles.pontoAlerta]} />
-              <Text style={[styles.parada, maquina.status === 'manutencao' && styles.alerta]}>
-                {maquina.status === 'ativa' ? 'Parada' : STATUS_MAQUINA_LABEL[maquina.status]}
+              <View style={[styles.ponto, alerta && styles.pontoAlerta]} />
+              <Text style={[styles.parada, alerta && styles.alerta]}>
+                {implemento && condicao === 'ok' ? 'Implemento' : condicao === 'ok' ? 'Parada' : CONDICAO_LABEL[condicao]}
               </Text>
             </View>
           )}
         </View>
 
-        <BotaoLigarMaquina
-          nome={maquina.nome}
-          emUso={usoAtual !== null}
-          onPress={alternarUso}
-          disabled={inativa && !usoAtual}
-          loading={ocupada}
-        />
+        {!implemento ? (
+          <BotaoLigarMaquina
+            nome={maquina.nome}
+            emUso={usoAtual !== null && !deOutraPessoa}
+            onPress={alternarUso}
+            disabled={inativa && !usoAtual}
+            loading={ocupada}
+          />
+        ) : null}
       </View>
 
-      {usoAtual ? (
+      {usoAtual && !deOutraPessoa ? (
         <Button label="Desligar" variant="danger" size="sm" fullWidth onPress={alternarUso} disabled={ocupada} />
       ) : null}
     </Card>

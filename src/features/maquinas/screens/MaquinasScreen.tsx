@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text } from 'react-native';
 
 import {
   EmptyState,
@@ -11,13 +11,18 @@ import {
   type SegmentedTabItem,
 } from '@/components/ui';
 import { AgroColors, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import { useLiveQuery } from '@/database';
 import type { MaquinaComUso } from '@/dtos';
+import { usuarioAtual } from '@/services/usuario';
 import { BuscarMaquinaModal } from '../components/BuscarMaquinaModal';
 import { MaquinaCard } from '../components/MaquinaCard';
 import { NovaMaquinaForm } from '../components/NovaMaquinaForm';
 import { ResumoFrotaCard } from '../components/ResumoFrotaCard';
-import { useControleUso } from '../hooks/useControleUso';
+import { problemasAbertosDaFrota } from '../data/ocorrencias';
+import { useFluxosMaquina } from '../hooks/useFluxosMaquina';
 import { useMaquinas } from '../hooks/useMaquinas';
+import { condicaoDaMaquina, type CondicaoMaquina } from '../services/registros';
+import { duracaoDoUso, formatarDuracao } from '../services/uso';
 
 type Filtro = 'todas' | 'emUso' | 'paradas';
 
@@ -33,6 +38,11 @@ const MENSAGEM_VAZIA: Record<Filtro, string> = {
   paradas: 'Todas as máquinas estão em uso.',
 };
 
+/** Uso aberto por outra pessoa (sem operador: uso antigo, feito neste celular). */
+function deOutraPessoa(maquina: MaquinaComUso): boolean {
+  return maquina.usoAtual?.operadorId != null && maquina.usoAtual.operadorId !== usuarioAtual().id;
+}
+
 // Quantidade de cards visíveis na lista antes de precisar rolar
 const MAQUINAS_VISIVEIS = 3;
 
@@ -43,7 +53,46 @@ const MAQUINAS_VISIVEIS = 3;
 export default function MaquinasScreen() {
   const router = useRouter();
   const maquinas = useMaquinas();
-  const { alternar, ocupadaId } = useControleUso();
+  const fluxos = useFluxosMaquina();
+  const { data: problemas } = useLiveQuery(problemasAbertosDaFrota());
+  const [ocupadaId, setOcupadaId] = useState<string | null>(null);
+
+  const condicaoPor = useMemo(() => {
+    const mapa = new Map<string, CondicaoMaquina>();
+    for (const maquina of maquinas) {
+      mapa.set(maquina.id, condicaoDaMaquina(maquina, problemas.filter((p) => p.maquinaId === maquina.id)));
+    }
+    return mapa;
+  }, [maquinas, problemas]);
+
+  const { abrir, desligar } = fluxos;
+  /** Botão de liga/desliga do card: ligar abre a escolha de implemento e atividade. */
+  const alternar = useCallback(
+    (maquina: MaquinaComUso) => {
+      const outra = deOutraPessoa(maquina);
+      if (maquina.usoAtual && !outra) {
+        const tempo = formatarDuracao(duracaoDoUso(maquina.usoAtual, new Date()));
+        Alert.alert(`Desligar ${maquina.nome}?`, `Tempo de uso: ${tempo}.`, [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Desligar',
+            style: 'destructive',
+            onPress: () => {
+              setOcupadaId(maquina.id);
+              desligar(maquina).finally(() => setOcupadaId(null));
+            },
+          },
+        ]);
+        return;
+      }
+      abrir('ligar', maquina, {
+        usoAberto: maquina.usoAtual,
+        condicao: condicaoPor.get(maquina.id),
+        deOutraPessoa: outra,
+      });
+    },
+    [abrir, desligar, condicaoPor]
+  );
 
   const [filtro, setFiltro] = useState<Filtro>('todas');
   const [cadastroVisivel, setCadastroVisivel] = useState(false);
@@ -111,6 +160,8 @@ export default function MaquinasScreen() {
               onAbrir={abrirFicha}
               onCodigoPress={alternar}
               ocupada={ocupadaId === maquina.id}
+              condicao={condicaoPor.get(maquina.id)}
+              deOutraPessoa={deOutraPessoa(maquina)}
             />
           )}
         />
@@ -123,6 +174,8 @@ export default function MaquinasScreen() {
         onClose={() => setCadastroVisivel(false)}
         onCreated={handleCreated}
       />
+
+      {fluxos.modais}
 
       <BuscarMaquinaModal
         visible={buscaVisivel}
