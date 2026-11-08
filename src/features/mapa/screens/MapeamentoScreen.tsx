@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 
@@ -40,11 +40,15 @@ function abrirMapa(opcoes: { talhao?: string; desenhar?: 'divisa' | 'talhao' } =
  * fazenda em talhões. Depois, a lista permite criar mais, editar e excluir.
  */
 export default function MapeamentoScreen() {
-  const { data: talhoes, updatedAt } = useLiveQuery(listarTalhoesAtivos());
+  const { data: talhoes, updatedAt, error } = useLiveQuery(listarTalhoesAtivos());
   const fazenda = useFazendaMapa();
   const [calculadora, setCalculadora] = useState<'sementes' | 'cerca' | null>(null);
 
-  const carregado = updatedAt !== undefined;
+  // Com erro na consulta, a tela segue (sem talhões) em vez de ficar presa em "…"
+  const carregado = updatedAt !== undefined || error !== undefined;
+  useEffect(() => {
+    if (error) console.warn('[Mapa] Falha ao listar talhões:', error);
+  }, [error]);
   const vista = vistaDaFazenda(fazenda, talhoes);
   // Remonta a prévia quando muda o que ela deve enquadrar (a câmera só lê a vista ao montar)
   const chavePrevia = JSON.stringify(vista);

@@ -53,8 +53,11 @@ function TabBar() {
         accessibilityRole="tab"
         accessibilityState={{ selected: isFocused }}
         style={styles.tabItem}>
-        {/* Aba ativa: ícone dentro de uma pílula verde-clara (protótipo) */}
-        <View style={[styles.iconPill, isFocused && styles.iconPillActive]}>
+        {/* Aba ativa: ícone dentro de uma pílula verde-clara (protótipo). O fundo é uma
+            view própria, montada já arredondada: ligar o backgroundColor numa view que já
+            existe faz o Android (Fabric) perder o borderRadius e a pílula fica quadrada. */}
+        <View style={styles.iconPill}>
+          {isFocused ? <View style={styles.iconPillFundo} /> : null}
           <AppIcon
             name={tab.icon}
             size={22}
@@ -229,7 +232,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconPillActive: {
+  iconPillFundo: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: 15,
     backgroundColor: AgroColors.forestTint,
   },
   tabLabel: {
