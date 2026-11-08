@@ -5,6 +5,7 @@ import {
   desfazerDia,
   diasConfirmados,
   diasConfirmadosDoAnimal,
+  todasDosesConfirmadas,
 } from '@/features/rebanho/data/doses';
 import { alterarFimDoTratamento, createTratamento } from '@/features/rebanho/data/tratamentos';
 import {
@@ -185,6 +186,8 @@ async function runDosesTest() {
       new Set(doAnimal.map((d) => d.tratamentoId)).size === 2,
     'diasConfirmadosDoAnimal junta os tratamentos do animal numa consulta'
   );
+  const todas = await todasDosesConfirmadas();
+  check(todas.length === 2, 'todasDosesConfirmadas traz todas as doses do rebanho numa consulta');
 
   console.log('\n🎉 DOSES OK!\n');
 }

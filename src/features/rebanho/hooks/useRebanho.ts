@@ -13,8 +13,10 @@ import {
   criasDe,
   criasPorMae,
   listarAnimais,
+  listarTouros,
   ultimosPartos,
 } from '../data/animais';
+import { todasDosesConfirmadas } from '../data/doses';
 import { pesagensDoAnimal, pesosAtuais } from '../data/pesagens';
 import { reproducoesDoAnimal } from '../data/reproducoes';
 import { useFazenda } from '@/providers/FazendaProvider';
@@ -29,10 +31,12 @@ export function useRebanho(): AnimalComFase[] {
   const { data: lista } = useLiveQuery(listarAnimais());
   const { data: partos } = useLiveQuery(ultimosPartos());
   const { data: comCarencia } = useLiveQuery(tratamentosComCarencia());
+  const { data: doses } = useLiveQuery(todasDosesConfirmadas());
   const { data: crias } = useLiveQuery(criasPorMae());
   const { data: pesos } = useLiveQuery(pesosAtuais());
 
   return useMemo(() => {
+    const hoje = new Date();
     const partoPorMae = new Map(partos.map((p) => [p.maeId, p.data]));
     const criasPor = new Map(crias.map((c) => [c.maeId, c.total]));
     const pesoPor = new Map(pesos.map((p) => [p.animalId, p.pesoKg]));
@@ -40,7 +44,9 @@ export function useRebanho(): AnimalComFase[] {
       const ultimoParto = partoPorMae.get(animal.id) ?? null;
       const carencia = carenciaAte(
         comCarencia.filter((t) => t.animalId === animal.id),
-        produzLeite
+        produzLeite,
+        hoje,
+        doses
       );
       return {
         ...animal,
@@ -57,7 +63,12 @@ export function useRebanho(): AnimalComFase[] {
         }),
       };
     });
-  }, [lista, partos, comCarencia, crias, pesos, produzLeite]);
+  }, [lista, partos, comCarencia, doses, crias, pesos, produzLeite]);
+}
+
+/** Machos ativos do rebanho (touros para cobertura e parto), numa consulta só. */
+export function useTouros(): Animal[] {
+  return useLiveQuery(listarTouros()).data;
 }
 
 export function useAnimal(id?: string): Animal | null {

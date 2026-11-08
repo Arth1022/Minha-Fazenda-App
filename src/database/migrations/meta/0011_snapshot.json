@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "d1dd90bf-d34e-4b7b-864d-ae60aa85db28",
+  "id": "81b8de8e-d894-4c78-a20a-4a94c496640a",
   "prevId": "f16be02d-f7df-48cd-b820-6290e1d47f2b",
   "tables": {
     "animais": {
@@ -182,6 +182,13 @@
           ],
           "isUnique": false
         },
+        "animais_status_idx": {
+          "name": "animais_status_idx",
+          "columns": [
+            "status"
+          ],
+          "isUnique": false
+        },
         "animais_mae_id_idx": {
           "name": "animais_mae_id_idx",
           "columns": [
@@ -242,80 +249,6 @@
             "id"
           ],
           "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "anotacoes_maquina": {
-      "name": "anotacoes_maquina",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "maquina_id": {
-          "name": "maquina_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "texto": {
-          "name": "texto",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "criado_por": {
-          "name": "criado_por",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "anotacoes_maquina_maquina_id_idx": {
-          "name": "anotacoes_maquina_maquina_id_idx",
-          "columns": [
-            "maquina_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "anotacoes_maquina_maquina_id_maquinas_id_fk": {
-          "name": "anotacoes_maquina_maquina_id_maquinas_id_fk",
-          "tableFrom": "anotacoes_maquina",
-          "tableTo": "maquinas",
-          "columnsFrom": [
-            "maquina_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -474,145 +407,6 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "maquinas": {
-      "name": "maquinas",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "codigo": {
-          "name": "codigo",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "nome": {
-          "name": "nome",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "tipo": {
-          "name": "tipo",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'outro'"
-        },
-        "marca": {
-          "name": "marca",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "modelo": {
-          "name": "modelo",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "ano_fabricacao": {
-          "name": "ano_fabricacao",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "numero_serie": {
-          "name": "numero_serie",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "placa": {
-          "name": "placa",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "potencia_cv": {
-          "name": "potencia_cv",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "combustivel": {
-          "name": "combustivel",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "horimetro_inicial": {
-          "name": "horimetro_inicial",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "data_aquisicao": {
-          "name": "data_aquisicao",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'ativa'"
-        },
-        "criado_por": {
-          "name": "criado_por",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "maquinas_codigo_idx": {
-          "name": "maquinas_codigo_idx",
-          "columns": [
-            "codigo"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "notificacoes_agendadas": {
       "name": "notificacoes_agendadas",
       "columns": {
@@ -734,7 +528,15 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "ordenhas_data_registro_idx": {
+          "name": "ordenhas_data_registro_idx",
+          "columns": [
+            "data_registro"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -1147,103 +949,6 @@
           "tableTo": "animais",
           "columnsFrom": [
             "animal_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "usos_maquina": {
-      "name": "usos_maquina",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "maquina_id": {
-          "name": "maquina_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "inicio": {
-          "name": "inicio",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "fim": {
-          "name": "fim",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "operador": {
-          "name": "operador",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "criado_por": {
-          "name": "criado_por",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "usos_maquina_maquina_inicio_idx": {
-          "name": "usos_maquina_maquina_inicio_idx",
-          "columns": [
-            "maquina_id",
-            "inicio"
-          ],
-          "isUnique": false
-        },
-        "usos_maquina_aberto_idx": {
-          "name": "usos_maquina_aberto_idx",
-          "columns": [
-            "maquina_id"
-          ],
-          "isUnique": true,
-          "where": "\"usos_maquina\".\"fim\" is null"
-        }
-      },
-      "foreignKeys": {
-        "usos_maquina_maquina_id_maquinas_id_fk": {
-          "name": "usos_maquina_maquina_id_maquinas_id_fk",
-          "tableFrom": "usos_maquina",
-          "tableTo": "maquinas",
-          "columnsFrom": [
-            "maquina_id"
           ],
           "columnsTo": [
             "id"

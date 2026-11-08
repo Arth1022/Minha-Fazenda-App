@@ -12,8 +12,10 @@ import m0007 from './0007_sprint2_agenda_doses_pai.sql';
 import m0008 from './0008_copia_dias_confirmados.sql';
 import m0009 from './0009_tratamentos_observacoes.sql';
 import m0010 from './0010_animais_crias_anteriores.sql';
-import m0011 from './0011_maquinas.sql';
-import m0012 from './0012_rebanho_dados_extras.sql';
+import m0011 from './0011_indices_status_ordenha.sql';
+import m0012 from './0012_talhoes.sql';
+import m0013 from './0013_maquinas.sql';
+import m0014 from './0014_rebanho_dados_extras.sql';
 
   export default {
     journal,
@@ -30,7 +32,9 @@ m0008,
 m0009,
 m0010,
 m0011,
-m0012
+m0012,
+m0013,
+m0014
     }
   }
   

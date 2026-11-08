@@ -17,6 +17,7 @@ import {
   emIdadeReprodutiva,
   formatarIdade,
 } from '../services/fase';
+import { alertaPrincipal } from '../services/alertas';
 import { diasComDose, proximaDosePendente, tratamentosAtivos } from '../services/doses';
 import {
   calcularPesoAtual,
@@ -139,6 +140,17 @@ export function useFichaAnimal(id?: string): FichaAnimal | null {
         : null,
       exames,
       anotacoes,
+      alerta: alertaPrincipal(
+        {
+          animal,
+          fase,
+          tratamentos,
+          dosesConfirmadas: doses,
+          coberturaAberta,
+          produzLeite,
+        },
+        agora
+      ),
     };
   }, [
     animal,

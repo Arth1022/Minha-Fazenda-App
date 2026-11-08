@@ -43,7 +43,7 @@ export default function AnimalDetalheScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  // Touros para a cobertura: os machos ativos do rebanho
+  // Rebanho para a edição (mãe e pai) e, dele, os touros para a cobertura
   const rebanho = useRebanho();
   const touros = useMemo(() => rebanho.filter((a) => a.sexo === 'M'), [rebanho]);
 

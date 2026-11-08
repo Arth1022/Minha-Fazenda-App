@@ -1,7 +1,7 @@
 import React, { Fragment } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { AppIcon, Button } from '@/components/ui';
+import { AppIcon, Button, InfoBanner } from '@/components/ui';
 import { AgroColors, IconSize, Spacing, Typography } from '@/constants/theme';
 import type { FichaAnimal, TratamentoAtivo } from '@/dtos';
 import { formatDataBR } from '@/utils/date';
@@ -38,7 +38,7 @@ export interface ResumoTabProps {
   onVerReproducao: () => void;
 }
 
-/** Aba Resumo: o que fazer hoje, peso, crias e a reprodução em andamento. */
+/** Aba Resumo: o alerta, o que fazer hoje, peso, crias e a reprodução em andamento. */
 export function ResumoTab({
   ficha,
   dosesHoje,
@@ -56,6 +56,9 @@ export function ResumoTab({
 
   return (
     <View style={styles.coluna}>
+      {/* Alerta mais importante do animal (carência, dose, parto ou novilha) */}
+      {ficha.alerta ? <InfoBanner message={ficha.alerta.texto} /> : null}
+
       {dosesHoje.length > 0 ? (
         <FichaCard>
           <View style={styles.cabecalho}>

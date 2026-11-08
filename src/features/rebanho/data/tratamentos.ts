@@ -66,16 +66,18 @@ export async function ultimoUsoDoMedicamento(
   const alvo = normalizarTexto(medicamento);
   if (!alvo) return null;
 
-  // O lower() do SQLite ignora acentos fora do ASCII; por isso a comparação é feita aqui
+  // O lower() do SQLite ignora acentos fora do ASCII; agrupa por grafia para ler só uma linha por nome
   const usos = await db
     .select({
       medicamento: tratamentos.medicamento,
       dose: tratamentos.dose,
       carenciaLeiteDias: tratamentos.carenciaLeiteDias,
       carenciaCarneDias: tratamentos.carenciaCarneDias,
+      ultimoInicio: max(tratamentos.dataInicio),
     })
     .from(tratamentos)
-    .orderBy(desc(tratamentos.dataInicio), desc(tratamentos.createdAt));
+    .groupBy(tratamentos.medicamento)
+    .orderBy(desc(max(tratamentos.dataInicio)), desc(max(tratamentos.createdAt)));
 
   const ultimo = usos.find((uso) => normalizarTexto(uso.medicamento) === alvo);
   if (!ultimo) return null;

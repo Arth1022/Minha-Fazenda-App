@@ -155,6 +155,7 @@ export const animais = sqliteTable(
     index('animais_mae_id_idx').on(table.maeId),
     index('animais_pai_id_idx').on(table.paiId),
     index('animais_lote_id_idx').on(table.loteId),
+    index('animais_status_idx').on(table.status),
   ]
 );
 
@@ -369,15 +370,19 @@ export const anotacoesAnimal = sqliteTable(
   (table) => [index('anotacoes_animal_animal_id_idx').on(table.animalId)]
 );
 
-export const ordenhas = sqliteTable('ordenhas', {
-  id: id(),
-  periodo: text('periodo', { enum: PERIODOS_ORDENHA }).notNull(),
-  horarioPrevisto: text('horario_previsto'),
-  horarioNotificacao: text('horario_notificacao'),
-  volumeLitros: real('volume_litros'),
-  dataRegistro: integer('data_registro', { mode: 'timestamp_ms' }).notNull(),
-  ...timestamps,
-});
+export const ordenhas = sqliteTable(
+  'ordenhas',
+  {
+    id: id(),
+    periodo: text('periodo', { enum: PERIODOS_ORDENHA }).notNull(),
+    horarioPrevisto: text('horario_previsto'),
+    horarioNotificacao: text('horario_notificacao'),
+    volumeLitros: real('volume_litros'),
+    dataRegistro: integer('data_registro', { mode: 'timestamp_ms' }).notNull(),
+    ...timestamps,
+  },
+  (table) => [index('ordenhas_data_registro_idx').on(table.dataRegistro)]
+);
 
 export const ENTIDADES_NOTIFICACAO = ['animal', 'ordenha'] as const;
 export type EntidadeNotificacao = (typeof ENTIDADES_NOTIFICACAO)[number];
@@ -576,3 +581,42 @@ export type Cio = typeof cios.$inferSelect;
 export type Exame = typeof exames.$inferSelect;
 export type NovoExame = typeof exames.$inferInsert;
 export type AnotacaoAnimal = typeof anotacoesAnimal.$inferSelect;
+
+export const TIPOS_TALHAO = ['pasto', 'lavoura', 'reserva', 'outro'] as const;
+export type TipoTalhao = (typeof TIPOS_TALHAO)[number];
+
+export const STATUS_SYNC = ['created', 'updated', 'synced', 'deleted'] as const;
+export type StatusSync = (typeof STATUS_SYNC)[number];
+
+export interface GeometriaPoligono {
+  type: 'Polygon';
+  coordinates: number[][][];
+}
+
+export const talhoes = sqliteTable(
+  'talhoes',
+  {
+    id: id(),
+    nome: text('nome').notNull(),
+    tipo: text('tipo', { enum: TIPOS_TALHAO }).notNull().default('pasto'),
+    cor: text('cor').notNull(),
+    areaHectares: real('area_hectares').notNull(),
+    geometriaJson: text('geometria_json', { mode: 'json' }).$type<GeometriaPoligono>().notNull(),
+    centroLat: real('centro_lat').notNull(),
+    centroLng: real('centro_lng').notNull(),
+    minLat: real('min_lat').notNull(),
+    maxLat: real('max_lat').notNull(),
+    minLng: real('min_lng').notNull(),
+    maxLng: real('max_lng').notNull(),
+    syncStatus: text('sync_status', { enum: STATUS_SYNC }).notNull().default('created'),
+    criadoPor: criadoPor(),
+    ...timestamps,
+  },
+  (table) => [
+    index('talhoes_bbox_idx').on(table.minLat, table.maxLat, table.minLng, table.maxLng),
+    index('talhoes_sync_status_idx').on(table.syncStatus),
+  ]
+);
+
+export type Talhao = typeof talhoes.$inferSelect;
+export type NovoTalhao = typeof talhoes.$inferInsert;

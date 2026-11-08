@@ -1,4 +1,4 @@
-import type { Animal, Fase, SituacaoLeite } from './animal.dto';
+import type { AlertaAnimal, Animal, Fase, SituacaoLeite } from './animal.dto';
 import type { Pesagem, PesoAtual } from './pesagem.dto';
 import type {
   AnotacaoAnimal,
@@ -85,4 +85,6 @@ export interface FichaAnimal {
   exames: Exame[];
   /** Anotações livres, da mais recente para a mais antiga */
   anotacoes: AnotacaoAnimal[];
+  /** Alerta mais importante do animal (carência, dose, parto ou novilha); null se não há */
+  alerta: AlertaAnimal | null;
 }
