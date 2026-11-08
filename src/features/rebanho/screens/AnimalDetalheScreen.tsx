@@ -1,104 +1,191 @@
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, Header, ScreenContainer } from '@/components/ui';
-import { Spacing } from '@/constants/theme';
-import { FichaResumo } from '../components/FichaResumo';
+import { AppIcon, Header, ScreenContainer } from '@/components/ui';
+import { AgroColors, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import type { DiaDaTrilha, Tratamento, TratamentoAtivo } from '@/dtos';
+import { CriasSheet } from '../components/ficha/CriasSheet';
+import { EditarTratamentoModal } from '../components/ficha/EditarTratamentoModal';
+import { PesagensSheet } from '../components/ficha/PesagensSheet';
+import { QrCodeAnimalModal } from '../components/ficha/QrCodeAnimalModal';
+import { FichaHeader, type AbaFicha } from '../components/ficha/FichaHeader';
+import { InformarTouroModal } from '../components/ficha/InformarTouroModal';
+import { RegistrarMenu, type TipoRegistro } from '../components/ficha/RegistrarMenu';
+import { ReproducaoTab } from '../components/ficha/ReproducaoTab';
+import { ResumoTab } from '../components/ficha/ResumoTab';
+import { SaudeTab } from '../components/ficha/SaudeTab';
+import { NovoAnimalForm } from '../components/NovoAnimalForm';
 import { NovoTratamentoForm } from '../components/NovoTratamentoForm';
-import {
-  AdicionarRegistroMenu,
-  type TipoRegistro,
-} from '../components/AdicionarRegistroMenu';
 import { RegistroForm } from '../components/registros/RegistroForm';
-import { ReproducaoSecao } from '../components/ReproducaoSecao';
-import { TratamentosSecao } from '../components/TratamentosSecao';
+import { confirmarDia, desfazerDia } from '../data/doses';
 import { confirmarPrenhez } from '../data/reproducoes';
 import { useFichaAnimal } from '../hooks/useFichaAnimal';
 import { useRebanho } from '../hooks/useRebanho';
+import { dosesParaHoje } from '../services/ficha';
+import { historicoDePeso } from '../services/indicadores';
 
-const SEM_VALOR = '—';
+/** Espaço no fim da rolagem para o botão "Registrar" não cobrir o último card. */
+const ESPACO_DO_BOTAO = 96;
+
+function avisarErro(titulo: string, error: unknown) {
+  Alert.alert(titulo, error instanceof Error ? error.message : String(error));
+}
 
 /**
- * Ficha Animal (tela 3 do Figma, antes "Tratamento Animal").
- * Blocos na ordem do esboço aprovado: resumo, tratamento, reprodução e próximos
- * (o histórico saiu do escopo da Sprint 2).
+ * Ficha do animal: topo verde com a identificação e as abas Resumo, Saúde e
+ * Reprodução (só novilha e vaca). O botão "Registrar" abre o menu de registros.
  */
 export default function AnimalDetalheScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const ficha = useFichaAnimal(id);
-  const animal = ficha?.animal ?? null;
-  const ativos = ficha?.tratamentosAtivos ?? [];
-
-  const [modalVisible, setModalVisible] = useState(false);
-  const [menuVisible, setMenuVisible] = useState(false);
-  const [registro, setRegistro] = useState<TipoRegistro | null>(null);
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   // Touros para a cobertura: os machos ativos do rebanho
   const rebanho = useRebanho();
   const touros = useMemo(() => rebanho.filter((a) => a.sexo === 'M'), [rebanho]);
 
-  const displayBrinco = animal ? `Brinco ${animal.brinco}` : SEM_VALOR;
+  const [aba, setAba] = useState<AbaFicha>('resumo');
+  const [aplicando, setAplicando] = useState<string | null>(null);
+  const [salvandoDiagnostico, setSalvandoDiagnostico] = useState(false);
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [tratamentoVisible, setTratamentoVisible] = useState(false);
+  const [registro, setRegistro] = useState<Exclude<TipoRegistro, 'tratamento'> | null>(null);
+  const [editando, setEditando] = useState<Tratamento | null>(null);
+  const [informarTouroDe, setInformarTouroDe] = useState<string | null>(null);
+  const [pesagensVisible, setPesagensVisible] = useState(false);
+  const [criasVisible, setCriasVisible] = useState(false);
+  const [editarAnimal, setEditarAnimal] = useState(false);
+  const [qrVisible, setQrVisible] = useState(false);
+
+  if (!ficha || !id) {
+    return (
+      <ScreenContainer withTabInset={false} header={<Header title="Ficha do animal" showBack />}>
+        {null}
+      </ScreenContainer>
+    );
+  }
+
+  const { animal, tratamentosAtivos, podeReproduzir } = ficha;
+  const brinco = `Brinco ${animal.brinco}`;
+  const identificacao = animal.nome ? `${animal.nome} · ${brinco}` : brinco;
+  const dosesHoje = dosesParaHoje(tratamentosAtivos);
+  // Animal que deixou de ser novilha/vaca não tem a aba Reprodução
+  const abaAtual: AbaFicha = aba === 'reproducao' && !podeReproduzir ? 'resumo' : aba;
+
+  const gravarDose = async (ativo: TratamentoAtivo, dia: Date, desfazer: boolean) => {
+    setAplicando(ativo.tratamento.id);
+    try {
+      if (desfazer) await desfazerDia(ativo.tratamento.id, dia);
+      else await confirmarDia(ativo.tratamento.id, dia);
+    } catch (error) {
+      avisarErro('Não foi possível registrar a dose', error);
+    } finally {
+      setAplicando(null);
+    }
+  };
+
+  const aplicar = (ativo: TratamentoAtivo) => gravarDose(ativo, new Date(), false);
+  const alternarDia = (ativo: TratamentoAtivo, dia: DiaDaTrilha) =>
+    gravarDose(ativo, dia.dia, dia.confirmado);
+
+  const diagnosticar = async (coberturaId: string, prenhe: boolean) => {
+    setSalvandoDiagnostico(true);
+    try {
+      await confirmarPrenhez(coberturaId, prenhe);
+    } catch (error) {
+      avisarErro('Não foi possível salvar o diagnóstico', error);
+    } finally {
+      setSalvandoDiagnostico(false);
+    }
+  };
+
+  const escolherRegistro = (tipo: TipoRegistro) => {
+    setMenuVisible(false);
+    if (tipo === 'tratamento') setTratamentoVisible(true);
+    else setRegistro(tipo);
+  };
 
   return (
-    <ScreenContainer
-      withTabInset={false}
-      header={
-        <Header title="Ficha Animal" showBack />
-      }
-      footer={
-        <View style={styles.footerActions}>
-          <Button
-            label="Novo Tratamento"
-            variant="primary"
-            size="lg"
-            fullWidth
-            onPress={() => setModalVisible(true)}
+    <View style={styles.tela}>
+      <ScreenContainer
+        withTabInset={false}
+        header={
+          <FichaHeader
+            ficha={ficha}
+            aba={abaAtual}
+            onAbaChange={setAba}
+            pendentesHoje={dosesHoje.length}
+            onEditar={() => setEditarAnimal(true)}
+            onVerQrCode={() => setQrVisible(true)}
           />
-          <Button
-            label="Adicionar"
-            variant="outline"
-            size="lg"
-            fullWidth
-            onPress={() => setMenuVisible(true)}
+        }
+        contentContainerStyle={{ paddingBottom: insets.bottom + ESPACO_DO_BOTAO }}>
+        {abaAtual === 'resumo' ? (
+          <ResumoTab
+            ficha={ficha}
+            dosesHoje={dosesHoje}
+            aplicando={aplicando}
+            onAplicar={aplicar}
+            onRegistrarPeso={() => setRegistro('pesagem')}
+            onVerPesagens={() => setPesagensVisible(true)}
+            onVerCrias={() => setCriasVisible(true)}
+            onVerReproducao={() => setAba('reproducao')}
           />
-        </View>
-      }>
-      {/* A. Resumo */}
-      {ficha ? <FichaResumo ficha={ficha} alerta={null} /> : null}
+        ) : null}
 
-      {/* B. Tratamentos: um bloco por tratamento em andamento, com divisória */}
-      {ficha ? <TratamentosSecao ativos={ativos} /> : null}
+        {abaAtual === 'saude' ? (
+          <SaudeTab
+            ativos={tratamentosAtivos}
+            aplicando={aplicando}
+            onAplicar={aplicar}
+            onAlternarDia={alternarDia}
+            onEditar={setEditando}
+          />
+        ) : null}
 
-      {/* C. Reprodução: só novilha e vaca */}
-      {ficha?.podeReproduzir ? (
-        <ReproducaoSecao
-          reproducao={ficha.reproducao}
-          ultimoParto={ficha.ultimoParto}
-          touros={touros}
-          onConfirmarPrenhez={confirmarPrenhez}
-        />
-      ) : null}
+        {abaAtual === 'reproducao' ? (
+          <ReproducaoTab
+            ficha={ficha}
+            touros={touros}
+            salvando={salvandoDiagnostico}
+            onDiagnostico={diagnosticar}
+            onInformarTouro={setInformarTouroDe}
+            onRegistrarCobertura={() => setRegistro('cobertura')}
+          />
+        ) : null}
+      </ScreenContainer>
 
-      {/* D. F5 ProximosCard + aviso do limite de notificações (contagemNotificacoes) */}
+      <Pressable
+        onPress={() => setMenuVisible(true)}
+        style={({ pressed }) => [
+          styles.registrar,
+          { bottom: insets.bottom + Spacing.lg },
+          pressed && styles.pressed,
+        ]}
+        accessibilityRole="button">
+        <AppIcon name="plus" size={26} color={AgroColors.textInverse} />
+        <Text style={styles.registrarTexto}>Registrar</Text>
+      </Pressable>
+
+      <RegistrarMenu
+        visible={menuVisible}
+        identificacao={identificacao}
+        reprodutiva={podeReproduzir}
+        onClose={() => setMenuVisible(false)}
+        onSelect={escolherRegistro}
+      />
 
       <NovoTratamentoForm
-        visible={modalVisible}
+        visible={tratamentoVisible}
         animalId={id}
-        identificacao={displayBrinco}
-        onClose={() => setModalVisible(false)}
+        identificacao={identificacao}
+        onClose={() => setTratamentoVisible(false)}
       />
 
-      <AdicionarRegistroMenu
-        visible={menuVisible}
-        reprodutiva={ficha?.podeReproduzir ?? false}
-        onClose={() => setMenuVisible(false)}
-        onSelect={(tipo) => {
-          setMenuVisible(false);
-          setRegistro(tipo);
-        }}
-      />
-      {registro && id ? (
+      {registro ? (
         <RegistroForm
           tipo={registro}
           animalId={id}
@@ -106,12 +193,80 @@ export default function AnimalDetalheScreen() {
           onClose={() => setRegistro(null)}
         />
       ) : null}
-    </ScreenContainer>
+
+      {editando ? (
+        <EditarTratamentoModal tratamento={editando} onClose={() => setEditando(null)} />
+      ) : null}
+
+      <PesagensSheet
+        visible={pesagensVisible}
+        historico={historicoDePeso(ficha.pesagens)}
+        onClose={() => setPesagensVisible(false)}
+        onRegistrar={() => {
+          setPesagensVisible(false);
+          setRegistro('pesagem');
+        }}
+      />
+
+      <CriasSheet
+        visible={criasVisible}
+        crias={ficha.crias}
+        criasAnteriores={animal.criasAnteriores}
+        onClose={() => setCriasVisible(false)}
+        onAbrir={(cria) => {
+          setCriasVisible(false);
+          router.push({ pathname: '/animal/[id]', params: { id: cria.id } });
+        }}
+      />
+
+      <QrCodeAnimalModal visible={qrVisible} animal={animal} onClose={() => setQrVisible(false)} />
+
+      {/* Montado só aberto: cada abertura começa com os dados atuais do cadastro */}
+      {editarAnimal ? (
+        <NovoAnimalForm
+          visible
+          animal={animal}
+          animais={rebanho}
+          onClose={() => setEditarAnimal(false)}
+          onSaved={() => setEditarAnimal(false)}
+        />
+      ) : null}
+
+      {informarTouroDe ? (
+        <InformarTouroModal
+          coberturaId={informarTouroDe}
+          touros={touros}
+          onClose={() => setInformarTouroDe(null)}
+        />
+      ) : null}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  footerActions: {
-    gap: Spacing.two,
+  tela: {
+    flex: 1,
+    backgroundColor: AgroColors.screenBg,
+  },
+  registrar: {
+    position: 'absolute',
+    right: Spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.three,
+    borderRadius: Radius.xl,
+    backgroundColor: AgroColors.primary,
+    ...Shadows.fab,
+  },
+  registrarTexto: {
+    ...Typography.button,
+    fontSize: 18,
+    lineHeight: 24,
+    color: AgroColors.textInverse,
+  },
+  pressed: {
+    opacity: 0.85,
   },
 });

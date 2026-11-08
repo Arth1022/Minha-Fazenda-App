@@ -1,13 +1,15 @@
 import React from 'react';
 import {
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
   type ViewStyle,
 } from 'react-native';
 
-import { AgroColors, Radius, Shadows, Spacing } from '@/constants/theme';
+import { AgroColors, IconSize, Radius, Shadows, Spacing } from '@/constants/theme';
+import { AppIcon } from './AppIcon';
 
 export interface SegmentedTabItem<T extends string> {
   key: T;
@@ -21,6 +23,10 @@ export interface SegmentedTabsProps<T extends string> {
   activeTab: T;
   /** Callback ao selecionar uma aba */
   onTabChange: (tab: T) => void;
+  /** Exibe botão de busca (lupa) à direita, antes do filtro */
+  showSearch?: boolean;
+  /** Callback ao clicar no botão de busca */
+  onSearchPress?: () => void;
   /** Exibe botão de filtro (funil) à direita conforme Tela 2 do Figma */
   showFilter?: boolean;
   /** Indica se há filtro ativo */
@@ -31,14 +37,19 @@ export interface SegmentedTabsProps<T extends string> {
   style?: ViewStyle;
 }
 
+/** Área de toque dos botões da direita, sem invadir o botão vizinho. */
+const ACTION_HIT_SLOP = { top: 8, bottom: 8, left: 2, right: 2 };
+
 /**
- * Barra de abas com sublinhado verde e ícone de filtro à direita,
+ * Barra de abas com sublinhado verde e ícones de busca e filtro à direita,
  * idêntica à tela "Gerenciamento Rebanho" no protótipo do Figma.
  */
 export function SegmentedTabs<T extends string>({
   tabs,
   activeTab,
   onTabChange,
+  showSearch = false,
+  onSearchPress,
   showFilter = false,
   filterActive = false,
   onFilterPress,
@@ -46,7 +57,12 @@ export function SegmentedTabs<T extends string>({
 }: SegmentedTabsProps<T>) {
   return (
     <View style={[styles.container, style]}>
-      <View style={styles.tabsRow}>
+      {/* Só rola na horizontal quando as abas não cabem ao lado dos botões (telas estreitas) */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        alwaysBounceHorizontal={false}
+        contentContainerStyle={styles.tabsRow}>
         {tabs.map((tab) => {
           const isActive = tab.key === activeTab;
           return (
@@ -72,40 +88,55 @@ export function SegmentedTabs<T extends string>({
             </Pressable>
           );
         })}
-      </View>
+      </ScrollView>
 
-      {showFilter ? (
-        <Pressable
-          onPress={onFilterPress}
-          hitSlop={8}
-          style={({ pressed }) => [
-            styles.filterBtn,
-            filterActive && styles.filterBtnActive,
-            pressed && styles.pressed,
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel="Filtrar lista">
-          <View style={styles.funnelIcon}>
-            <View
-              style={[
-                styles.funnelBarTop,
-                filterActive && styles.funnelBarActive,
+      {showSearch || showFilter ? (
+        <View style={styles.actions}>
+          {showSearch ? (
+            <Pressable
+              onPress={onSearchPress}
+              hitSlop={ACTION_HIT_SLOP}
+              style={({ pressed }) => [styles.actionBtn, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Buscar">
+              <AppIcon name="search" size={IconSize.md} color={AgroColors.textMuted} />
+            </Pressable>
+          ) : null}
+
+          {showFilter ? (
+            <Pressable
+              onPress={onFilterPress}
+              hitSlop={ACTION_HIT_SLOP}
+              style={({ pressed }) => [
+                styles.actionBtn,
+                filterActive && styles.filterBtnActive,
+                pressed && styles.pressed,
               ]}
-            />
-            <View
-              style={[
-                styles.funnelBarMid,
-                filterActive && styles.funnelBarActive,
-              ]}
-            />
-            <View
-              style={[
-                styles.funnelBarBot,
-                filterActive && styles.funnelBarActive,
-              ]}
-            />
-          </View>
-        </Pressable>
+              accessibilityRole="button"
+              accessibilityLabel="Filtrar lista">
+              <View style={styles.funnelIcon}>
+                <View
+                  style={[
+                    styles.funnelBarTop,
+                    filterActive && styles.funnelBarActive,
+                  ]}
+                />
+                <View
+                  style={[
+                    styles.funnelBarMid,
+                    filterActive && styles.funnelBarActive,
+                  ]}
+                />
+                <View
+                  style={[
+                    styles.funnelBarBot,
+                    filterActive && styles.funnelBarActive,
+                  ]}
+                />
+              </View>
+            </Pressable>
+          ) : null}
+        </View>
       ) : null}
     </View>
   );
@@ -116,6 +147,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: Spacing.two,
     backgroundColor: AgroColors.cardBg,
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.md,
@@ -152,13 +184,18 @@ const styles = StyleSheet.create({
   indicatorActive: {
     backgroundColor: AgroColors.primary,
   },
-  filterBtn: {
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+    marginBottom: 6,
+  },
+  actionBtn: {
     width: 30,
     height: 30,
     borderRadius: Radius.xs,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
   },
   filterBtnActive: {
     backgroundColor: AgroColors.mintBg,

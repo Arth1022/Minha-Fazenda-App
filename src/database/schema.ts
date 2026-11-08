@@ -57,6 +57,25 @@ export type TipoReproducao = (typeof TIPOS_REPRODUCAO)[number];
 export const PERIODOS_ORDENHA = ['manha', 'tarde', 'noite'] as const;
 export type PeriodoOrdenha = (typeof PERIODOS_ORDENHA)[number];
 
+export const METODOS_PESAGEM = ['balanca', 'fita'] as const;
+export type MetodoPesagem = (typeof METODOS_PESAGEM)[number];
+
+export const METODOS_DIAGNOSTICO = ['toque', 'ultrassom', 'outro'] as const;
+export type MetodoDiagnostico = (typeof METODOS_DIAGNOSTICO)[number];
+
+/** Tetos: anterior/posterior, esquerdo/direito */
+export const TETOS = ['AE', 'AD', 'PE', 'PD'] as const;
+export type Teto = (typeof TETOS)[number];
+
+export const TIPOS_MASTITE = ['clinica', 'subclinica'] as const;
+export type TipoMastite = (typeof TIPOS_MASTITE)[number];
+
+export const TIPOS_EXAME = ['brucelose', 'tuberculose', 'outro'] as const;
+export type TipoExame = (typeof TIPOS_EXAME)[number];
+
+export const RESULTADOS_EXAME = ['negativo', 'positivo', 'inconclusivo'] as const;
+export type ResultadoExame = (typeof RESULTADOS_EXAME)[number];
+
 /** Configuração única da fazenda (uma linha). */
 export const fazendaConfig = sqliteTable('fazenda_config', {
   id: id(),
@@ -113,6 +132,21 @@ export const animais = sqliteTable(
     producaoLeiteL: real('producao_leite_l'),
     /** Ração por dia (kg), informada pelo produtor; opcional */
     racaoKgDia: real('racao_kg_dia'),
+    /** Quanto pagou (R$), quando a origem é compra */
+    valorCompra: real('valor_compra'),
+    /** Venda: quanto recebeu (R$) e o peso na saída */
+    valorVenda: real('valor_venda'),
+    pesoSaidaKg: real('peso_saida_kg'),
+    /** Número SISBOV ou do brinco eletrônico */
+    sisbov: text('sisbov'),
+    /** Grau de sangue em texto ("1/2 Gir 1/2 Holandês", "PO") */
+    grauSangue: text('grau_sangue'),
+    /** Foto do animal (arquivo local do app) */
+    fotoUri: text('foto_uri'),
+    /** Desmame da cria; o peso vai em pesagens */
+    dataDesmame: integer('data_desmame', { mode: 'timestamp_ms' }),
+    /** Nasceu de parto difícil (precisou de ajuda) */
+    partoAssistido: integer('parto_assistido', { mode: 'boolean' }).notNull().default(false),
     criadoPor: criadoPor(),
     ...timestamps,
   },
@@ -133,6 +167,8 @@ export const pesagens = sqliteTable(
       .references(() => animais.id, { onDelete: 'cascade' }),
     data: integer('data', { mode: 'timestamp_ms' }).notNull(),
     pesoKg: real('peso_kg').notNull(),
+    /** Balança ou fita de pesagem (o kg marcado na fita, peso estimado) */
+    metodo: text('metodo', { enum: METODOS_PESAGEM }).notNull().default('balanca'),
     criadoPor: criadoPor(),
     ...timestamps,
   },
@@ -156,6 +192,11 @@ export const reproducoes = sqliteTable(
     touroId: text('touro_id').references(() => animais.id, { onDelete: 'set null' }),
     /** Touro de fora ou sêmen (nome, código da palheta), em texto livre */
     touroDescricao: text('touro_descricao'),
+    /** Quando e como a prenhez foi diagnosticada */
+    dataDiagnostico: integer('data_diagnostico', { mode: 'timestamp_ms' }),
+    metodoDiagnostico: text('metodo_diagnostico', { enum: METODOS_DIAGNOSTICO }),
+    /** Perdeu a prenhez: encerra a cobertura sem parto */
+    dataAborto: integer('data_aborto', { mode: 'timestamp_ms' }),
     criadoPor: criadoPor(),
     ...timestamps,
   },
@@ -206,6 +247,8 @@ export const tratamentos = sqliteTable(
     observacoes: text('observacoes'),
     /** Liga os tratamentos aplicados em vários animais de uma vez */
     grupoAplicacaoId: text('grupo_aplicacao_id'),
+    /** Foto do comprovante (nota, atestado de vacinação), arquivo local do app */
+    comprovanteUri: text('comprovante_uri'),
     criadoPor: criadoPor(),
     ...timestamps,
   },
@@ -235,6 +278,95 @@ export const dosesAplicadas = sqliteTable(
   (table) => [
     uniqueIndex('doses_aplicadas_tratamento_dia_idx').on(table.tratamentoId, table.dia),
   ]
+);
+
+/** Colunas comuns dos registros datados de um animal (apagados junto com ele). */
+const registroDoAnimal = () => ({
+  id: id(),
+  animalId: text('animal_id')
+    .notNull()
+    .references(() => animais.id, { onDelete: 'cascade' }),
+  data: integer('data', { mode: 'timestamp_ms' }).notNull(),
+  criadoPor: criadoPor(),
+  ...timestamps,
+});
+
+/** Escore de condição corporal (1 = muito magra ... 5 = gorda), avaliado no olho. */
+export const avaliacoesCorporais = sqliteTable(
+  'avaliacoes_corporais',
+  {
+    ...registroDoAnimal(),
+    escore: real('escore').notNull(),
+  },
+  (table) => [index('avaliacoes_corporais_animal_id_idx').on(table.animalId)]
+);
+
+/** Controle leiteiro: litros da vaca num dia (soma das ordenhas do dia). */
+export const controlesLeiteiros = sqliteTable(
+  'controles_leiteiros',
+  {
+    ...registroDoAnimal(),
+    litros: real('litros').notNull(),
+  },
+  (table) => [index('controles_leiteiros_animal_id_idx').on(table.animalId)]
+);
+
+/** Secagem da vaca: encerra a lactação antes do próximo parto. */
+export const secagens = sqliteTable(
+  'secagens',
+  registroDoAnimal(),
+  (table) => [index('secagens_animal_id_idx').on(table.animalId)]
+);
+
+/** Caso de mastite, com os tetos afetados. */
+export const mastites = sqliteTable(
+  'mastites',
+  {
+    ...registroDoAnimal(),
+    tetos: text('tetos', { mode: 'json' })
+      .$type<Teto[]>()
+      .notNull()
+      .$defaultFn(() => []),
+    tipo: text('tipo', { enum: TIPOS_MASTITE }).notNull(),
+    observacoes: text('observacoes'),
+  },
+  (table) => [index('mastites_animal_id_idx').on(table.animalId)]
+);
+
+/** Cio observado (o próximo é previsto 21 dias depois). */
+export const cios = sqliteTable(
+  'cios',
+  {
+    ...registroDoAnimal(),
+    observacoes: text('observacoes'),
+  },
+  (table) => [index('cios_animal_id_idx').on(table.animalId)]
+);
+
+/** Exame (brucelose, tuberculose...) com validade e foto do laudo. */
+export const exames = sqliteTable(
+  'exames',
+  {
+    ...registroDoAnimal(),
+    tipo: text('tipo', { enum: TIPOS_EXAME }).notNull(),
+    /** Nome do exame quando o tipo é "outro" */
+    descricao: text('descricao'),
+    resultado: text('resultado', { enum: RESULTADOS_EXAME }).notNull(),
+    /** Vale por quantos dias (brucelose e tuberculose: 1 ano) */
+    validadeDias: integer('validade_dias'),
+    comprovanteUri: text('comprovante_uri'),
+  },
+  (table) => [index('exames_animal_id_idx').on(table.animalId)]
+);
+
+/** Anotação livre na ficha ("mancando da pata traseira"). */
+export const anotacoesAnimal = sqliteTable(
+  'anotacoes_animal',
+  {
+    ...registroDoAnimal(),
+    texto: text('texto').notNull(),
+  },
+  (table) => [index('anotacoes_animal_animal_id_idx').on(table.animalId)]
 );
 
 export const ordenhas = sqliteTable('ordenhas', {
@@ -271,6 +403,95 @@ export const notificacoesAgendadas = sqliteTable(
   (table) => [
     index('notificacoes_agendadas_entidade_idx').on(table.entidade, table.entidadeId),
   ]
+);
+
+export const TIPOS_MAQUINA = [
+  'trator',
+  'colheitadeira',
+  'pulverizador',
+  'plantadeira',
+  'implemento',
+  'caminhao',
+  'utilitario',
+  'ordenhadeira',
+  'outro',
+] as const;
+export type TipoMaquina = (typeof TIPOS_MAQUINA)[number];
+
+export const COMBUSTIVEIS = ['diesel', 'gasolina', 'etanol', 'flex', 'eletrico', 'nenhum'] as const;
+export type Combustivel = (typeof COMBUSTIVEIS)[number];
+
+export const STATUS_MAQUINA = ['ativa', 'manutencao', 'inativa'] as const;
+export type StatusMaquina = (typeof STATUS_MAQUINA)[number];
+
+/**
+ * Máquinas e veículos da fazenda. `codigo` é a identificação curta usada no dia a
+ * dia (ex.: "TR-01"); estar "em uso" não é coluna: é ter um uso sem `fim`.
+ */
+export const maquinas = sqliteTable(
+  'maquinas',
+  {
+    id: id(),
+    codigo: text('codigo').notNull(),
+    nome: text('nome').notNull(),
+    tipo: text('tipo', { enum: TIPOS_MAQUINA }).notNull().default('outro'),
+    marca: text('marca'),
+    modelo: text('modelo'),
+    anoFabricacao: integer('ano_fabricacao'),
+    /** Chassi ou número de série */
+    numeroSerie: text('numero_serie'),
+    placa: text('placa'),
+    potenciaCv: real('potencia_cv'),
+    combustivel: text('combustivel', { enum: COMBUSTIVEIS }),
+    /** Horímetro no cadastro; as horas de uso no app somam a partir dele */
+    horimetroInicial: real('horimetro_inicial'),
+    dataAquisicao: integer('data_aquisicao', { mode: 'timestamp_ms' }),
+    status: text('status', { enum: STATUS_MAQUINA }).notNull().default('ativa'),
+    criadoPor: criadoPor(),
+    ...timestamps,
+  },
+  (table) => [uniqueIndex('maquinas_codigo_idx').on(table.codigo)]
+);
+
+/**
+ * Auditoria de uso: uma linha por vez que a máquina foi ligada. `fim` null = em uso.
+ * O índice único parcial impede dois usos abertos na mesma máquina.
+ */
+export const usosMaquina = sqliteTable(
+  'usos_maquina',
+  {
+    id: id(),
+    maquinaId: text('maquina_id')
+      .notNull()
+      .references(() => maquinas.id, { onDelete: 'cascade' }),
+    inicio: integer('inicio', { mode: 'timestamp_ms' }).notNull(),
+    fim: integer('fim', { mode: 'timestamp_ms' }),
+    /** Quem operou (preenchido quando o login existir) */
+    operador: text('operador'),
+    criadoPor: criadoPor(),
+    ...timestamps,
+  },
+  (table) => [
+    index('usos_maquina_maquina_inicio_idx').on(table.maquinaId, table.inicio),
+    uniqueIndex('usos_maquina_aberto_idx')
+      .on(table.maquinaId)
+      .where(sql`${table.fim} is null`),
+  ]
+);
+
+/** Anotações livres da máquina (revisões, defeitos, observações). */
+export const anotacoesMaquina = sqliteTable(
+  'anotacoes_maquina',
+  {
+    id: id(),
+    maquinaId: text('maquina_id')
+      .notNull()
+      .references(() => maquinas.id, { onDelete: 'cascade' }),
+    texto: text('texto').notNull(),
+    criadoPor: criadoPor(),
+    ...timestamps,
+  },
+  (table) => [index('anotacoes_maquina_maquina_id_idx').on(table.maquinaId)]
 );
 
 export const lotesRelations = relations(lotes, ({ many }) => ({
@@ -341,3 +562,17 @@ export type NovaDoseAplicada = typeof dosesAplicadas.$inferInsert;
 export type Ordenha = typeof ordenhas.$inferSelect;
 export type NovaOrdenha = typeof ordenhas.$inferInsert;
 export type NotificacaoAgendadaRow = typeof notificacoesAgendadas.$inferSelect;
+export type Maquina = typeof maquinas.$inferSelect;
+export type NovaMaquina = typeof maquinas.$inferInsert;
+export type UsoMaquina = typeof usosMaquina.$inferSelect;
+export type AnotacaoMaquina = typeof anotacoesMaquina.$inferSelect;
+export type AvaliacaoCorporal = typeof avaliacoesCorporais.$inferSelect;
+export type ControleLeiteiro = typeof controlesLeiteiros.$inferSelect;
+export type NovoControleLeiteiro = typeof controlesLeiteiros.$inferInsert;
+export type Secagem = typeof secagens.$inferSelect;
+export type Mastite = typeof mastites.$inferSelect;
+export type NovaMastite = typeof mastites.$inferInsert;
+export type Cio = typeof cios.$inferSelect;
+export type Exame = typeof exames.$inferSelect;
+export type NovoExame = typeof exames.$inferInsert;
+export type AnotacaoAnimal = typeof anotacoesAnimal.$inferSelect;

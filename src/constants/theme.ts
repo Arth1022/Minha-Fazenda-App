@@ -44,6 +44,11 @@ export const AgroColors = {
   soilBrown: '#78350F',        // Detalhes de insumos / terra
   purpleMed: '#7C3AED',        // Ícone de antibióticos
   purpleMedBg: '#F3E8FF',      // Fundo ícone de antibióticos
+  health: '#B45309',           // Saúde: seringa, pendências e progresso de dose (Ficha)
+  healthBg: '#FFEDD5',         // Fundo do ícone/chip de saúde
+  healthProgress: '#E08A1E',   // Barra de dias do tratamento
+  breeding: '#1E5AA8',         // Reprodução: situação e ícones (Ficha)
+  breedingBg: '#E6EEF9',       // Fundo do chip/ícone de reprodução
 
   // Textos
   textPrimary: '#111827',      // Títulos e valores principais

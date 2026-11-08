@@ -1,8 +1,11 @@
-import { and, asc, count, desc, eq, isNotNull, isNull, max } from 'drizzle-orm';
+import { and, asc, count, desc, eq, isNotNull, isNull, max, or } from 'drizzle-orm';
 
 import { animais, db, pesagens, reproducoes } from '@/database';
+import type { ReferenciaAnimal } from '../services/qrCode';
 import type {
   Animal,
+  DadosDesmame,
+  DadosEdicaoAnimal,
   DadosParto,
   DadosSaida,
   NovoAnimal,
@@ -16,6 +19,25 @@ type Transacao = Parameters<Parameters<typeof db.transaction>[0]>[0];
 export function listarAnimais({ incluirInativos = false } = {}) {
   const query = db.select().from(animais).orderBy(asc(animais.createdAt));
   return incluirInativos ? query : query.where(eq(animais.status, 'ativo'));
+}
+
+/**
+ * Animal do QR Code lido: pelo id (link do app) ou pelo brinco. Brinco pode
+ * repetir entre animais que já saíram: vale o ativo, e entre iguais o mais novo.
+ */
+export async function buscarAnimalPorReferencia(
+  referencia: ReferenciaAnimal
+): Promise<Animal | undefined> {
+  if (referencia.tipo === 'id') {
+    const [animal] = await db.select().from(animais).where(eq(animais.id, referencia.id)).limit(1);
+    return animal;
+  }
+  const iguais = await db
+    .select()
+    .from(animais)
+    .where(eq(animais.brinco, referencia.brinco))
+    .orderBy(desc(animais.createdAt));
+  return iguais.find((animal) => animal.status === 'ativo') ?? iguais[0];
 }
 
 export function animalPorId(id: string) {
@@ -87,6 +109,43 @@ export async function cadastrarAnimal(
   });
 }
 
+/**
+ * Edição do cadastro (lápis da ficha). Valida mãe e pai como no cadastro e não
+ * deixa o animal ser mãe/pai dele mesmo. O sexo só muda se ainda não há crias
+ * nem coberturas ligadas a ele (senão a mãe viraria macho, o touro fêmea...).
+ */
+export async function atualizarAnimal(id: string, dados: DadosEdicaoAnimal): Promise<Animal> {
+  return db.transaction((tx) => {
+    const atual = tx.select().from(animais).where(eq(animais.id, id)).get();
+    if (!atual) throw new Error('Animal não encontrado');
+    if (dados.maeId === id || dados.paiId === id) {
+      throw new Error('O animal não pode ser mãe ou pai dele mesmo');
+    }
+    validarParente(tx, dados.maeId, 'F');
+    validarParente(tx, dados.paiId, 'M');
+
+    if (dados.sexo !== atual.sexo) {
+      const filho = tx
+        .select({ id: animais.id })
+        .from(animais)
+        .where(or(eq(animais.maeId, id), eq(animais.paiId, id)))
+        .limit(1)
+        .get();
+      const cobertura = tx
+        .select({ id: reproducoes.id })
+        .from(reproducoes)
+        .where(or(eq(reproducoes.animalId, id), eq(reproducoes.touroId, id)))
+        .limit(1)
+        .get();
+      if (filho || cobertura) {
+        throw new Error('Não dá para trocar o sexo: o animal já tem crias ou coberturas registradas');
+      }
+    }
+
+    return tx.update(animais).set(dados).where(eq(animais.id, id)).returning().get();
+  });
+}
+
 /** Cadastro sem pesagem; prefira `cadastrarAnimal`. */
 export function createAnimal(animal: NovoAnimal): Promise<Animal> {
   return cadastrarAnimal(animal);
@@ -99,8 +158,11 @@ export function createAnimal(animal: NovoAnimal): Promise<Animal> {
  */
 export async function registrarParto(
   maeId: string,
-  { data, sexo, brinco, paiId, paiDescricao }: DadosParto
+  { data, sexo, brinco, paiId, paiDescricao, partoAssistido = false, pesoNascerKg = null }: DadosParto
 ): Promise<Animal> {
+  if (pesoNascerKg !== null && !(Number.isFinite(pesoNascerKg) && pesoNascerKg > 0)) {
+    throw new Error('Peso ao nascer inválido');
+  }
   // Transação síncrona do driver expo-sqlite: as escritas usam .run()/.get()
   return db.transaction((tx) => {
     const mae = tx.select().from(animais).where(eq(animais.id, maeId)).get();
@@ -129,9 +191,15 @@ export async function registrarParto(
         dataNascimento: data,
         dataEntrada: data,
         loteId: mae?.loteId,
+        partoAssistido,
       })
       .returning()
       .get();
+
+    // Peso ao nascer: a primeira pesagem da cria (base do ganho até o desmame)
+    if (pesoNascerKg !== null) {
+      tx.insert(pesagens).values({ animalId: cria.id, data, pesoKg: pesoNascerKg }).run();
+    }
 
     if (coberturaAberta) {
       tx.update(reproducoes)
@@ -144,13 +212,45 @@ export async function registrarParto(
   });
 }
 
-/** Saída do rebanho: só muda o status, o registro nunca é apagado. */
+/**
+ * Saída do rebanho: só muda o status, o registro nunca é apagado. Na venda,
+ * guarda o valor e o peso; o peso também vira a última pesagem do animal.
+ */
 export async function registrarSaida(
   animalId: string,
   saida: DadosSaida
 ): Promise<void> {
-  await db
-    .update(animais)
-    .set({ status: saida.status, dataSaida: saida.data, motivoSaida: saida.motivo ?? null })
-    .where(eq(animais.id, animalId));
+  const { valorVenda = null, pesoSaidaKg = null } = saida;
+  if (valorVenda !== null && !(Number.isFinite(valorVenda) && valorVenda >= 0)) {
+    throw new Error('Valor de venda inválido');
+  }
+  if (pesoSaidaKg !== null && !(Number.isFinite(pesoSaidaKg) && pesoSaidaKg > 0)) {
+    throw new Error('Peso de saída inválido');
+  }
+  db.transaction((tx) => {
+    tx.update(animais)
+      .set({
+        status: saida.status,
+        dataSaida: saida.data,
+        motivoSaida: saida.motivo ?? null,
+        valorVenda,
+        pesoSaidaKg,
+      })
+      .where(eq(animais.id, animalId))
+      .run();
+    if (pesoSaidaKg !== null) {
+      tx.insert(pesagens).values({ animalId, data: saida.data, pesoKg: pesoSaidaKg }).run();
+    }
+  });
+}
+
+/** Desmame da cria: guarda a data e, se informado, o peso como pesagem do dia. */
+export async function registrarDesmame(animalId: string, { data, pesoKg = null }: DadosDesmame): Promise<void> {
+  if (pesoKg !== null && !(Number.isFinite(pesoKg) && pesoKg > 0)) {
+    throw new Error('Peso ao desmame inválido');
+  }
+  db.transaction((tx) => {
+    tx.update(animais).set({ dataDesmame: data }).where(eq(animais.id, animalId)).run();
+    if (pesoKg !== null) tx.insert(pesagens).values({ animalId, data, pesoKg }).run();
+  });
 }

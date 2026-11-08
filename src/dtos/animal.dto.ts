@@ -1,4 +1,4 @@
-import type { Animal, Sexo, StatusAnimal } from '@/database';
+import type { Animal, NovoAnimal, Sexo, StatusAnimal } from '@/database';
 
 import type { Reproducao } from './reproducao.dto';
 import type { DoseConfirmada, Tratamento } from './tratamento.dto';
@@ -42,6 +42,17 @@ export interface DadosParto {
   /** Pai da cria; sem informar, vem do touro da cobertura em aberto */
   paiId?: string | null;
   paiDescricao?: string | null;
+  /** Parto difícil (precisou de ajuda): fica marcado na cria */
+  partoAssistido?: boolean;
+  /** Peso da cria ao nascer: vira a primeira pesagem dela */
+  pesoNascerKg?: number | null;
+}
+
+/** Entrada de `registrarDesmame`. */
+export interface DadosDesmame {
+  data: Date;
+  /** Peso ao desmame: vira uma pesagem nessa data */
+  pesoKg?: number | null;
 }
 
 /** Opções de `cadastrarAnimal`: peso de entrada, gravado na mesma transação. */
@@ -51,6 +62,32 @@ export interface OpcoesCadastroAnimal {
   dataPesagem?: Date | null;
 }
 
+/** Entrada de `atualizarAnimal`: o que a edição da ficha pode mudar no cadastro. */
+export type DadosEdicaoAnimal = Required<
+  Pick<
+    NovoAnimal,
+    | 'brinco'
+    | 'nome'
+    | 'raca'
+    | 'sexo'
+    | 'dataNascimento'
+    | 'nascimentoAproximado'
+    | 'criasAnteriores'
+    | 'jaPariu'
+    | 'producaoLeiteL'
+    | 'racaoKgDia'
+    | 'maeId'
+    | 'paiId'
+    | 'paiDescricao'
+    | 'origem'
+    | 'dataEntrada'
+    | 'valorCompra'
+    | 'sisbov'
+    | 'grauSangue'
+    | 'fotoUri'
+  >
+>;
+
 export type StatusSaida = Exclude<StatusAnimal, 'ativo'>;
 
 /** Entrada de `registrarSaida`. */
@@ -58,6 +95,9 @@ export interface DadosSaida {
   status: StatusSaida;
   data: Date;
   motivo?: string;
+  /** Venda: quanto recebeu (R$) e o peso na saída */
+  valorVenda?: number | null;
+  pesoSaidaKg?: number | null;
 }
 
 export type TipoAlerta = 'carencia' | 'dose' | 'parto' | 'novilha';

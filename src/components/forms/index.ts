@@ -39,3 +39,9 @@ export {
   WeekdayPicker,
   type WeekdayPickerProps,
 } from './WeekdayPicker';
+export {
+  BuscaModal,
+  ResultadoBuscaItem,
+  type BuscaModalProps,
+  type ResultadoBuscaItemProps,
+} from './BuscaModal';

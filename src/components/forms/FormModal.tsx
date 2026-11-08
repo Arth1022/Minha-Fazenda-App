@@ -24,6 +24,13 @@ export interface FormModalProps {
   submitLabel?: string;
   cancelLabel?: string;
   loading?: boolean;
+  /** Chamado quando o modal termina de abrir (ex.: focar o campo de busca) */
+  onShow?: () => void;
+  /**
+   * Envolve o conteúdo numa rolagem (padrão). Desligue quando o conteúdo já rola
+   * sozinho (ex.: FlatList), para o que vem antes dele ficar fixo.
+   */
+  scrollable?: boolean;
   children: React.ReactNode;
 }
 
@@ -39,6 +46,8 @@ export function FormModal({
   submitLabel = 'Salvar',
   cancelLabel = 'Cancelar',
   loading = false,
+  onShow,
+  scrollable = true,
   children,
 }: FormModalProps) {
   return (
@@ -46,7 +55,8 @@ export function FormModal({
       visible={visible}
       transparent
       animationType="fade"
-      onRequestClose={onClose}>
+      onRequestClose={onClose}
+      onShow={onShow}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.overlay}>
@@ -70,13 +80,17 @@ export function FormModal({
             </Pressable>
           </View>
 
-          <ScrollView
-            style={styles.bodyScroll}
-            contentContainerStyle={styles.bodyContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}>
-            {children}
-          </ScrollView>
+          {scrollable ? (
+            <ScrollView
+              style={styles.bodyScroll}
+              contentContainerStyle={styles.bodyContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}>
+              {children}
+            </ScrollView>
+          ) : (
+            <View style={[styles.bodyContent, styles.bodyFixed]}>{children}</View>
+          )}
 
           {onSubmit ? (
             <View style={styles.footer}>
@@ -154,6 +168,10 @@ const styles = StyleSheet.create({
   bodyContent: {
     gap: Spacing.md,
     paddingVertical: 2,
+  },
+  // Encolhe com o modal (ex.: teclado aberto) para a lista interna continuar rolando
+  bodyFixed: {
+    flexShrink: 1,
   },
   footer: {
     flexDirection: 'row',

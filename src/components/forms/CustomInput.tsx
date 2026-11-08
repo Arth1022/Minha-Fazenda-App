@@ -4,6 +4,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  type TextInputInstance,
   type TextInputProps,
   View,
   type ViewStyle,
@@ -12,6 +13,8 @@ import {
 import { AgroColors, Radius, Spacing, Typography } from '@/constants/theme';
 
 export interface CustomInputProps extends TextInputProps {
+  /** Referência do TextInput interno (ex.: focar o campo ao abrir um modal) */
+  ref?: React.Ref<TextInputInstance>;
   /** Rótulo exibido acima do campo */
   label?: string;
   /** Mensagem de erro de validação (ativa o estado visual de erro) */

@@ -1,10 +1,14 @@
+import { Image } from 'expo-image';
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Alert, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { type Href, Tabs, router, usePathname } from 'expo-router';
 
 import { FloatingActionButton } from '@/components/ui/FloatingActionButton';
-import { AgroColors, MaxContentWidth, Shadows } from '@/constants/theme';
+import { AgroColors, MaxContentWidth, Shadows, Spacing } from '@/constants/theme';
+import { AcoesMaquinaModal, useQrCodeMaquina } from '@/features/maquinas';
+import { LeituraBrincoModais, useLeituraBrinco, useQrCodeAnimal } from '@/features/rebanho';
+import { BotaoLerQrCode } from '@/services/qrcode';
 
 interface TabConfig {
   href: Href;
@@ -73,12 +77,19 @@ function TabBar() {
         <View style={styles.tabBarRow}>
           <View style={styles.tabGroup}>{LEFT_TABS.map(renderTabButton)}</View>
 
-          {/* Posição Central: Ícone da Home com espaço reservado para futura Logo */}
+          {/* Posição Central: logo do app, leva ao Início */}
           <View style={styles.fabCenterSlot}>
             <FloatingActionButton
               isActive={isHomeActive}
               onPress={() => navigateTo(HOME_HREF)}
               accessibilityLabel="Ir para o Início (Home)"
+              logo={
+                <Image
+                  source={require('@/assets/images/minha-fazenda-logo.png')}
+                  style={styles.fabLogo}
+                  contentFit="contain"
+                />
+              }
             />
             <Text
               style={[
@@ -97,19 +108,72 @@ function TabBar() {
   );
 }
 
+/** Altura da linha de abas (tabBarRow), sem a área segura de baixo */
+const TAB_BAR_HEIGHT = 62;
+
+/** QR Code que nenhum fluxo reconheceu: só mostra o que foi lido. */
+function mostrarQrCodeLido(valor: string) {
+  Alert.alert('QR Code lido', valor);
+}
+
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  // Alinha com a coluna central (MaxContentWidth) em telas largas
+  const margemLateral = Math.max(0, (width - MaxContentWidth) / 2) + Spacing.three;
+  const qrMaquina = useQrCodeMaquina();
+  const qrAnimal = useQrCodeAnimal();
+  const leituraBrinco = useLeituraBrinco();
+
+  // Cada fluxo tenta reconhecer o QR Code; o que sobrar só é mostrado
+  const aoLerQrCode = async (valor: string) => {
+    if (await qrMaquina.tratar(valor)) return;
+    if (await qrAnimal.tratar(valor)) return;
+    mostrarQrCodeLido(valor);
+  };
+
   return (
-    <Tabs screenOptions={{ headerShown: false }} tabBar={() => <TabBar />}>
-      <Tabs.Screen name="index" options={{ title: 'Início' }} />
-      <Tabs.Screen name="mapa" options={{ title: 'Mapa' }} />
-      <Tabs.Screen name="rebanho" options={{ title: 'Rebanho' }} />
-      <Tabs.Screen name="estoque" options={{ title: 'Estoque' }} />
-      <Tabs.Screen name="maquinas" options={{ title: 'Máquinas' }} />
-    </Tabs>
+    <View style={styles.root}>
+      <Tabs screenOptions={{ headerShown: false }} tabBar={() => <TabBar />}>
+        <Tabs.Screen name="index" options={{ title: 'Início' }} />
+        <Tabs.Screen name="mapa" options={{ title: 'Mapa' }} />
+        <Tabs.Screen name="rebanho" options={{ title: 'Rebanho' }} />
+        <Tabs.Screen name="estoque" options={{ title: 'Estoque' }} />
+        <Tabs.Screen name="maquinas" options={{ title: 'Máquinas' }} />
+      </Tabs>
+
+      {/* Leitor de QR Code: canto inferior direito, logo acima da barra de abas */}
+      <BotaoLerQrCode
+        onLido={aoLerQrCode}
+        onTextoLido={leituraBrinco.tratarTextos}
+        opcoes={{ titulo: 'Ler QR Code ou brinco', modoTexto: 'Número do brinco' }}
+        style={{
+          ...styles.qrButton,
+          right: margemLateral,
+          bottom: insets.bottom + TAB_BAR_HEIGHT + Spacing.three,
+        }}
+      />
+
+      <AcoesMaquinaModal maquinaId={qrMaquina.maquinaId} onClose={qrMaquina.fechar} />
+
+      <LeituraBrincoModais
+        estado={leituraBrinco.estado}
+        onAbrir={leituraBrinco.abrirFicha}
+        onDigitar={leituraBrinco.digitar}
+        onBuscar={leituraBrinco.buscarDigitado}
+        onFechar={leituraBrinco.fechar}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+  qrButton: {
+    position: 'absolute',
+  },
   outerBarWrapper: {
     width: '100%',
     alignItems: 'center',
@@ -145,6 +209,10 @@ const styles = StyleSheet.create({
   },
   centerHomeLabel: {
     marginTop: 1,
+  },
+  fabLogo: {
+    width: '100%',
+    height: '100%',
   },
   tabItem: {
     flex: 1,

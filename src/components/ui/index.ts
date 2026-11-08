@@ -1,5 +1,6 @@
 export { AppIcon, type AppIconProps, type AppIconName } from './AppIcon';
 export { Badge, type BadgeProps, type BadgeVariant } from './Badge';
+export { BottomSheet, type BottomSheetProps } from './BottomSheet';
 export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from './Button';
 export { Card, type CardProps, type CardVariant } from './Card';
 export { EmptyState, type EmptyStateProps } from './EmptyState';
@@ -18,6 +19,10 @@ export {
   ScreenContainer,
   type ScreenContainerProps,
 } from './ScreenContainer';
+export {
+  ScrollHintList,
+  type ScrollHintListProps,
+} from './ScrollHintList';
 export {
   SectionHeader,
   type SectionHeaderProps,

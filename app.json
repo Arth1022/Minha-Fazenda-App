@@ -8,14 +8,13 @@
     "scheme": "minhafazenda",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/images/icon.png",
       "bundleIdentifier": "com.minhafazenda.app"
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E8F5E9",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
@@ -44,6 +43,30 @@
       "expo-status-bar",
       "expo-web-browser",
       "expo-sqlite",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "O Minha Fazenda usa a câmera para ler QR Codes.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "O Minha Fazenda usa suas fotos para salvar os QR Codes.",
+          "savePhotosPermission": "O Minha Fazenda salva os QR Codes na sua galeria.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ],
+      "./plugins/withModeloOcr",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "O Minha Fazenda usa suas fotos para guardar a foto do animal e os comprovantes de vacina e exame.",
+          "cameraPermission": "O Minha Fazenda usa a câmera para fotografar o animal e os comprovantes.",
+          "microphonePermission": false
+        }
+      ],
       [
         "expo-notifications",
         {

@@ -26,25 +26,33 @@ export interface NovoAnimalFormProps {
   visible: boolean;
   /** Rebanho, para escolher a mãe (fêmeas) e o pai (machos) */
   animais: Animal[];
+  /** Animal a editar (lápis da ficha); sem ele, cadastra um novo */
+  animal?: Animal | null;
   onClose: () => void;
-  onCreated: (animal: Animal) => void;
+  /** Animal gravado (o novo ou o editado) */
+  onSaved: (animal: Animal) => void;
 }
 
 /**
- * Modal de cadastro de um novo animal no rebanho: o essencial à vista e o
- * resto (peso, leite, ração, mãe e pai) em "Mais detalhes", recolhido.
+ * Modal de cadastro (ou edição) de animal: o essencial à vista e o resto
+ * (peso, leite, ração, mãe e pai) em "Mais detalhes", recolhido. Na edição o
+ * peso fica de fora: ele muda pela pesagem.
  */
 export function NovoAnimalForm({
   visible,
   animais,
+  animal,
   onClose,
-  onCreated,
+  onSaved,
 }: NovoAnimalFormProps) {
   const { control, clearErrors, submit, saving, femea, mostrarCrias } =
-    useNovoAnimalForm(onCreated);
+    useNovoAnimalForm(onSaved, animal);
+  const editando = Boolean(animal);
 
-  const femeas = animais.filter((animal) => animal.sexo === 'F');
-  const machos = animais.filter((animal) => animal.sexo === 'M');
+  // Na edição, o próprio animal não pode ser escolhido como mãe ou pai
+  const outros = animais.filter((a) => a.id !== animal?.id);
+  const femeas = outros.filter((a) => a.sexo === 'F');
+  const machos = outros.filter((a) => a.sexo === 'M');
 
   useEffect(() => {
     if (visible) clearErrors();
@@ -53,11 +61,13 @@ export function NovoAnimalForm({
   return (
     <FormModal
       visible={visible}
-      title="Novo Animal"
-      subtitle="Cadastre um novo animal no rebanho local"
+      title={editando ? 'Editar animal' : 'Novo Animal'}
+      subtitle={
+        editando ? 'Corrija os dados do cadastro' : 'Cadastre um novo animal no rebanho local'
+      }
       onClose={onClose}
       onSubmit={submit}
-      submitLabel="Salvar Animal"
+      submitLabel={editando ? 'Salvar alterações' : 'Salvar Animal'}
       loading={saving}>
       <ControlledInput
         control={control}
@@ -136,14 +146,16 @@ export function NovoAnimalForm({
       ) : null}
 
       <CollapsibleSection title="Mais detalhes">
-        <ControlledInput
-          control={control}
-          name="pesoKg"
-          label="Peso atual"
-          placeholder="450"
-          keyboardType="numeric"
-          suffix="kg"
-        />
+        {editando ? null : (
+          <ControlledInput
+            control={control}
+            name="pesoKg"
+            label="Peso atual"
+            placeholder="450"
+            keyboardType="numeric"
+            suffix="kg"
+          />
+        )}
 
         {femea ? (
           <View style={styles.twoColInputs}>

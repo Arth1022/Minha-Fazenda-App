@@ -14,9 +14,9 @@ export interface FloatingActionButtonProps {
   onPress: () => void;
   /** Indica se a tela Home central está ativa no momento */
   isActive?: boolean;
-  /** Elemento de Logo customizado (Image/SVG) a ser inserido futuramente */
+  /** Logo do app (Image/SVG): troca o fundo verde por branco para as cores aparecerem */
   logo?: React.ReactNode;
-  /** Ícone exibido enquanto a logo definitiva não for definida (padrão: "⌂") */
+  /** Ícone exibido quando não há logo (padrão: "⌂") */
   icon?: string;
   /** Label de acessibilidade */
   accessibilityLabel?: string;
@@ -25,9 +25,9 @@ export interface FloatingActionButtonProps {
 }
 
 /**
- * Botão central flutuante da barra de navegação inferior (Home + Espaço reservado para Logo).
- * Quando a prop `logo` não é informada, renderiza o ícone de Home dentro do container
- * dimensionado para receber a futura logo do app.
+ * Botão central flutuante da barra de navegação inferior (Home).
+ * Com `logo`, mostra a logo do app num círculo branco (borda verde quando ativo);
+ * sem ela, o ícone de Home sobre o verde.
  */
 export function FloatingActionButton({
   onPress,
@@ -45,18 +45,18 @@ export function FloatingActionButton({
       accessibilityLabel={accessibilityLabel}
       style={({ pressed }) => [
         styles.fab,
-        isActive && styles.fabActive,
+        logo ? styles.fabLogo : isActive && styles.fabActive,
+        Boolean(logo) && isActive && styles.fabLogoActive,
         pressed && styles.pressed,
         style,
       ]}>
-      {/* Container dimensionado e reservado para a futura Logo */}
-      <View style={styles.logoPlaceholderSlot}>
-        {logo ? (
-          logo
-        ) : (
+      {logo ? (
+        <View style={styles.logoSlot}>{logo}</View>
+      ) : (
+        <View style={styles.iconSlot}>
           <Text style={styles.homeIcon}>{icon}</Text>
-        )}
-      </View>
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -77,20 +77,28 @@ const styles = StyleSheet.create({
     backgroundColor: AgroColors.primary,
     borderColor: '#DCFCE7',
   },
+  fabLogo: {
+    backgroundColor: AgroColors.cardBg,
+    borderColor: AgroColors.mintBorder,
+  },
+  fabLogoActive: {
+    borderColor: AgroColors.primaryLight,
+  },
   pressed: {
     opacity: 0.9,
     transform: [{ scale: 0.95 }],
   },
-  logoPlaceholderSlot: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: 'rgba(255, 255, 255, 0.45)',
+  logoSlot: {
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
+  },
+  iconSlot: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   homeIcon: {
     color: AgroColors.textInverse,

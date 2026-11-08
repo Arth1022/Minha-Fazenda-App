@@ -5,10 +5,12 @@
  */
 export * from './animal.dto';
 export * from './fazenda.dto';
+export * from './maquina.dto';
 export * from './ficha.dto';
 export * from './notificacoes.dto';
 export * from './novoTratamento.dto';
 export * from './ordenha.dto';
 export * from './pesagem.dto';
+export * from './registros.dto';
 export * from './reproducao.dto';
 export * from './tratamento.dto';

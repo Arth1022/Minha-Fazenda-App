@@ -1,1 +1,1 @@
-export { default } from '@/features/maquinas/MaquinasScreen';
+export { default } from '@/features/maquinas/screens/MaquinasScreen';

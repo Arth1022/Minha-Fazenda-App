@@ -5,6 +5,7 @@ import * as SplashScreen from 'expo-splash-screen';
 
 import { useDatabaseMigrations } from '@/database';
 import { AgroColors, Spacing, Typography } from '@/constants/theme';
+import { LeitorQrCodeProvider } from '@/services/qrcode';
 import { FazendaProvider } from './FazendaProvider';
 
 interface AppProvidersProps {
@@ -15,7 +16,11 @@ export function AppProviders({ children }: AppProvidersProps) {
   const colorScheme = useColorScheme();
   const { success, error } = useDatabaseMigrations();
 
-  let content = <FazendaProvider>{children}</FazendaProvider>;
+  let content = (
+    <FazendaProvider>
+      <LeitorQrCodeProvider>{children}</LeitorQrCodeProvider>
+    </FazendaProvider>
+  );
   if (error) {
     content = <DatabaseError message={error.message} />;
   } else if (!success) {

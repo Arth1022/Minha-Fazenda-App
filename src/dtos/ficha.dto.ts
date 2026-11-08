@@ -1,5 +1,15 @@
 import type { Animal, Fase, SituacaoLeite } from './animal.dto';
 import type { Pesagem, PesoAtual } from './pesagem.dto';
+import type {
+  AnotacaoAnimal,
+  AvaliacaoCorporal,
+  Cio,
+  ControleLeiteiro,
+  Exame,
+  IndicesReprodutivos,
+  Mastite,
+  ResumoLeite,
+} from './registros.dto';
 import type { Reproducao } from './reproducao.dto';
 import type { DiaDeDose, DosePendente, Tratamento } from './tratamento.dto';
 
@@ -11,7 +21,7 @@ export interface DiaDaTrilha extends DiaDeDose {
   futuro: boolean;
 }
 
-/** Tratamento em andamento hoje, pronto para o TratamentoAtivoCard. */
+/** Tratamento em andamento hoje, pronto para a aba Saúde da ficha. */
 export interface TratamentoAtivo {
   tratamento: Tratamento;
   /** Dias com dose, do primeiro ao último */
@@ -57,4 +67,22 @@ export interface FichaAnimal {
   tratamentos: Tratamento[];
   /** Tratamentos em andamento hoje, com a trilha de doses */
   tratamentosAtivos: TratamentoAtivo[];
+  /** Escores corporais, do mais recente para o mais antigo */
+  avaliacoes: AvaliacaoCorporal[];
+  /** Controles leiteiros, do mais recente para o mais antigo */
+  controlesLeiteiros: ControleLeiteiro[];
+  /** Lactação atual (só vaca em fazenda de leite; null nos outros casos) */
+  leite: ResumoLeite | null;
+  /** Casos de mastite, do mais recente para o mais antigo */
+  mastites: Mastite[];
+  /** Cios observados, do mais recente para o mais antigo */
+  cios: Cio[];
+  /** Próximo cio previsto (21 dias), só se está vazia; null sem previsão */
+  proximoCio: Date | null;
+  /** Índices reprodutivos (só fêmea que pode reproduzir) */
+  indices: IndicesReprodutivos | null;
+  /** Exames, do mais recente para o mais antigo */
+  exames: Exame[];
+  /** Anotações livres, da mais recente para a mais antiga */
+  anotacoes: AnotacaoAnimal[];
 }

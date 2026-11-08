@@ -1,5 +1,5 @@
 import React from 'react';
-import Svg, { Circle, Line, Path } from 'react-native-svg';
+import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 
 import { IconSize } from '@/constants/theme';
 
@@ -17,9 +17,41 @@ export type AppIconName =
   | 'weight'
   | 'alert'
   | 'check'
+  | 'search'
+  | 'qrcode'
+  | 'syringe'
+  | 'heart'
+  | 'baby'
+  | 'arrowLeft'
+  | 'logOut'
+  | 'flashlight'
   | 'chevronDown'
   | 'chevronUp'
   | 'chevronRight';
+
+/** Ícones só de traços (Lucide), desenhados pela lista de caminhos. */
+const PATH_ICONS: Partial<Record<AppIconName, string[]>> = {
+  syringe: [
+    'm18 2 4 4',
+    'm17 7 3-3',
+    'M19 9 8.7 19.3c-1 1-2.5 1-3.4 0l-.6-.6c-1-1-1-2.5 0-3.4L15 5',
+    'm9 11 4 4',
+    'm5 19-3 3',
+    'm14 4 6 6',
+  ],
+  heart: [
+    'M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z',
+  ],
+  baby: [
+    'M9 12h.01',
+    'M15 12h.01',
+    'M10 16c.5.3 1.2.5 2 .5s1.5-.2 2-.5',
+    'M19 6.3a9 9 0 0 1 1.8 3.9 2 2 0 0 1 0 3.6 9 9 0 0 1-17.6 0 2 2 0 0 1 0-3.6A9 9 0 0 1 12 3c2 0 3.5 1.1 3.5 2.5s-.9 2.5-2 2.5c-.8 0-1.5-.4-1.5-1',
+  ],
+  arrowLeft: ['m12 19-7-7 7-7', 'M19 12H5'],
+  logOut: ['M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4', 'm16 17 5-5-5-5', 'M21 12H9'],
+  flashlight: ['M18 6c0 2-2 2-2 4v10a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V10c0-2-2-2-2-4V2h12z', 'M6 6h12', 'M12 12h.01'],
+};
 
 /** Setas simples (Feather): um único traço em "V". */
 const CHEVRON_PATH: Record<'chevronDown' | 'chevronUp' | 'chevronRight', string> = {
@@ -39,6 +71,25 @@ export interface AppIconProps {
  * Não depende de arquivos de fontes ou módulos externos que falham no Metro bundler.
  */
 export function AppIcon({ name, size = IconSize.lg, color = '#64748B' }: AppIconProps) {
+  const paths = PATH_ICONS[name];
+  if (paths) {
+    return (
+      <Svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round">
+        {paths.map((d) => (
+          <Path key={d} d={d} />
+        ))}
+      </Svg>
+    );
+  }
+
   switch (name) {
     case 'sun':
       return (
@@ -259,6 +310,45 @@ export function AppIcon({ name, size = IconSize.lg, color = '#64748B' }: AppIcon
           strokeLinecap="round"
           strokeLinejoin="round">
           <Path d="M20 6L9 17l-5-5" />
+        </Svg>
+      );
+
+    case 'search':
+      return (
+        <Svg
+          width={size}
+          height={size}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={color}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round">
+          <Circle cx="11" cy="11" r="8" />
+          <Line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </Svg>
+      );
+
+    case 'qrcode':
+      // Leitura de QR Code: cantos do visor com um QR dentro (Lucide "scan-qr-code")
+      return (
+        <Svg
+          width={size}
+          height={size}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={color}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round">
+          <Path d="M3 7V5a2 2 0 0 1 2-2h2" />
+          <Path d="M17 3h2a2 2 0 0 1 2 2v2" />
+          <Path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+          <Path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+          <Rect x="7" y="7" width="4" height="4" rx="1" />
+          <Path d="M17 12v4a1 1 0 0 1-1 1h-4" />
+          <Path d="M17 8V7" />
+          <Path d="M7 17h.01" />
         </Svg>
       );
 

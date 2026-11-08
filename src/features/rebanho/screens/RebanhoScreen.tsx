@@ -1,11 +1,12 @@
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
 
 import {
   EmptyState,
   Header,
   ScreenContainer,
+  ScrollHintList,
   SegmentedTabs,
   type SegmentedTabItem,
 } from '@/components/ui';
@@ -18,6 +19,7 @@ import {
 } from '@/constants/theme';
 import type { Animal, AnimalComFase, Fase } from '@/dtos';
 import { AnimalCard } from '../components/AnimalCard';
+import { BuscarAnimalModal } from '../components/BuscarAnimalModal';
 import { NovoAnimalForm } from '../components/NovoAnimalForm';
 import { ResumoAnimalCard } from '../components/ResumoAnimalCard';
 import { useRebanho } from '../hooks/useRebanho';
@@ -43,10 +45,13 @@ const GRUPO_DA_FASE: Record<Fase, Grupo> = {
 };
 
 // Quantidade de cards visíveis na lista antes de precisar rolar
-const VISIBLE_ANIMALS = 3;
+const VISIBLE_ANIMALS = 4;
 
 // Filtro do funil: produção diária mínima para "alta produção"
 const ALTA_PRODUCAO_LEITE_L = 20;
+
+const isAltaProducao = (animal: Animal) =>
+  (animal.producaoLeiteL ?? 0) >= ALTA_PRODUCAO_LEITE_L;
 
 export default function RebanhoScreen() {
   const router = useRouter();
@@ -55,8 +60,8 @@ export default function RebanhoScreen() {
   const [activeTab, setActiveTab] = useState<Grupo>('vacas');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [onlyHighMilkFilter, setOnlyHighMilkFilter] = useState(false);
-  const [cardHeight, setCardHeight] = useState(0);
   const [modalVisible, setModalVisible] = useState(false);
+  const [searchVisible, setSearchVisible] = useState(false);
 
   const openModal = useCallback(() => setModalVisible(true), []);
 
@@ -73,10 +78,7 @@ export default function RebanhoScreen() {
     const doGrupo = rebanho.filter(
       (animal) => GRUPO_DA_FASE[animal.fase] === activeTab
     );
-    if (!onlyHighMilkFilter) return doGrupo;
-    return doGrupo.filter(
-      (animal) => (animal.producaoLeiteL ?? 0) >= ALTA_PRODUCAO_LEITE_L
-    );
+    return onlyHighMilkFilter ? doGrupo.filter(isAltaProducao) : doGrupo;
   }, [rebanho, onlyHighMilkFilter, activeTab]);
 
   const selectedAnimal: AnimalComFase | null =
@@ -88,6 +90,15 @@ export default function RebanhoScreen() {
   const handleAnimalPress = (animal: Animal) => {
     setSelectedId(animal.id);
     router.push({ pathname: '/animal/[id]', params: { id: animal.id } });
+  };
+
+  // Achado na busca: a lista vai para a aba dele (sem o filtro que o esconderia)
+  // para o resumo mostrar o animal aberto ao voltar da ficha
+  const handleSearchSelect = (animal: AnimalComFase) => {
+    setSearchVisible(false);
+    setActiveTab(GRUPO_DA_FASE[animal.fase]);
+    if (!isAltaProducao(animal)) setOnlyHighMilkFilter(false);
+    handleAnimalPress(animal);
   };
 
   const handleAnimalCreated = (animal: Animal) => {
@@ -116,6 +127,8 @@ export default function RebanhoScreen() {
         tabs={tabs}
         activeTab={activeTab}
         onTabChange={setActiveTab}
+        showSearch
+        onSearchPress={() => setSearchVisible(true)}
         showFilter
         filterActive={onlyHighMilkFilter}
         onFilterPress={() => setOnlyHighMilkFilter((prev) => !prev)}
@@ -134,28 +147,17 @@ export default function RebanhoScreen() {
       {filteredAnimais.length === 0 ? (
         <EmptyState message="Nenhum animal nesta categoria." />
       ) : (
-        // Lista de Animais: área limitada a VISIBLE_ANIMALS cards, com rolagem interna
-        <ScrollView
-          style={
-            cardHeight > 0 && {
-              maxHeight:
-                cardHeight * VISIBLE_ANIMALS + Spacing.sm * (VISIBLE_ANIMALS - 1),
-            }
-          }
-          contentContainerStyle={styles.listColumn}
-          nestedScrollEnabled>
-          {filteredAnimais.map((animal, index) => (
-            <View
-              key={animal.id}
-              onLayout={
-                index === 0
-                  ? (e) => setCardHeight(e.nativeEvent.layout.height)
-                  : undefined
-              }>
-              <AnimalCard animal={animal} onPress={() => handleAnimalPress(animal)} />
-            </View>
-          ))}
-        </ScrollView>
+        // Lista de Animais: VISIBLE_ANIMALS cards à vista, rolagem interna e a seta
+        // indicando que há mais. A key volta a lista ao topo ao trocar de aba ou filtro
+        <ScrollHintList
+          key={`${activeTab}-${onlyHighMilkFilter}`}
+          data={filteredAnimais}
+          keyExtractor={(animal) => animal.id}
+          visibleCount={VISIBLE_ANIMALS}
+          renderItem={(animal) => (
+            <AnimalCard animal={animal} onPress={() => handleAnimalPress(animal)} />
+          )}
+        />
       )}
 
       {selectedAnimal && <ResumoAnimalCard animal={selectedAnimal} />}
@@ -164,16 +166,20 @@ export default function RebanhoScreen() {
         visible={modalVisible}
         animais={rebanho}
         onClose={() => setModalVisible(false)}
-        onCreated={handleAnimalCreated}
+        onSaved={handleAnimalCreated}
+      />
+
+      <BuscarAnimalModal
+        visible={searchVisible}
+        animais={rebanho}
+        onClose={() => setSearchVisible(false)}
+        onSelect={handleSearchSelect}
       />
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  listColumn: {
-    gap: Spacing.sm,
-  },
   newAnimalBtn: {
     backgroundColor: AgroColors.primaryLight,
     borderRadius: Radius.md,

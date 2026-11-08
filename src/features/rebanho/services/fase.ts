@@ -66,15 +66,18 @@ export function calcularFase(
 
 /**
  * Situação da vaca numa fazenda de leite: em lactação até 305 dias após o
- * último parto, depois seca. Retorna null quando não se aplica.
+ * último parto, depois seca. Uma secagem registrada depois do parto já faz
+ * dela seca. Retorna null quando não se aplica.
  */
 export function calcularSituacaoLeite(
   fase: Fase,
   ultimoParto: Date | null,
   produzLeite: boolean,
-  hoje = new Date()
+  hoje = new Date(),
+  secaDesde: Date | null = null
 ): SituacaoLeite | null {
   if (!produzLeite || fase !== 'vaca') return null;
+  if (secaDesde) return 'seca';
   if (ultimoParto && diasEntre(ultimoParto, hoje) <= DURACAO_LACTACAO_DIAS) {
     return 'lactacao';
   }

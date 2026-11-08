@@ -1,7 +1,11 @@
+import type { Animal, DadosEdicaoAnimal } from '@/dtos';
 import {
+  atualizarAnimal,
+  buscarAnimalPorReferencia,
   cadastrarAnimal,
   createAnimal,
   registrarParto,
+  registrarSaida,
 } from '@/features/rebanho/data/animais';
 import { pesagensDoAnimal } from '@/features/rebanho/data/pesagens';
 import { createReproducao } from '@/features/rebanho/data/reproducoes';
@@ -80,6 +84,59 @@ async function runCadastroTest() {
 
   const cria3 = await registrarParto(vaca.id, { data: dia(20, 11), sexo: 'M', brinco: '#303', paiDescricao: 'Touro do vizinho' });
   check(cria3.paiId === null && cria3.paiDescricao === 'Touro do vizinho', 'parto: pai informado na hora vale mais que a cobertura');
+
+  // Edição do cadastro (lápis da ficha)
+  const edicao = (animal: Animal): DadosEdicaoAnimal => ({
+    brinco: animal.brinco,
+    nome: animal.nome,
+    raca: animal.raca,
+    sexo: animal.sexo,
+    dataNascimento: animal.dataNascimento,
+    nascimentoAproximado: animal.nascimentoAproximado,
+    criasAnteriores: animal.criasAnteriores,
+    jaPariu: animal.jaPariu,
+    producaoLeiteL: animal.producaoLeiteL,
+    racaoKgDia: animal.racaoKgDia,
+    maeId: animal.maeId,
+    paiId: animal.paiId,
+    paiDescricao: animal.paiDescricao,
+    origem: animal.origem,
+    dataEntrada: animal.dataEntrada,
+    valorCompra: animal.valorCompra,
+    sisbov: animal.sisbov,
+    grauSangue: animal.grauSangue,
+    fotoUri: animal.fotoUri,
+  });
+  const editado = await atualizarAnimal(semPeso.id, {
+    ...edicao(semPeso),
+    nome: 'Mimosa',
+    raca: 'Girolando',
+    producaoLeiteL: 18.5,
+    maeId: vaca.id,
+  });
+  check(
+    editado.nome === 'Mimosa' && editado.raca === 'Girolando' && editado.producaoLeiteL === 18.5 && editado.maeId === vaca.id,
+    'edição grava nome, raça, leite e mãe'
+  );
+  check((await atualizarAnimal(semPeso.id, { ...edicao(editado), nome: null })).nome === null, 'edição apaga o nome');
+  check(await rejeita(() => atualizarAnimal(semPeso.id, { ...edicao(editado), maeId: semPeso.id })), 'animal não pode ser mãe dele mesmo');
+  check(await rejeita(() => atualizarAnimal(semPeso.id, { ...edicao(editado), paiId: vaca.id })), 'edição: pai precisa ser macho');
+  check(await rejeita(() => atualizarAnimal(vaca.id, { ...edicao(vaca), sexo: 'M' })), 'vaca com crias não pode virar macho');
+  check(await rejeita(() => atualizarAnimal(touro.id, { ...edicao(touro), sexo: 'F' })), 'touro com filhos não pode virar fêmea');
+  check((await atualizarAnimal(comprado.id, { ...edicao(comprado), sexo: 'M' })).sexo === 'M', 'sem crias nem coberturas, o sexo pode ser corrigido');
+  check(await rejeita(() => atualizarAnimal('nao-existe', edicao(vaca))), 'editar animal que não existe é recusado');
+
+  // QR Code: animal pelo id (link do app) ou pelo brinco
+  check((await buscarAnimalPorReferencia({ tipo: 'id', id: vaca.id }))?.id === vaca.id, 'QR com id abre o animal');
+  check((await buscarAnimalPorReferencia({ tipo: 'brinco', brinco: '#201' }))?.id === vaca.id, 'QR com brinco acha o animal');
+  check((await buscarAnimalPorReferencia({ tipo: 'id', id: 'nao-existe' })) === undefined, 'id que não existe não acha nada');
+  const repetido = await createAnimal({ brinco: '#777', sexo: 'F' });
+  await registrarSaida(repetido.id, { status: 'vendido', data: dia(1, 10) });
+  const repetidoAtivo = await createAnimal({ brinco: '#777', sexo: 'F' });
+  check(
+    (await buscarAnimalPorReferencia({ tipo: 'brinco', brinco: '#777' }))?.id === repetidoAtivo.id,
+    'brinco repetido: vale o animal ativo, não o que já saiu'
+  );
 
   // Nomes de medicamentos
   check((await nomesDeMedicamentos()).join() === 'Brucelose', 'sem uso anterior, Brucelose aparece sempre');
