@@ -1,4 +1,4 @@
-import { relations, sql } from 'drizzle-orm';
+import { relations, sql } from "drizzle-orm";
 import {
   type AnySQLiteColumn,
   index,
@@ -7,9 +7,9 @@ import {
   sqliteTable,
   text,
   uniqueIndex,
-} from 'drizzle-orm/sqlite-core';
+} from "drizzle-orm/sqlite-core";
 
-import { newId } from './id';
+import { newId } from "./id";
 
 /**
  * Fonte única das tabelas e dos tipos do banco local.
@@ -23,196 +23,203 @@ import { newId } from './id';
  */
 
 const id = () =>
-  text('id')
+  text("id")
     .primaryKey()
     .$defaultFn(() => newId());
 
 const timestamps = {
-  createdAt: integer('created_at', { mode: 'timestamp_ms' })
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
     .notNull()
     .$defaultFn(() => new Date()),
-  updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" })
     .notNull()
     .$defaultFn(() => new Date())
     .$onUpdateFn(() => new Date()),
 };
 
-const criadoPor = () => text('criado_por');
+const criadoPor = () => text("criado_por");
 
-export const TIPOS_PRODUCAO = ['leite', 'corte', 'misto'] as const;
+export const TIPOS_PRODUCAO = ["leite", "corte", "misto"] as const;
 export type TipoProducao = (typeof TIPOS_PRODUCAO)[number];
 
-export const SEXOS = ['F', 'M'] as const;
+export const SEXOS = ["F", "M"] as const;
 export type Sexo = (typeof SEXOS)[number];
 
-export const ORIGENS = ['nascido', 'comprado'] as const;
+export const ORIGENS = ["nascido", "comprado"] as const;
 export type Origem = (typeof ORIGENS)[number];
 
-export const STATUS_ANIMAL = ['ativo', 'vendido', 'morto', 'descarte'] as const;
+export const STATUS_ANIMAL = ["ativo", "vendido", "morto", "descarte"] as const;
 export type StatusAnimal = (typeof STATUS_ANIMAL)[number];
 
-export const TIPOS_REPRODUCAO = ['cobertura', 'inseminacao'] as const;
+export const TIPOS_REPRODUCAO = ["cobertura", "inseminacao"] as const;
 export type TipoReproducao = (typeof TIPOS_REPRODUCAO)[number];
 
-export const PERIODOS_ORDENHA = ['manha', 'tarde', 'noite'] as const;
+export const PERIODOS_ORDENHA = ["manha", "tarde", "noite"] as const;
 export type PeriodoOrdenha = (typeof PERIODOS_ORDENHA)[number];
 
 /** Configuração única da fazenda (uma linha). */
-export const fazendaConfig = sqliteTable('fazenda_config', {
+export const fazendaConfig = sqliteTable("fazenda_config", {
   id: id(),
-  tipoProducao: text('tipo_producao', { enum: TIPOS_PRODUCAO }).notNull(),
+  tipoProducao: text("tipo_producao", { enum: TIPOS_PRODUCAO }).notNull(),
   ...timestamps,
 });
 
-export const lotes = sqliteTable('lotes', {
+export const lotes = sqliteTable("lotes", {
   id: id(),
-  nome: text('nome').notNull(),
+  nome: text("nome").notNull(),
   ...timestamps,
 });
 
 export const animais = sqliteTable(
-  'animais',
+  "animais",
   {
     id: id(),
-    brinco: text('brinco').notNull(),
-    nome: text('nome'),
-    raca: text('raca'),
+    brinco: text("brinco").notNull(),
+    nome: text("nome"),
+    raca: text("raca"),
     // Rebanhos cadastrados antes deste campo eram só de fêmeas (vacas/novilhas)
-    sexo: text('sexo', { enum: SEXOS }).notNull().default('F'),
-    dataNascimento: integer('data_nascimento', { mode: 'timestamp_ms' }),
+    sexo: text("sexo", { enum: SEXOS }).notNull().default("F"),
+    dataNascimento: integer("data_nascimento", { mode: "timestamp_ms" }),
     /** true quando o produtor informou só a idade aproximada */
-    nascimentoAproximado: integer('nascimento_aproximado', { mode: 'boolean' })
+    nascimentoAproximado: integer("nascimento_aproximado", { mode: "boolean" })
       .notNull()
       .default(false),
     /**
      * Já pariu antes de entrar no app (ex.: vaca comprada adulta). Sem isso, uma
      * fêmea sem cria registrada ficaria novilha para sempre.
      */
-    jaPariu: integer('ja_pariu', { mode: 'boolean' }).notNull().default(false),
+    jaPariu: integer("ja_pariu", { mode: "boolean" }).notNull().default(false),
     /**
      * Crias que ela teve antes de entrar no app (não cadastradas como animal).
      * O total de crias é este número mais as cadastradas com ela como mãe.
      */
-    criasAnteriores: integer('crias_anteriores').notNull().default(0),
-    maeId: text('mae_id').references((): AnySQLiteColumn => animais.id, {
-      onDelete: 'set null',
+    criasAnteriores: integer("crias_anteriores").notNull().default(0),
+    maeId: text("mae_id").references((): AnySQLiteColumn => animais.id, {
+      onDelete: "set null",
     }),
     /** Pai cadastrado no rebanho (touro da fazenda) */
-    paiId: text('pai_id').references((): AnySQLiteColumn => animais.id, {
-      onDelete: 'set null',
+    paiId: text("pai_id").references((): AnySQLiteColumn => animais.id, {
+      onDelete: "set null",
     }),
     /** Pai fora do rebanho (touro emprestado, sêmen de inseminação), em texto livre */
-    paiDescricao: text('pai_descricao'),
-    origem: text('origem', { enum: ORIGENS }),
-    dataEntrada: integer('data_entrada', { mode: 'timestamp_ms' }),
-    status: text('status', { enum: STATUS_ANIMAL }).notNull().default('ativo'),
-    dataSaida: integer('data_saida', { mode: 'timestamp_ms' }),
-    motivoSaida: text('motivo_saida'),
-    loteId: text('lote_id').references(() => lotes.id, { onDelete: 'set null' }),
+    paiDescricao: text("pai_descricao"),
+    origem: text("origem", { enum: ORIGENS }),
+    dataEntrada: integer("data_entrada", { mode: "timestamp_ms" }),
+    status: text("status", { enum: STATUS_ANIMAL }).notNull().default("ativo"),
+    dataSaida: integer("data_saida", { mode: "timestamp_ms" }),
+    motivoSaida: text("motivo_saida"),
+    loteId: text("lote_id").references(() => lotes.id, {
+      onDelete: "set null",
+    }),
     /** Leite estimado por dia (litros), informado pelo produtor; opcional */
-    producaoLeiteL: real('producao_leite_l'),
+    producaoLeiteL: real("producao_leite_l"),
     /** Ração por dia (kg), informada pelo produtor; opcional */
-    racaoKgDia: real('racao_kg_dia'),
+    racaoKgDia: real("racao_kg_dia"),
     criadoPor: criadoPor(),
     ...timestamps,
   },
   (table) => [
-    index('animais_brinco_idx').on(table.brinco),
-    index('animais_mae_id_idx').on(table.maeId),
-    index('animais_pai_id_idx').on(table.paiId),
-    index('animais_lote_id_idx').on(table.loteId),
-  ]
+    index("animais_brinco_idx").on(table.brinco),
+    index("animais_status_idx").on(table.status),
+    index("animais_mae_id_idx").on(table.maeId),
+    index("animais_pai_id_idx").on(table.paiId),
+    index("animais_lote_id_idx").on(table.loteId),
+  ],
 );
 
 export const pesagens = sqliteTable(
-  'pesagens',
+  "pesagens",
   {
     id: id(),
-    animalId: text('animal_id')
+    animalId: text("animal_id")
       .notNull()
-      .references(() => animais.id, { onDelete: 'cascade' }),
-    data: integer('data', { mode: 'timestamp_ms' }).notNull(),
-    pesoKg: real('peso_kg').notNull(),
+      .references(() => animais.id, { onDelete: "cascade" }),
+    data: integer("data", { mode: "timestamp_ms" }).notNull(),
+    pesoKg: real("peso_kg").notNull(),
     criadoPor: criadoPor(),
     ...timestamps,
   },
-  (table) => [index('pesagens_animal_id_idx').on(table.animalId)]
+  (table) => [index("pesagens_animal_id_idx").on(table.animalId)],
 );
 
 export const reproducoes = sqliteTable(
-  'reproducoes',
+  "reproducoes",
   {
     id: id(),
-    animalId: text('animal_id')
+    animalId: text("animal_id")
       .notNull()
-      .references(() => animais.id, { onDelete: 'cascade' }),
-    tipo: text('tipo', { enum: TIPOS_REPRODUCAO }).notNull(),
-    data: integer('data', { mode: 'timestamp_ms' }).notNull(),
-    prenhezConfirmada: integer('prenhez_confirmada', { mode: 'boolean' }),
-    previsaoParto: integer('previsao_parto', { mode: 'timestamp_ms' }),
-    dataParto: integer('data_parto', { mode: 'timestamp_ms' }),
-    criaId: text('cria_id').references(() => animais.id, { onDelete: 'set null' }),
+      .references(() => animais.id, { onDelete: "cascade" }),
+    tipo: text("tipo", { enum: TIPOS_REPRODUCAO }).notNull(),
+    data: integer("data", { mode: "timestamp_ms" }).notNull(),
+    prenhezConfirmada: integer("prenhez_confirmada", { mode: "boolean" }),
+    previsaoParto: integer("previsao_parto", { mode: "timestamp_ms" }),
+    dataParto: integer("data_parto", { mode: "timestamp_ms" }),
+    criaId: text("cria_id").references(() => animais.id, {
+      onDelete: "set null",
+    }),
     /** Touro do rebanho usado na cobertura */
-    touroId: text('touro_id').references(() => animais.id, { onDelete: 'set null' }),
+    touroId: text("touro_id").references(() => animais.id, {
+      onDelete: "set null",
+    }),
     /** Touro de fora ou sêmen (nome, código da palheta), em texto livre */
-    touroDescricao: text('touro_descricao'),
+    touroDescricao: text("touro_descricao"),
     criadoPor: criadoPor(),
     ...timestamps,
   },
   (table) => [
-    index('reproducoes_animal_id_idx').on(table.animalId),
-    index('reproducoes_touro_id_idx').on(table.touroId),
-  ]
+    index("reproducoes_animal_id_idx").on(table.animalId),
+    index("reproducoes_touro_id_idx").on(table.touroId),
+  ],
 );
 
 export const tratamentos = sqliteTable(
-  'tratamentos',
+  "tratamentos",
   {
     id: id(),
-    animalId: text('animal_id')
+    animalId: text("animal_id")
       .notNull()
-      .references(() => animais.id, { onDelete: 'cascade' }),
-    medicamento: text('medicamento').notNull(),
-    dose: text('dose'),
-    dataInicio: integer('data_inicio', { mode: 'timestamp_ms' }).notNull(),
-    dataFim: integer('data_fim', { mode: 'timestamp_ms' }),
+      .references(() => animais.id, { onDelete: "cascade" }),
+    medicamento: text("medicamento").notNull(),
+    dose: text("dose"),
+    dataInicio: integer("data_inicio", { mode: "timestamp_ms" }).notNull(),
+    dataFim: integer("data_fim", { mode: "timestamp_ms" }),
     /**
      * Legado: índices (1 = primeiro dia) dos dias confirmados. Copiado para
      * `doses_aplicadas` na migration 0008; sai quando a tela deixar de usar.
      */
-    diasConfirmados: text('dias_confirmados', { mode: 'json' })
+    diasConfirmados: text("dias_confirmados", { mode: "json" })
       .$type<number[]>()
       .notNull()
       .$defaultFn(() => []),
     /** Legado: substituído pela agenda (dias_semana, horario, intervalo_horas) */
-    proximaDoseEm: integer('proxima_dose_em', { mode: 'timestamp_ms' }),
+    proximaDoseEm: integer("proxima_dose_em", { mode: "timestamp_ms" }),
     /** Dias da semana com dose, no padrão do expo-notifications: 1 = domingo ... 7 = sábado */
-    diasSemana: text('dias_semana', { mode: 'json' })
+    diasSemana: text("dias_semana", { mode: "json" })
       .$type<number[]>()
       .notNull()
       .default(sql`'[1,2,3,4,5,6,7]'`),
     /** Horário da (primeira) dose do dia, "HH:mm"; null = sem horário */
-    horario: text('horario'),
+    horario: text("horario"),
     /** De quantas em quantas horas repetir no dia (só com todos os dias; divisor de 24) */
-    intervaloHoras: integer('intervalo_horas'),
+    intervaloHoras: integer("intervalo_horas"),
     /** Antecedência do aviso, em minutos (0 = na hora da dose) */
-    avisoMinutosAntes: integer('aviso_minutos_antes').notNull().default(0),
-    notificacaoAtiva: integer('notificacao_ativa', { mode: 'boolean' })
+    avisoMinutosAntes: integer("aviso_minutos_antes").notNull().default(0),
+    notificacaoAtiva: integer("notificacao_ativa", { mode: "boolean" })
       .notNull()
       .default(true),
-    carenciaLeiteDias: integer('carencia_leite_dias'),
-    carenciaCarneDias: integer('carencia_carne_dias'),
+    carenciaLeiteDias: integer("carencia_leite_dias"),
+    carenciaCarneDias: integer("carencia_carne_dias"),
     /** Anotação livre do produtor (via de aplicação, lote, veterinário...) */
-    observacoes: text('observacoes'),
+    observacoes: text("observacoes"),
     /** Liga os tratamentos aplicados em vários animais de uma vez */
-    grupoAplicacaoId: text('grupo_aplicacao_id'),
+    grupoAplicacaoId: text("grupo_aplicacao_id"),
     criadoPor: criadoPor(),
     ...timestamps,
   },
   (table) => [
-    index('tratamentos_animal_id_idx').on(table.animalId),
-    index('tratamentos_grupo_aplicacao_id_idx').on(table.grupoAplicacaoId),
-  ]
+    index("tratamentos_animal_id_idx").on(table.animalId),
+    index("tratamentos_grupo_aplicacao_id_idx").on(table.grupoAplicacaoId),
+  ],
 );
 
 /**
@@ -221,33 +228,40 @@ export const tratamentos = sqliteTable(
  * data_inicio. O índice único impede confirmar o mesmo dia duas vezes.
  */
 export const dosesAplicadas = sqliteTable(
-  'doses_aplicadas',
+  "doses_aplicadas",
   {
     id: id(),
-    tratamentoId: text('tratamento_id')
+    tratamentoId: text("tratamento_id")
       .notNull()
-      .references(() => tratamentos.id, { onDelete: 'cascade' }),
+      .references(() => tratamentos.id, { onDelete: "cascade" }),
     /** Meia-noite local do dia da dose */
-    dia: integer('dia', { mode: 'timestamp_ms' }).notNull(),
+    dia: integer("dia", { mode: "timestamp_ms" }).notNull(),
     criadoPor: criadoPor(),
     ...timestamps,
   },
   (table) => [
-    uniqueIndex('doses_aplicadas_tratamento_dia_idx').on(table.tratamentoId, table.dia),
-  ]
+    uniqueIndex("doses_aplicadas_tratamento_dia_idx").on(
+      table.tratamentoId,
+      table.dia,
+    ),
+  ],
 );
 
-export const ordenhas = sqliteTable('ordenhas', {
-  id: id(),
-  periodo: text('periodo', { enum: PERIODOS_ORDENHA }).notNull(),
-  horarioPrevisto: text('horario_previsto'),
-  horarioNotificacao: text('horario_notificacao'),
-  volumeLitros: real('volume_litros'),
-  dataRegistro: integer('data_registro', { mode: 'timestamp_ms' }).notNull(),
-  ...timestamps,
-});
+export const ordenhas = sqliteTable(
+  "ordenhas",
+  {
+    id: id(),
+    periodo: text("periodo", { enum: PERIODOS_ORDENHA }).notNull(),
+    horarioPrevisto: text("horario_previsto"),
+    horarioNotificacao: text("horario_notificacao"),
+    volumeLitros: real("volume_litros"),
+    dataRegistro: integer("data_registro", { mode: "timestamp_ms" }).notNull(),
+    ...timestamps,
+  },
+  (table) => [index("ordenhas_data_registro_idx").on(table.dataRegistro)],
+);
 
-export const ENTIDADES_NOTIFICACAO = ['animal', 'ordenha'] as const;
+export const ENTIDADES_NOTIFICACAO = ["animal", "ordenha"] as const;
 export type EntidadeNotificacao = (typeof ENTIDADES_NOTIFICACAO)[number];
 
 /**
@@ -257,20 +271,23 @@ export type EntidadeNotificacao = (typeof ENTIDADES_NOTIFICACAO)[number];
  * precisam ser canceladas no aparelho antes (ver src/services/notificacoes).
  */
 export const notificacoesAgendadas = sqliteTable(
-  'notificacoes_agendadas',
+  "notificacoes_agendadas",
   {
     /** O mesmo identificador usado no agendamento do expo-notifications */
     id: id(),
-    entidade: text('entidade', { enum: ENTIDADES_NOTIFICACAO }).notNull(),
+    entidade: text("entidade", { enum: ENTIDADES_NOTIFICACAO }).notNull(),
     /** Id do animal ou período da ordenha ('manha', 'tarde', 'noite') */
-    entidadeId: text('entidade_id').notNull(),
+    entidadeId: text("entidade_id").notNull(),
     /** Data do disparo; null nas recorrentes (ex.: ordenha diária) */
-    disparaEm: integer('dispara_em', { mode: 'timestamp_ms' }),
+    disparaEm: integer("dispara_em", { mode: "timestamp_ms" }),
     ...timestamps,
   },
   (table) => [
-    index('notificacoes_agendadas_entidade_idx').on(table.entidade, table.entidadeId),
-  ]
+    index("notificacoes_agendadas_entidade_idx").on(
+      table.entidade,
+      table.entidadeId,
+    ),
+  ],
 );
 
 export const lotesRelations = relations(lotes, ({ many }) => ({
@@ -281,33 +298,42 @@ export const animaisRelations = relations(animais, ({ one, many }) => ({
   mae: one(animais, {
     fields: [animais.maeId],
     references: [animais.id],
-    relationName: 'mae_crias',
+    relationName: "mae_crias",
   }),
-  crias: many(animais, { relationName: 'mae_crias' }),
+  crias: many(animais, { relationName: "mae_crias" }),
   pai: one(animais, {
     fields: [animais.paiId],
     references: [animais.id],
-    relationName: 'pai_filhos',
+    relationName: "pai_filhos",
   }),
-  filhos: many(animais, { relationName: 'pai_filhos' }),
+  filhos: many(animais, { relationName: "pai_filhos" }),
   lote: one(lotes, { fields: [animais.loteId], references: [lotes.id] }),
   pesagens: many(pesagens),
-  reproducoes: many(reproducoes, { relationName: 'reproducoes_da_mae' }),
+  reproducoes: many(reproducoes, { relationName: "reproducoes_da_mae" }),
   tratamentos: many(tratamentos),
 }));
 
 export const pesagensRelations = relations(pesagens, ({ one }) => ({
-  animal: one(animais, { fields: [pesagens.animalId], references: [animais.id] }),
+  animal: one(animais, {
+    fields: [pesagens.animalId],
+    references: [animais.id],
+  }),
 }));
 
 export const reproducoesRelations = relations(reproducoes, ({ one }) => ({
   animal: one(animais, {
     fields: [reproducoes.animalId],
     references: [animais.id],
-    relationName: 'reproducoes_da_mae',
+    relationName: "reproducoes_da_mae",
   }),
-  cria: one(animais, { fields: [reproducoes.criaId], references: [animais.id] }),
-  touro: one(animais, { fields: [reproducoes.touroId], references: [animais.id] }),
+  cria: one(animais, {
+    fields: [reproducoes.criaId],
+    references: [animais.id],
+  }),
+  touro: one(animais, {
+    fields: [reproducoes.touroId],
+    references: [animais.id],
+  }),
 }));
 
 export const tratamentosRelations = relations(tratamentos, ({ one, many }) => ({
@@ -341,3 +367,52 @@ export type NovaDoseAplicada = typeof dosesAplicadas.$inferInsert;
 export type Ordenha = typeof ordenhas.$inferSelect;
 export type NovaOrdenha = typeof ordenhas.$inferInsert;
 export type NotificacaoAgendadaRow = typeof notificacoesAgendadas.$inferSelect;
+
+
+export const TIPOS_TALHAO = ["pasto", "lavoura", "reserva", "outro"] as const;
+export type TipoTalhao = (typeof TIPOS_TALHAO)[number];
+
+export const STATUS_SYNC = ["created", "updated", "synced", "deleted"] as const;
+export type StatusSync = (typeof STATUS_SYNC)[number];
+
+export interface GeometriaPoligono {
+  type: "Polygon";
+  coordinates: number[][][];
+}
+
+export const talhoes = sqliteTable(
+  "talhoes",
+  {
+    id: id(),
+    nome: text("nome").notNull(),
+    tipo: text("tipo", { enum: TIPOS_TALHAO }).notNull().default("pasto"),
+    cor: text("cor").notNull(),
+    areaHectares: real("area_hectares").notNull(),
+    geometriaJson: text("geometria_json", { mode: "json" })
+      .$type<GeometriaPoligono>()
+      .notNull(),
+    centroLat: real("centro_lat").notNull(),
+    centroLng: real("centro_lng").notNull(),
+    minLat: real("min_lat").notNull(),
+    maxLat: real("max_lat").notNull(),
+    minLng: real("min_lng").notNull(),
+    maxLng: real("max_lng").notNull(),
+    syncStatus: text("sync_status", { enum: STATUS_SYNC })
+      .notNull()
+      .default("created"),
+    criadoPor: criadoPor(),
+    ...timestamps,
+  },
+  (table) => [
+    index("talhoes_bbox_idx").on(
+      table.minLat,
+      table.maxLat,
+      table.minLng,
+      table.maxLng,
+    ),
+    index("talhoes_sync_status_idx").on(table.syncStatus),
+  ],
+);
+
+export type Talhao = typeof talhoes.$inferSelect;
+export type NovoTalhao = typeof talhoes.$inferInsert;

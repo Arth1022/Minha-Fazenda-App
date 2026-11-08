@@ -23,6 +23,14 @@ export function diasConfirmadosDoAnimal(animalId: string) {
     .orderBy(asc(dosesAplicadas.dia));
 }
 
+/** Todos os dias confirmados do rebanho, numa consulta só (cálculo de carência na lista). */
+export function todasDosesConfirmadas() {
+  return db
+    .select({ tratamentoId: dosesAplicadas.tratamentoId, dia: dosesAplicadas.dia })
+    .from(dosesAplicadas)
+    .orderBy(asc(dosesAplicadas.dia));
+}
+
 /**
  * "Dei a dose de hoje": grava o dia como aplicado. Idempotente (o índice único
  * tratamento + dia ignora a repetição). Recusa dia que não é dia de dose.

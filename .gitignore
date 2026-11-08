@@ -68,3 +68,6 @@ yarn-error.*
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
+
+# Graphify output
+graphify-out/

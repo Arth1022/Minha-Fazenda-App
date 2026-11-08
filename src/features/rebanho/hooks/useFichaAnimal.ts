@@ -21,6 +21,7 @@ import {
   emIdadeReprodutiva,
   formatarIdade,
 } from '../services/fase';
+import { alertaPrincipal } from '../services/alertas';
 import { diasComDose, proximaDosePendente, tratamentosAtivos } from '../services/doses';
 import { calcularPesoAtual, calcularPrevisaoParto } from '../services/indicadores';
 
@@ -110,6 +111,17 @@ export function useFichaAnimal(id?: string): FichaAnimal | null {
       tratamentos,
       tratamentosAtivos: tratamentosAtivos(tratamentos, agora).map((t) =>
         montarTratamentoAtivo(t, confirmados.get(t.id) ?? [], agora)
+      ),
+      alerta: alertaPrincipal(
+        {
+          animal,
+          fase,
+          tratamentos,
+          dosesConfirmadas: doses,
+          coberturaAberta,
+          produzLeite,
+        },
+        agora
       ),
     };
   }, [animal, crias, pesagens, reproducoes, tratamentos, doses, produzLeite]);

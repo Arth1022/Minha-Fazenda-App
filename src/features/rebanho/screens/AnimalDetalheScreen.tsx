@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 
@@ -15,7 +15,7 @@ import { ReproducaoSecao } from '../components/ReproducaoSecao';
 import { TratamentosSecao } from '../components/TratamentosSecao';
 import { confirmarPrenhez } from '../data/reproducoes';
 import { useFichaAnimal } from '../hooks/useFichaAnimal';
-import { useRebanho } from '../hooks/useRebanho';
+import { useTouros } from '../hooks/useRebanho';
 
 const SEM_VALOR = '—';
 
@@ -35,8 +35,7 @@ export default function AnimalDetalheScreen() {
   const [registro, setRegistro] = useState<TipoRegistro | null>(null);
 
   // Touros para a cobertura: os machos ativos do rebanho
-  const rebanho = useRebanho();
-  const touros = useMemo(() => rebanho.filter((a) => a.sexo === 'M'), [rebanho]);
+  const touros = useTouros();
 
   const displayBrinco = animal ? `Brinco ${animal.brinco}` : SEM_VALOR;
 
@@ -65,7 +64,7 @@ export default function AnimalDetalheScreen() {
         </View>
       }>
       {/* A. Resumo */}
-      {ficha ? <FichaResumo ficha={ficha} alerta={null} /> : null}
+      {ficha ? <FichaResumo ficha={ficha} alerta={ficha.alerta?.texto} /> : null}
 
       {/* B. Tratamentos: um bloco por tratamento em andamento, com divisória */}
       {ficha ? <TratamentosSecao ativos={ativos} /> : null}
