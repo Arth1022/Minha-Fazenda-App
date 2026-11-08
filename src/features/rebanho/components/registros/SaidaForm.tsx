@@ -35,6 +35,7 @@ export function SaidaForm({ animalId, onClose }: SaidaFormProps) {
 
   return (
     <FormModal
+      variant="sheet"
       visible
       title="Saída do rebanho"
       subtitle="O animal sai da lista, mas o histórico fica guardado"

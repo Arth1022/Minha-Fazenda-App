@@ -60,6 +60,7 @@ export function NovoAnimalForm({
 
   return (
     <FormModal
+      variant="sheet"
       visible={visible}
       title={editando ? 'Editar animal' : 'Novo Animal'}
       subtitle={

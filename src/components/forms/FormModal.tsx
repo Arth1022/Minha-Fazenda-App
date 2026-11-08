@@ -9,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/ui/AppIcon';
 import { Button } from '@/components/ui/Button';
@@ -31,6 +32,11 @@ export interface FormModalProps {
    * sozinho (ex.: FlatList), para o que vem antes dele ficar fixo.
    */
   scrollable?: boolean;
+  /**
+   * `center` (padrão): cartão no meio da tela.
+   * `sheet`: sobe do rodapé e pode crescer até quase cobrir a tela.
+   */
+  variant?: 'center' | 'sheet';
   children: React.ReactNode;
 }
 
@@ -48,21 +54,39 @@ export function FormModal({
   loading = false,
   onShow,
   scrollable = true,
+  variant = 'center',
   children,
 }: FormModalProps) {
+  const insets = useSafeAreaInsets();
+  const isSheet = variant === 'sheet';
+
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType={isSheet ? 'slide' : 'fade'}
       onRequestClose={onClose}
       onShow={onShow}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
+        style={[
+          styles.overlay,
+          isSheet && [styles.overlaySheet, { paddingTop: insets.top + Spacing.five }],
+        ]}>
+        <Pressable
+          style={styles.backdrop}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Fechar"
+        />
 
-        <View style={styles.sheet}>
+        <View
+          style={[
+            styles.sheet,
+            isSheet && [styles.sheetBottom, { paddingBottom: insets.bottom + Spacing.lg }],
+          ]}>
+          {isSheet ? <View style={styles.handle} /> : null}
+
           <View style={styles.header}>
             <View style={{ flex: 1 }}>
               <Text style={styles.title}>{title}</Text>
@@ -82,7 +106,7 @@ export function FormModal({
 
           {scrollable ? (
             <ScrollView
-              style={styles.bodyScroll}
+              style={isSheet ? styles.bodyScrollSheet : styles.bodyScroll}
               contentContainerStyle={styles.bodyContent}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}>
@@ -123,6 +147,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: Spacing.three,
   },
+  // Folha colada no rodapé; o paddingTop (status bar + folga) limita a altura
+  overlaySheet: {
+    justifyContent: 'flex-end',
+    alignItems: 'stretch',
+    padding: 0,
+  },
   backdrop: {
     ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(17, 24, 39, 0.55)',
@@ -136,6 +166,22 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     gap: Spacing.three,
     ...Shadows.md,
+  },
+  sheetBottom: {
+    maxWidth: '100%',
+    maxHeight: '100%',
+    flexShrink: 1,
+    borderRadius: 0,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingTop: Spacing.sm,
+  },
+  handle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: Radius.full,
+    backgroundColor: AgroColors.borderStrong,
   },
   header: {
     flexDirection: 'row',
@@ -164,6 +210,11 @@ const styles = StyleSheet.create({
   },
   bodyScroll: {
     maxHeight: 380,
+  },
+  // Sem teto fixo: ocupa o espaço que a folha tiver e rola o resto
+  bodyScrollSheet: {
+    flexGrow: 0,
+    flexShrink: 1,
   },
   bodyContent: {
     gap: Spacing.md,
