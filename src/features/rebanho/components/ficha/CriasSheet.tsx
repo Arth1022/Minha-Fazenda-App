@@ -1,13 +1,12 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { AppIcon, BottomSheet } from '@/components/ui';
+import { AppIcon, BottomSheet, Chip } from '@/components/ui';
 import { AgroColors, IconSize, Radius, Spacing, Typography } from '@/constants/theme';
 import type { Animal, StatusAnimal } from '@/dtos';
 import { formatDataBR } from '@/utils/date';
 import { formatarIdade } from '../../services/fase';
 import { AnimalAvatar } from '../AnimalAvatar';
-import { Chip } from './elementos';
 
 const STATUS_LABEL: Record<Exclude<StatusAnimal, 'ativo'>, string> = {
   vendido: 'Vendido',

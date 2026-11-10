@@ -9,6 +9,7 @@ import {
   ControlledInput,
   DateField,
   FormModal,
+  SwitchField,
   type ChipOption,
 } from '@/components/forms';
 import { COMBUSTIVEIS, TIPOS_MAQUINA } from '@/database';
@@ -31,14 +32,24 @@ export interface NovaMaquinaFormProps {
   visible: boolean;
   onClose: () => void;
   onCreated: (maquina: Maquina) => void;
+  /**
+   * Máquina a editar: o formulário começa preenchido e salva por cima. Monte o
+   * modal só quando abrir, para começar com os dados atuais do cadastro.
+   */
+  maquina?: Maquina | null;
 }
 
 /**
- * Modal de cadastro de máquina: nome, tipo, marca e modelo à vista;
- * ano, série, placa, potência, combustível, horímetro e aquisição em "Mais detalhes".
+ * Modal de cadastro de máquina: nome, tipo, marca e modelo à vista; o resto em
+ * "Mais detalhes". Implemento (plantadeira, grade, carreta) não tem motor: no
+ * lugar de combustível e horímetro, pede a largura de trabalho (dá a área).
  */
-export function NovaMaquinaForm({ visible, onClose, onCreated }: NovaMaquinaFormProps) {
-  const { control, clearErrors, submit, saving } = useNovaMaquinaForm(onCreated);
+export function NovaMaquinaForm({ visible, onClose, onCreated, maquina = null }: NovaMaquinaFormProps) {
+  const { control, clearErrors, submit, saving, implemento, possuiHorimetro } = useNovaMaquinaForm(
+    onCreated,
+    maquina
+  );
+  const editando = maquina !== null;
 
   useEffect(() => {
     if (visible) clearErrors();
@@ -47,11 +58,11 @@ export function NovaMaquinaForm({ visible, onClose, onCreated }: NovaMaquinaForm
   return (
     <FormModal
       visible={visible}
-      title="Nova Máquina"
-      subtitle="Cadastre um equipamento ou veículo da fazenda"
+      title={editando ? 'Editar máquina' : 'Nova Máquina'}
+      subtitle={editando ? maquina.nome : 'Cadastre um equipamento ou veículo da fazenda'}
       onClose={onClose}
       onSubmit={submit}
-      submitLabel="Salvar Máquina"
+      submitLabel={editando ? 'Salvar' : 'Salvar Máquina'}
       loading={saving}>
       <ControlledInput
         control={control}
@@ -86,6 +97,18 @@ export function NovaMaquinaForm({ visible, onClose, onCreated }: NovaMaquinaForm
 
       <ControlledInput control={control} name="modelo" label="Modelo" placeholder="Ex: MF 4275" />
 
+      {implemento ? (
+        <ControlledInput
+          control={control}
+          name="larguraTrabalhoM"
+          label="Largura de trabalho"
+          placeholder="3,5"
+          keyboardType="numeric"
+          suffix="m"
+          helperText="Com o KM do GPS, dá a área trabalhada (ha)."
+        />
+      ) : null}
+
       <CollapsibleSection title="Mais detalhes">
         <View style={styles.duasColunas}>
           <ControlledInput
@@ -97,15 +120,17 @@ export function NovaMaquinaForm({ visible, onClose, onCreated }: NovaMaquinaForm
             keyboardType="number-pad"
             maxLength={4}
           />
-          <ControlledInput
-            control={control}
-            name="potenciaCv"
-            containerStyle={styles.coluna}
-            label="Potência"
-            placeholder="75"
-            keyboardType="numeric"
-            suffix="cv"
-          />
+          {!implemento ? (
+            <ControlledInput
+              control={control}
+              name="potenciaCv"
+              containerStyle={styles.coluna}
+              label="Potência"
+              placeholder="75"
+              keyboardType="numeric"
+              suffix="cv"
+            />
+          ) : null}
         </View>
 
         <ControlledInput
@@ -116,38 +141,66 @@ export function NovaMaquinaForm({ visible, onClose, onCreated }: NovaMaquinaForm
           autoCapitalize="characters"
         />
 
-        <View style={styles.duasColunas}>
-          <ControlledInput
-            control={control}
-            name="placa"
-            containerStyle={styles.coluna}
-            label="Placa"
-            placeholder="ABC1D23"
-            autoCapitalize="characters"
-          />
-          <ControlledInput
-            control={control}
-            name="horimetro"
-            containerStyle={styles.coluna}
-            label="Horímetro atual"
-            placeholder="1250"
-            keyboardType="numeric"
-            suffix="h"
-          />
-        </View>
+        {!implemento ? (
+          <>
+            <View style={styles.duasColunas}>
+              <ControlledInput
+                control={control}
+                name="placa"
+                containerStyle={styles.coluna}
+                label="Placa"
+                placeholder="ABC1D23"
+                autoCapitalize="characters"
+              />
+              <ControlledInput
+                control={control}
+                name="tanqueLitros"
+                containerStyle={styles.coluna}
+                label="Tanque"
+                placeholder="150"
+                keyboardType="numeric"
+                suffix="L"
+              />
+            </View>
 
-        <Controller
-          control={control}
-          name="combustivel"
-          render={({ field }) => (
-            <ChipSelector
-              label="Combustível"
-              options={COMBUSTIVEL_OPCOES}
-              value={field.value}
-              onChange={field.onChange}
+            <Controller
+              control={control}
+              name="possuiHorimetro"
+              render={({ field }) => (
+                <SwitchField
+                  label="Tem horímetro funcionando?"
+                  value={field.value}
+                  onChange={field.onChange}
+                  helperText="Sem horímetro, o app usa as horas de uso registradas."
+                />
+              )}
             />
-          )}
-        />
+            {possuiHorimetro ? (
+              <ControlledInput
+                control={control}
+                name="horimetro"
+                label={editando ? 'Horímetro no cadastro' : 'Horímetro atual'}
+                helperText={editando ? 'As horas de uso no app somam a partir deste valor.' : undefined}
+                placeholder="1250"
+                keyboardType="numeric"
+                suffix="h"
+              />
+            ) : null}
+
+            <Controller
+              control={control}
+              name="combustivel"
+              render={({ field }) => (
+                <ChipSelector
+                  label="Combustível"
+                  options={COMBUSTIVEL_OPCOES}
+                  value={field.value}
+                  onChange={field.onChange}
+                />
+              )}
+            />
+          </>
+        ) : null}
 
         <Controller
           control={control}

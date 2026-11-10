@@ -1,9 +1,8 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { AppIcon, BottomSheet, type AppIconName } from '@/components/ui';
+import { AppIcon, type AppIconName, BottomSheet, IconeRedondo, type TomFicha } from '@/components/ui';
 import { AgroColors, IconSize, Radius, Spacing, Typography } from '@/constants/theme';
-import { IconeRedondo, type TomFicha } from './elementos';
 
 export type TipoRegistro = 'tratamento' | 'pesagem' | 'cobertura' | 'parto' | 'saida';
 

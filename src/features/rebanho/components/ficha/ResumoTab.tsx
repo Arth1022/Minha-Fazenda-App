@@ -1,7 +1,7 @@
 import React, { Fragment } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { AppIcon, Button, InfoBanner } from '@/components/ui';
+import { AppIcon, Button, Chip, FichaCard, IconeRedondo, InfoBanner, type TomFicha } from '@/components/ui';
 import { AgroColors, IconSize, Spacing, Typography } from '@/constants/theme';
 import type { FichaAnimal, TratamentoAtivo } from '@/dtos';
 import { formatDataBR } from '@/utils/date';
@@ -16,7 +16,6 @@ import {
   type SituacaoReprodutiva,
 } from '../../services/ficha';
 import { historicoDePeso } from '../../services/indicadores';
-import { Chip, FichaCard, IconeRedondo, type TomFicha } from './elementos';
 
 export const TOM_DA_SITUACAO: Record<SituacaoReprodutiva, TomFicha> = {
   vazia: 'neutro',

@@ -29,6 +29,11 @@ export const AgroColors = {
   mapPolygonLavoura: '#9A7B3E',// Preenchimento polígono de lavoura
   mapPolygonLavouraBorder: '#FEF08A',
 
+  // Protótipo "Minha Fazenda" (PDF): tela de Mapa e barra de abas
+  forest: '#1D6B39',           // Verde dos botões, ícones e links do protótipo
+  forestTint: '#E3EDE5',       // Pílula atrás do ícone da aba ativa
+  surfaceMuted: '#F1F4F1',     // Fundo do resultado das calculadoras, ícones e botão fechar
+
   // Semânticas e Indicadores
   waterBlue: '#0EA5E9',        // Informativo (badge info)
   waterBlueBg: '#E0F2FE',      // Fundo suave azul

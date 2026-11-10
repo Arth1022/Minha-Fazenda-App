@@ -1,6 +1,8 @@
 import React from 'react';
 import {
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -18,6 +20,8 @@ export interface BottomSheetProps {
   title: string;
   subtitle?: string;
   onClose: () => void;
+  /** Fração da altura da tela que o conteúdo pode ocupar antes de rolar (padrão 0,6) */
+  alturaMaxima?: number;
   children: React.ReactNode;
 }
 
@@ -25,7 +29,14 @@ export interface BottomSheetProps {
  * Folha que sobe do rodapé sobre a tela escurecida (ex.: menu "O que deseja
  * registrar?"). Fecha no X, no fundo escuro ou no voltar do Android.
  */
-export function BottomSheet({ visible, title, subtitle, onClose, children }: BottomSheetProps) {
+export function BottomSheet({
+  visible,
+  title,
+  subtitle,
+  onClose,
+  alturaMaxima = 0.6,
+  children,
+}: BottomSheetProps) {
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
 
@@ -37,7 +48,9 @@ export function BottomSheet({ visible, title, subtitle, onClose, children }: Bot
       statusBarTranslucent
       navigationBarTranslucent
       onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.overlay}>
         <Pressable
           style={styles.backdrop}
           onPress={onClose}
@@ -65,13 +78,14 @@ export function BottomSheet({ visible, title, subtitle, onClose, children }: Bot
 
           {/* Rola quando a lista passa de ~60% da tela (ex.: muitas crias ou pesagens) */}
           <ScrollView
-            style={{ maxHeight: height * 0.6 }}
+            style={{ maxHeight: height * alturaMaxima }}
             contentContainerStyle={styles.body}
+            keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
             {children}
           </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

@@ -9,6 +9,7 @@ import {
 import { useRouter } from 'expo-router';
 
 import { AgroColors, Spacing, Typography } from '@/constants/theme';
+import { AppIcon } from './AppIcon';
 
 export interface HeaderProps {
   /** Título exibido na barra superior */
@@ -121,7 +122,7 @@ export function Header({
               ]}
               accessibilityRole="button"
               accessibilityLabel="Notificações">
-              <Text style={styles.bellIcon}>🔔</Text>
+              <AppIcon name="bell" size={22} color={AgroColors.textInverse} />
             </Pressable>
           ) : null}
 
@@ -217,10 +218,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#A7F3D0',
     marginTop: 1,
-  },
-  bellIcon: {
-    fontSize: 17,
-    color: AgroColors.textInverse,
   },
   moreDots: {
     color: AgroColors.textInverse,

@@ -124,3 +124,20 @@ export function extrairMetadadosEspaciais(
     maxLng,
   };
 }
+
+/**
+ * Diz se o ponto está dentro do polígono (ray casting no plano lng/lat). Serve para
+ * conferir se os cantos de um talhão ficam dentro da divisa da fazenda; em áreas
+ * do tamanho de uma fazenda a curvatura da Terra não muda o resultado.
+ */
+export function pontoDentroDoPoligono(ponto: Coordenada, poligono: Coordenada[]): boolean {
+  const [x, y] = ponto;
+  let dentro = false;
+  for (let i = 0, j = poligono.length - 1; i < poligono.length; j = i++) {
+    const [xi, yi] = poligono[i];
+    const [xj, yj] = poligono[j];
+    const cruza = yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
+    if (cruza) dentro = !dentro;
+  }
+  return dentro;
+}

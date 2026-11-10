@@ -53,13 +53,22 @@ export function msParaHoras(ms: number): number {
   return ms / MS_POR_HORA;
 }
 
-/** Duração curta para leitura: "2h 05min", "45min" ou "0min". */
-export function formatarDuracao(ms: number): string {
-  const totalMin = Math.floor(ms / MS_POR_MINUTO);
+/**
+ * O formatador de duração do app inteiro: "0 min", "<1 min", "45 min", "2h 05 min".
+ * `curto` é para espaço apertado (barra do gráfico): "", "<1m", "45m", "2,5h".
+ */
+export function formatarDuracao(ms: number, { curto = false }: { curto?: boolean } = {}): string {
+  const valor = Math.max(0, ms);
+  if (valor === 0) return curto ? '' : '0 min';
+  if (valor < MS_POR_MINUTO) return curto ? '<1m' : '<1 min';
+  const totalMin = Math.floor(valor / MS_POR_MINUTO);
   const horas = Math.floor(totalMin / 60);
   const minutos = totalMin % 60;
-  if (horas === 0) return `${minutos}min`;
-  return `${horas}h ${String(minutos).padStart(2, '0')}min`;
+  if (curto) {
+    return horas === 0 ? `${minutos}m` : `${(valor / MS_POR_HORA).toFixed(1).replace('.', ',')}h`;
+  }
+  if (horas === 0) return `${minutos} min`;
+  return `${horas}h ${String(minutos).padStart(2, '0')} min`;
 }
 
 /** Cronômetro "HH:MM:SS" do uso em andamento (passa de 24h sem voltar a zero). */
@@ -74,4 +83,9 @@ export function formatarCronometro(ms: number): string {
 /** Identificação da máquina sem espaços nas pontas e em maiúsculas ("tr-01 " → "TR-01"). */
 export function normalizarCodigo(codigo: string): string {
   return codigo.trim().toUpperCase();
+}
+
+/** Hora "07:10" para frases como "Em uso por Beta desde 07:10". */
+export function horaCurta(data: Date): string {
+  return `${String(data.getHours()).padStart(2, '0')}:${String(data.getMinutes()).padStart(2, '0')}`;
 }

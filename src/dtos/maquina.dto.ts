@@ -2,13 +2,28 @@ import type { Maquina, UsoMaquina } from '@/database';
 
 // Linhas da tabela: inferidas pelo Drizzle no schema, só reexportadas
 export type {
+  Abastecimento,
   AnotacaoMaquina,
+  AtividadeUso,
+  CategoriaMaquina,
+  CategoriaProblema,
   Combustivel,
+  LeituraHorimetro,
   Maquina,
+  MotivoFimUso,
+  MotivoParada,
   NovaMaquina,
+  OcorrenciaMaquina,
+  OrigemAbastecimento,
+  OrigemHorimetro,
+  OrigemUso,
+  ParadaUso,
+  PontoGps,
+  PontoRastro,
   StatusMaquina,
   TipoMaquina,
   UsoMaquina,
+  UsoNoTalhao,
 } from '@/database';
 
 /** Máquina da lista com o uso em aberto já cruzado (`useMaquinas`). */
@@ -35,8 +50,12 @@ export interface FichaMaquina {
   totalSemanaMs: number;
   /** Tempo total registrado no app (usos encerrados), em milissegundos */
   totalRegistradoMs: number;
-  /** Horímetro estimado: inicial + horas registradas; null sem horímetro inicial */
+  /** Horímetro estimado: última leitura (ou o do cadastro) + horas de uso no app; null sem referência */
   horimetroAtual: number | null;
+  /** KM andados na semana (usos com GPS); null se nenhum uso teve GPS */
+  kmSemana: number | null;
+  /** Hectares estimados na semana (com implemento); null sem área */
+  haSemana: number | null;
   /** Usos mais recentes, do mais novo para o mais antigo */
   usosRecentes: UsoMaquina[];
 }

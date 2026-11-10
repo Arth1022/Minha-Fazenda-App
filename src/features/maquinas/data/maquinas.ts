@@ -1,14 +1,24 @@
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq, ne } from 'drizzle-orm';
 
 import { db, maquinas } from '@/database';
 import type { Maquina, NovaMaquina } from '@/dtos';
 import { gerarCodigo } from '../services/codigo';
+import { categoriaDoTipo } from '../services/padroes';
 import type { ReferenciaMaquina } from '../services/qrCode';
 import { normalizarCodigo } from '../services/uso';
 
 /** Frota em ordem alfabética pelo nome. */
 export function listarMaquinas() {
   return db.select().from(maquinas).orderBy(asc(maquinas.nome));
+}
+
+/** Implementos ativos (plantadeira, grade, carreta) para engatar ao ligar. */
+export function listarImplementos() {
+  return db
+    .select()
+    .from(maquinas)
+    .where(and(eq(maquinas.categoria, 'implemento'), ne(maquinas.status, 'inativa')))
+    .orderBy(asc(maquinas.nome));
 }
 
 export function maquinaPorId(id: string) {
@@ -49,6 +59,32 @@ export async function cadastrarMaquina(nova: DadosNovaMaquina): Promise<Maquina>
       throw new Error(`Já existe uma máquina com a identificação ${informado}`);
     }
     const codigo = informado ?? gerarCodigo(nova.tipo ?? 'outro', usados);
-    return tx.insert(maquinas).values({ ...nova, codigo, nome }).returning().get();
+    const categoria = categoriaDoTipo(nova.tipo ?? 'outro');
+    return tx
+      .insert(maquinas)
+      .values({ ...nova, ...camposDaCategoria(categoria), categoria, codigo, nome })
+      .returning()
+      .get();
   });
+}
+
+/** Implemento não tem motor: sem combustível, horímetro, tanque nem potência. */
+function camposDaCategoria(categoria: ReturnType<typeof categoriaDoTipo>) {
+  return categoria === 'implemento'
+    ? { combustivel: null, possuiHorimetro: false, horimetroInicial: null, tanqueLitros: null, potenciaCv: null }
+    : { larguraTrabalhoM: null };
+}
+
+/** Edição do cadastro (lápis da ficha). O ID interno não muda: está no QR impresso. */
+export async function atualizarMaquina(id: string, dados: Omit<DadosNovaMaquina, 'codigo'>): Promise<Maquina> {
+  const nome = dados.nome.trim();
+  if (!nome) throw new Error('Informe o nome da máquina');
+  const categoria = categoriaDoTipo(dados.tipo ?? 'outro');
+  const [atualizada] = await db
+    .update(maquinas)
+    .set({ ...dados, ...camposDaCategoria(categoria), categoria, nome })
+    .where(eq(maquinas.id, id))
+    .returning();
+  if (!atualizada) throw new Error('Máquina não encontrada');
+  return atualizada;
 }

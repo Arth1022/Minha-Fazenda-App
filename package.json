@@ -36,6 +36,7 @@
     "expo-status-bar": "~58.0.4",
     "expo-symbols": "~58.0.4",
     "expo-system-ui": "~58.0.7",
+    "expo-task-manager": "~58.0.13",
     "expo-text-extractor": "^2.0.0",
     "expo-web-browser": "~58.0.7",
     "qrcode": "^1.5.4",
@@ -78,7 +79,9 @@
     "test:cadastro": "tsx --tsconfig tsconfig.test.json __tests__/cadastro.test.ts",
     "test:talhoes": "tsx --tsconfig tsconfig.test.json __tests__/talhoes.test.ts",
     "test:maquinas": "tsx --tsconfig tsconfig.test.json __tests__/maquinas.test.ts",
-    "test": "npm run test:regras && npm run test:db && npm run test:notificacoes && npm run test:migrations && npm run test:doses && npm run test:cadastro && npm run test:talhoes && npm run test:maquinas"
+    "test:auditoria": "tsx --tsconfig tsconfig.test.json __tests__/auditoriaMaquinas.test.ts",
+    "test:agro": "tsx --tsconfig tsconfig.test.json __tests__/agriculturaMapa.test.ts",
+    "test": "npm run test:regras && npm run test:db && npm run test:notificacoes && npm run test:migrations && npm run test:doses && npm run test:cadastro && npm run test:talhoes && npm run test:maquinas && npm run test:auditoria && npm run test:agro"
   },
   "private": true
 }

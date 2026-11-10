@@ -9,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@/components/ui/AppIcon';
 import { Button } from '@/components/ui/Button';
@@ -35,7 +36,9 @@ export interface FormModalProps {
 }
 
 /**
- * Modal padronizado para formulários de criação e edição rápida.
+ * Modal padronizado do app (formulários, buscas, QR Code): folha que sobe do
+ * rodapé, como os registros do rebanho, e pode crescer até quase cobrir a tela.
+ * Fecha no X, no fundo escuro ou no voltar do Android.
  */
 export function FormModal({
   visible,
@@ -50,19 +53,28 @@ export function FormModal({
   scrollable = true,
   children,
 }: FormModalProps) {
+  const insets = useSafeAreaInsets();
+
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType="slide"
       onRequestClose={onClose}
       onShow={onShow}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
+        style={[styles.overlay, { paddingTop: insets.top + Spacing.five }]}>
+        <Pressable
+          style={styles.backdrop}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Fechar"
+        />
 
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { paddingBottom: insets.bottom + Spacing.lg }]}>
+          <View style={styles.handle} />
+
           <View style={styles.header}>
             <View style={{ flex: 1 }}>
               <Text style={styles.title}>{title}</Text>
@@ -117,11 +129,10 @@ export function FormModal({
 }
 
 const styles = StyleSheet.create({
+  // Folha colada no rodapé; o paddingTop (status bar + folga) limita a altura
   overlay: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Spacing.three,
+    justifyContent: 'flex-end',
   },
   backdrop: {
     ...StyleSheet.absoluteFill,
@@ -129,13 +140,21 @@ const styles = StyleSheet.create({
   },
   sheet: {
     width: '100%',
-    maxWidth: 420,
-    maxHeight: '88%',
+    flexShrink: 1,
     backgroundColor: AgroColors.cardBg,
-    borderRadius: Radius.xl,
-    padding: Spacing.lg,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
     gap: Spacing.three,
     ...Shadows.md,
+  },
+  handle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: Radius.full,
+    backgroundColor: AgroColors.borderStrong,
   },
   header: {
     flexDirection: 'row',
@@ -162,8 +181,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // Sem teto fixo: ocupa o espaço que a folha tiver e rola o resto
   bodyScroll: {
-    maxHeight: 380,
+    flexGrow: 0,
+    flexShrink: 1,
   },
   bodyContent: {
     gap: Spacing.md,

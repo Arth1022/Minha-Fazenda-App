@@ -22,6 +22,10 @@ export const CANAIS: Record<CanalId, { nome: string; descricao: string }> = {
     nome: 'Reprodução',
     descricao: 'Partos previstos e acompanhamento reprodutivo',
   },
+  maquinas: {
+    nome: 'Máquinas',
+    descricao: 'Máquina parada em uso e uso encerrado pelo app',
+  },
 };
 
 /** Cria (ou atualiza) os canais. Idempotente; no Android 13+ precisa vir antes do pedido de permissão. */

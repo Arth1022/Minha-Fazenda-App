@@ -1,175 +1,135 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  type StyleProp,
-  type ViewStyle,
-} from 'react-native';
-import Svg, { Circle, Line, Path } from 'react-native-svg';
-import Mapbox from '@rnmapbox/maps';
+import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import Mapbox, { type MapState } from '@rnmapbox/maps';
 import * as Location from 'expo-location';
 
 import '@/constants/mapbox';
-import { AgroColors, Radius, Shadows, Spacing } from '@/constants/theme';
+import { AgroColors } from '@/constants/theme';
 import type { Coordenada } from '@/utils/geoMath';
 
-// Centro padrão no coração agrícola do Brasil caso o GPS ainda não tenha sido autorizado
-const COORDENADA_INICIAL_PADRAO: Coordenada = [-47.9292, -15.7801];
-const ZOOM_FAZENDA_PADRAO = 15;
-const ZOOM_MINIMO = 3;
-const ZOOM_MAXIMO = 20;
+export const ZOOM_TALHAO = 16;
+
+/** Onde a câmera abre: um ponto com zoom ou uma área a enquadrar. */
+export type VistaMapa =
+  | { tipo: 'ponto'; coordenada: Coordenada; zoom: number }
+  | { tipo: 'area'; ne: Coordenada; sw: Coordenada };
+
+/** Brasil inteiro: usado enquanto não há local salvo, talhão nem GPS. */
+export const VISTA_BRASIL: VistaMapa = { tipo: 'ponto', coordenada: [-51.9, -14.2], zoom: 3.6 };
+
+export type EstiloMapa = 'satelite' | 'mapa';
+
+export interface MapaBaseHandle {
+  voarPara: (coordenada: Coordenada, zoom?: number) => void;
+  /** Pede o GPS e centraliza; devolve false sem permissão ou sem sinal */
+  centralizarNoGps: () => Promise<boolean>;
+  /** Centro e zoom atuais da câmera */
+  obterCentro: () => { coordenada: Coordenada; zoom: number };
+}
 
 export interface MapaBaseProps {
-  nomeFazenda?: string;
-  totalHectares?: number;
-  coordenadaInicial?: Coordenada;
-  coordenadaFoco?: Coordenada | null;
-  zoomInicial?: number;
+  ref?: React.Ref<MapaBaseHandle>;
+  vistaInicial: VistaMapa;
+  estilo?: EstiloMapa;
+  /** false: mapa só de vitrine (sem arrastar, zoom ou toque) */
+  interativo?: boolean;
+  /** Ao abrir, centraliza no GPS sem perguntar de novo se já houver permissão */
+  centralizarNoGpsAoAbrir?: boolean;
+  /** Folga (pt) das bordas ao enquadrar uma área, para não ficar sob os cartões */
+  folga?: { top: number; bottom: number; left: number; right: number };
   onMapPress?: (coordenada: Coordenada) => void;
   style?: StyleProp<ViewStyle>;
   children?: React.ReactNode;
 }
 
-/** Ícone de camadas (satélite / mapa) fiel ao protótipo do Figma. */
-function LayersIcon({ color = AgroColors.headerGreen }: { color?: string }) {
-  return (
-    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M12 2L2 7L12 12L22 7L12 2Z"
-        stroke={color}
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <Path
-        d="M2 12L12 17L22 12"
-        stroke={color}
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </Svg>
-  );
-}
+const FOLGA_PADRAO = { top: 24, bottom: 24, left: 24, right: 24 };
 
-/** Ícone de mira do GPS fiel ao protótipo do Figma. */
-function GpsTargetIcon({ color = AgroColors.headerGreen }: { color?: string }) {
-  return (
-    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-      <Circle cx="12" cy="12" r="6" stroke={color} strokeWidth={2} />
-      <Circle cx="12" cy="12" r="2" fill={color} />
-      <Line x1="12" y1="2" x2="12" y2="6" stroke={color} strokeWidth={2} strokeLinecap="round" />
-      <Line x1="12" y1="18" x2="12" y2="22" stroke={color} strokeWidth={2} strokeLinecap="round" />
-      <Line x1="2" y1="12" x2="6" y2="12" stroke={color} strokeWidth={2} strokeLinecap="round" />
-      <Line x1="18" y1="12" x2="22" y2="12" stroke={color} strokeWidth={2} strokeLinecap="round" />
-    </Svg>
-  );
-}
-
-function ZoomIcon({
-  sinal,
-  color = AgroColors.headerGreen,
-}: {
-  sinal: 'mais' | 'menos';
-  color?: string;
-}) {
-  return (
-    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-      <Line x1="5" y1="12" x2="19" y2="12" stroke={color} strokeWidth={2.2} strokeLinecap="round" />
-      {sinal === 'mais' && (
-        <Line x1="12" y1="5" x2="12" y2="19" stroke={color} strokeWidth={2.2} strokeLinecap="round" />
-      )}
-    </Svg>
-  );
-}
-
+/**
+ * Mapa Mapbox da fazenda (satélite por padrão). Só desenha o mapa e as camadas
+ * filhas; botões e cartões ficam na tela que o usa, que comanda a câmera pela ref.
+ */
 export function MapaBase({
-  nomeFazenda = 'Fazenda Recanto Verde',
-  totalHectares,
-  coordenadaInicial = COORDENADA_INICIAL_PADRAO,
-  coordenadaFoco,
-  zoomInicial = ZOOM_FAZENDA_PADRAO,
+  ref,
+  vistaInicial,
+  estilo = 'satelite',
+  interativo = true,
+  centralizarNoGpsAoAbrir = false,
+  folga = FOLGA_PADRAO,
   onMapPress,
   style,
   children,
 }: MapaBaseProps) {
   const cameraRef = useRef<Mapbox.Camera>(null);
-  const zoomAtualRef = useRef<number>(zoomInicial);
-  const [modoSatelite, setModoSatelite] = useState(true);
-  const [buscandoGps, setBuscandoGps] = useState(false);
-  const [permissaoGps, setPermissaoGps] = useState(false);
+  const centroRef = useRef<{ coordenada: Coordenada; zoom: number }>(
+    vistaInicial.tipo === 'ponto'
+      ? { coordenada: vistaInicial.coordenada, zoom: vistaInicial.zoom }
+      : {
+          coordenada: [
+            (vistaInicial.ne[0] + vistaInicial.sw[0]) / 2,
+            (vistaInicial.ne[1] + vistaInicial.sw[1]) / 2,
+          ],
+          zoom: ZOOM_TALHAO,
+        },
+  );
+  const [mostrarUsuario, setMostrarUsuario] = useState(false);
 
-  const centralizarNoGps = useCallback(async (silencioso = false) => {
+  const voarPara = useCallback((coordenada: Coordenada, zoom?: number) => {
+    const zoomFinal = zoom ?? Math.max(centroRef.current.zoom, ZOOM_TALHAO);
+    centroRef.current = { coordenada, zoom: zoomFinal };
+    cameraRef.current?.setCamera({
+      centerCoordinate: coordenada,
+      zoomLevel: zoomFinal,
+      animationDuration: 800,
+    });
+  }, []);
+
+  const centralizarNoGps = useCallback(async () => {
     try {
-      if (!silencioso) setBuscandoGps(true);
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setPermissaoGps(false);
-        return;
-      }
-      setPermissaoGps(true);
-
-      const posicao = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-
-      const novaCoordenada: Coordenada = [
-        posicao.coords.longitude,
-        posicao.coords.latitude,
-      ];
-
-      zoomAtualRef.current = 16;
-      cameraRef.current?.setCamera({
-        centerCoordinate: novaCoordenada,
-        zoomLevel: 16,
-        animationDuration: 900,
-      });
+      const { granted } = await Location.requestForegroundPermissionsAsync();
+      if (!granted) return false;
+      setMostrarUsuario(true);
+      const posicao =
+        (await Location.getLastKnownPositionAsync({ maxAge: 60_000 })) ??
+        (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
+      voarPara([posicao.coords.longitude, posicao.coords.latitude], ZOOM_TALHAO);
+      return true;
     } catch {
-      // Mantém a coordenada inicial caso o GPS esteja desligado no aparelho
-    } finally {
-      if (!silencioso) setBuscandoGps(false);
+      // GPS desligado no aparelho: a câmera fica onde está
+      return false;
+    }
+  }, [voarPara]);
+
+  useImperativeHandle(
+    ref,
+    () => ({ voarPara, centralizarNoGps, obterCentro: () => centroRef.current }),
+    [voarPara, centralizarNoGps],
+  );
+
+  useEffect(() => {
+    let ativo = true;
+    // Mostra o ponto azul se a permissão já foi dada, sem abrir o pedido
+    Location.getForegroundPermissionsAsync()
+      .then(({ granted }) => {
+        if (!ativo || !granted) return;
+        setMostrarUsuario(true);
+        if (centralizarNoGpsAoAbrir) centralizarNoGps();
+      })
+      .catch(() => {});
+    return () => {
+      ativo = false;
+    };
+  }, [centralizarNoGpsAoAbrir, centralizarNoGps]);
+
+  const handleCameraChanged = useCallback((estado: MapState) => {
+    const { center, zoom } = estado.properties;
+    if (Array.isArray(center) && typeof zoom === 'number') {
+      centroRef.current = { coordenada: [center[0], center[1]], zoom };
     }
   }, []);
 
-  useEffect(() => {
-    centralizarNoGps(true);
-  }, [centralizarNoGps]);
-
-  useEffect(() => {
-    if (!coordenadaFoco) return;
-    zoomAtualRef.current = Math.max(zoomAtualRef.current, 16);
-    cameraRef.current?.setCamera({
-      centerCoordinate: coordenadaFoco,
-      zoomLevel: zoomAtualRef.current,
-      animationDuration: 700,
-    });
-  }, [coordenadaFoco]);
-
-  const alterarZoom = useCallback((delta: number) => {
-    const novoZoom = Math.min(
-      ZOOM_MAXIMO,
-      Math.max(ZOOM_MINIMO, zoomAtualRef.current + delta),
-    );
-    zoomAtualRef.current = novoZoom;
-    cameraRef.current?.zoomTo(novoZoom, 250);
-  }, []);
-
-  const handleCameraChanged = useCallback(
-    (state: { properties?: { zoom?: number } }) => {
-      if (typeof state?.properties?.zoom === 'number') {
-        zoomAtualRef.current = state.properties.zoom;
-      }
-    },
-    [],
-  );
-
   const handlePress = useCallback(
     (feature: GeoJSON.Feature) => {
-      if (!onMapPress) return;
-      if (feature.geometry?.type === 'Point') {
+      if (onMapPress && feature.geometry?.type === 'Point') {
         const [lng, lat] = feature.geometry.coordinates;
         onMapPress([lng, lat]);
       }
@@ -177,171 +137,53 @@ export function MapaBase({
     [onMapPress],
   );
 
-  const hectaresFormatados =
-    totalHectares !== undefined
-      ? `${Number(totalHectares.toFixed(totalHectares > 0 && totalHectares < 10 ? 2 : 1))} Ha`
-      : null;
-
   return (
-    <View style={[styles.container, style]}>
+    <View style={[styles.container, style]} pointerEvents={interativo ? 'auto' : 'none'}>
       <Mapbox.MapView
         style={styles.map}
-        styleURL={
-          modoSatelite ? Mapbox.StyleURL.Satellite : Mapbox.StyleURL.Outdoors
-        }
+        styleURL={estilo === 'satelite' ? Mapbox.StyleURL.SatelliteStreet : Mapbox.StyleURL.Outdoors}
         logoEnabled={false}
         attributionEnabled={false}
         compassEnabled={false}
         scaleBarEnabled={false}
+        scrollEnabled={interativo}
+        zoomEnabled={interativo}
+        rotateEnabled={false}
+        pitchEnabled={false}
         onCameraChanged={handleCameraChanged}
-        onPress={handlePress}>
+        onPress={interativo ? handlePress : undefined}>
         <Mapbox.Camera
           ref={cameraRef}
-          defaultSettings={{
-            centerCoordinate: coordenadaInicial,
-            zoomLevel: zoomInicial,
-          }}
+          defaultSettings={
+            vistaInicial.tipo === 'ponto'
+              ? { centerCoordinate: vistaInicial.coordenada, zoomLevel: vistaInicial.zoom }
+              : {
+                  bounds: { ne: vistaInicial.ne, sw: vistaInicial.sw },
+                  padding: {
+                    paddingTop: folga.top,
+                    paddingBottom: folga.bottom,
+                    paddingLeft: folga.left,
+                    paddingRight: folga.right,
+                  },
+                }
+          }
         />
 
-        {permissaoGps && (
-          <Mapbox.UserLocation visible={true} showsUserHeadingIndicator={true} />
-        )}
+        {mostrarUsuario && <Mapbox.UserLocation visible showsUserHeadingIndicator />}
 
         {children}
       </Mapbox.MapView>
-
-      {/* Pílula com o nome da fazenda (canto superior esquerdo) */}
-      {nomeFazenda ? (
-        <View style={styles.farmBadge} pointerEvents="none">
-          <Text style={styles.farmBadgeText} numberOfLines={1}>
-            {nomeFazenda}
-          </Text>
-        </View>
-      ) : null}
-
-      {/* Botões flutuantes: Camada, GPS, Zoom + e Zoom - (canto superior direito) */}
-      <View style={styles.controlsCol}>
-        <Pressable
-          style={({ pressed }) => [
-            styles.controlBtn,
-            pressed && styles.controlBtnPressed,
-          ]}
-          onPress={() => setModoSatelite((atual) => !atual)}
-          accessibilityRole="button"
-          accessibilityLabel="Alternar camada de satélite">
-          <LayersIcon />
-        </Pressable>
-
-        <Pressable
-          style={({ pressed }) => [
-            styles.controlBtn,
-            pressed && styles.controlBtnPressed,
-          ]}
-          onPress={() => centralizarNoGps(false)}
-          disabled={buscandoGps}
-          accessibilityRole="button"
-          accessibilityLabel="Centralizar na minha localização GPS">
-          {buscandoGps ? (
-            <ActivityIndicator size="small" color={AgroColors.headerGreen} />
-          ) : (
-            <GpsTargetIcon />
-          )}
-        </Pressable>
-
-        <Pressable
-          style={({ pressed }) => [
-            styles.controlBtn,
-            pressed && styles.controlBtnPressed,
-          ]}
-          onPress={() => alterarZoom(1)}
-          accessibilityRole="button"
-          accessibilityLabel="Aumentar zoom">
-          <ZoomIcon sinal="mais" />
-        </Pressable>
-
-        <Pressable
-          style={({ pressed }) => [
-            styles.controlBtn,
-            pressed && styles.controlBtnPressed,
-          ]}
-          onPress={() => alterarZoom(-1)}
-          accessibilityRole="button"
-          accessibilityLabel="Diminuir zoom">
-          <ZoomIcon sinal="menos" />
-        </Pressable>
-      </View>
-
-      {/* Pílula totalizadora de Hectares (canto inferior direito) */}
-      {hectaresFormatados ? (
-        <View style={styles.totalHaBadge} pointerEvents="none">
-          <Text style={styles.totalHaText}>{hectaresFormatados}</Text>
-        </View>
-      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    width: '100%',
-    height: 240,
-    backgroundColor: AgroColors.mapTerrainBg,
-    borderRadius: Radius.lg,
     overflow: 'hidden',
-    position: 'relative',
-    ...Shadows.sm,
+    backgroundColor: AgroColors.mapTerrainBg,
   },
   map: {
     flex: 1,
-  },
-  farmBadge: {
-    position: 'absolute',
-    top: Spacing.md,
-    left: Spacing.md,
-    maxWidth: '68%',
-    backgroundColor: AgroColors.cardBg,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 6,
-    borderRadius: Radius.md,
-    ...Shadows.sm,
-  },
-  farmBadgeText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: AgroColors.headerGreen,
-  },
-  controlsCol: {
-    position: 'absolute',
-    top: Spacing.sm,
-    right: Spacing.sm,
-    gap: 5,
-  },
-  controlBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: Radius.md,
-    backgroundColor: AgroColors.cardBg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Shadows.sm,
-  },
-  controlBtnPressed: {
-    opacity: 0.8,
-  },
-  totalHaBadge: {
-    position: 'absolute',
-    bottom: Spacing.sm,
-    right: Spacing.md,
-    backgroundColor: 'rgba(255, 255, 255, 0.94)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.sm,
-    ...Shadows.sm,
-  },
-  totalHaText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: AgroColors.textPrimary,
   },
 });
 

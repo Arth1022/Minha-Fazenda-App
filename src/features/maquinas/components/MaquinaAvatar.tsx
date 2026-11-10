@@ -18,8 +18,12 @@ export interface MaquinaAvatarProps {
   marca?: string | null;
   /** Diâmetro do círculo (padrão 44) */
   size?: number;
-  /** Fundo do ícone genérico: 'neutro' (cinza, lista) ou 'mint' (verde claro, ficha) */
-  variant?: 'neutro' | 'mint';
+  /**
+   * Fundo do ícone genérico: 'neutro' (cinza, lista), 'mint' (verde claro) ou
+   * 'translucido' (ícone branco sobre o topo verde da ficha). Com logo da marca,
+   * o logo aparece no círculo branco em qualquer variante
+   */
+  variant?: 'neutro' | 'mint' | 'translucido';
 }
 
 function Logo({ logo, lado }: { logo: LogoMarca; lado: number }) {
@@ -42,14 +46,14 @@ function Logo({ logo, lado }: { logo: LogoMarca; lado: number }) {
   );
 }
 
-function IconeGenerico({ tipo, lado }: { tipo: TipoMaquina; lado: number }) {
+function IconeGenerico({ tipo, lado, cor }: { tipo: TipoMaquina; lado: number; cor: string }) {
   return (
     <Svg
       width={lado}
       height={lado}
       viewBox="0 0 24 24"
       fill="none"
-      stroke={AgroColors.primary}
+      stroke={cor}
       strokeWidth={2}
       strokeLinecap="round"
       strokeLinejoin="round">
@@ -70,6 +74,7 @@ export const MaquinaAvatar = React.memo(function MaquinaAvatar({
   size = 44,
   variant = 'neutro',
 }: MaquinaAvatarProps) {
+  const translucido = variant === 'translucido';
   const logo = logoDaMarca(marca);
   const circulo = { width: size, height: size, borderRadius: size / 2 };
 
@@ -82,8 +87,12 @@ export const MaquinaAvatar = React.memo(function MaquinaAvatar({
   }
 
   return (
-    <View style={[styles.base, variant === 'mint' ? styles.mint : styles.neutro, circulo]}>
-      <IconeGenerico tipo={tipo} lado={size * ESCALA_ICONE} />
+    <View style={[styles.base, FUNDO[variant], circulo]}>
+      <IconeGenerico
+        tipo={tipo}
+        lado={size * ESCALA_ICONE}
+        cor={translucido ? AgroColors.textInverse : AgroColors.primary}
+      />
     </View>
   );
 });
@@ -105,4 +114,13 @@ const styles = StyleSheet.create({
   mint: {
     backgroundColor: AgroColors.mintBg,
   },
+  translucido: {
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+  },
 });
+
+const FUNDO = {
+  neutro: styles.neutro,
+  mint: styles.mint,
+  translucido: styles.translucido,
+} as const;

@@ -1,21 +1,23 @@
 import React from 'react';
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
-import { AppIcon, type AppIconName } from '@/components/ui';
 import { AgroColors, Radius, Shadows, Spacing } from '@/constants/theme';
+import { AppIcon, type AppIconName } from './AppIcon';
 
-/** Card branco de borda arredondada usado nas abas da ficha. */
+/** Card branco de borda arredondada usado nas abas das fichas (animal e máquina). */
 export function FichaCard({ children, style }: { children: React.ReactNode; style?: ViewStyle }) {
   return <View style={[styles.card, style]}>{children}</View>;
 }
 
-export type TomFicha = 'saude' | 'reproducao' | 'sucesso' | 'neutro';
+export type TomFicha = 'saude' | 'reproducao' | 'sucesso' | 'neutro' | 'verde';
 
 const TONS: Record<TomFicha, { fundo: string; texto: string }> = {
   saude: { fundo: AgroColors.healthBg, texto: AgroColors.health },
   reproducao: { fundo: AgroColors.breedingBg, texto: AgroColors.breeding },
   sucesso: { fundo: AgroColors.mintBg, texto: AgroColors.primary },
   neutro: { fundo: AgroColors.divider, texto: AgroColors.textSecondary },
+  /** Ícone verde sobre o cinza claro (registros da máquina) */
+  verde: { fundo: AgroColors.surfaceMuted, texto: AgroColors.forest },
 };
 
 /** Etiqueta arredondada ("2 pendentes", "Prenhez a confirmar"). */

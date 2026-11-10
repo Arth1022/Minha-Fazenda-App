@@ -8,12 +8,14 @@ export interface NovaAnotacaoFormProps {
   maquinaId: string;
   /** Nome da máquina, mostrado no subtítulo */
   nome: string;
+  /** Anotação feita no resumo de um uso: fica ligada a ele */
+  usoId?: string | null;
   onClose: () => void;
 }
 
 /** Modal com um campo de texto para anotar algo na ficha da máquina. */
-export function NovaAnotacaoForm({ visible, maquinaId, nome, onClose }: NovaAnotacaoFormProps) {
-  const { texto, alterarTexto, erro, saving, submit, limpar } = useNovaAnotacao(maquinaId, onClose);
+export function NovaAnotacaoForm({ visible, maquinaId, nome, usoId = null, onClose }: NovaAnotacaoFormProps) {
+  const { texto, alterarTexto, erro, saving, submit, limpar } = useNovaAnotacao(maquinaId, onClose, usoId);
 
   const fechar = () => {
     limpar();
