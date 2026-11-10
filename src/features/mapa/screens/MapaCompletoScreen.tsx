@@ -17,6 +17,7 @@ import { AppIcon, ConfirmacaoSheet, type ItemConfirmacao } from '@/components/ui
 import { AgroColors, MaxContentWidth, Shadows, Spacing } from '@/constants/theme';
 import { useConsultaAoVivo, useLiveQuery, type Talhao } from '@/database';
 import { existeCercaSalva } from '@/services/cercaService';
+import { existeCicloAtivo } from '@/services/cicloService';
 import {
   contarPontosAbertos,
   criarMarcador,
@@ -47,7 +48,6 @@ import { InsumosAreaSheet } from '../components/InsumosAreaSheet';
 import { MapaBase, type MapaBaseHandle, type VistaMapa } from '../components/MapaBase';
 import { OpcoesAreaSheet } from '../components/OpcoesAreaSheet';
 import { PainelArea } from '../components/PainelArea';
-import { SafraLavouraSheet, type DadosSafra } from '../components/SafraLavouraSheet';
 import { SalvarAreaSheet, type DadosSalvarArea } from '../components/SalvarAreaSheet';
 import { SalvarFazendaSheet } from '../components/SalvarFazendaSheet';
 import { SalvarMarcadorSheet, type DadosSalvarMarcador } from '../components/SalvarMarcadorSheet';
@@ -102,9 +102,11 @@ interface Confirmacao {
 export default function MapaCompletoScreen() {
   const insets = useSafeAreaInsets();
   const { height: alturaTela } = useWindowDimensions();
-  const { talhao: talhaoInicialId, desenhar } = useLocalSearchParams<{
+  const { talhao: talhaoInicialId, desenhar, vista } = useLocalSearchParams<{
     talhao?: string;
     desenhar?: 'divisa' | 'area';
+    /** "ciclo": abre a linha do tempo da lavoura (toque no aviso de uma etapa) */
+    vista?: 'ciclo';
   }>();
   const { data: talhoes, updatedAt, error } = useLiveQuery(listarTalhoesAtivos());
   const { data: marcadores } = useLiveQuery(listarMarcadoresAtivos());
@@ -139,7 +141,6 @@ export default function MapaCompletoScreen() {
   );
   const [rascunho, setRascunho] = useState<ResultadoDesenhoTalhao | null>(null);
   const [editandoId, setEditandoId] = useState<string | null>(null);
-  const [safraId, setSafraId] = useState<string | null>(null);
   // Folhas que somem deslizando: o conteúdo fica até a próxima abertura
   const [opcoesId, setOpcoesId] = useState<string | null>(null);
   const [opcoesVisivel, setOpcoesVisivel] = useState(false);
@@ -147,6 +148,8 @@ export default function MapaCompletoScreen() {
   const [insumosVisivel, setInsumosVisivel] = useState(false);
   // Área cujo painel mostra o "Cercar" (tela 21) no lugar do resumo
   const [cercandoId, setCercandoId] = useState<string | null>(null);
+  // Aviso de etapa tocado: o primeiro painel abre na linha do tempo do ciclo
+  const [abrirCiclo, setAbrirCiclo] = useState(vista === 'ciclo');
   const [confirmacao, setConfirmacao] = useState<Confirmacao | null>(null);
   const [confirmando, setConfirmando] = useState(false);
   // Destino escolhido ao mover animais (tracejado branco) e o animal achado na busca, cada um
@@ -240,7 +243,6 @@ export default function MapaCompletoScreen() {
   );
   const pastos = useMemo(() => talhoes.filter((t) => t.tipo === 'pasto'), [talhoes]);
   const editando = talhoes.find((t) => t.id === editandoId) ?? null;
-  const areaSafra = talhoes.find((t) => t.id === safraId) ?? null;
   const areaOpcoes = talhoes.find((t) => t.id === opcoesId) ?? null;
   const areaInsumos = talhoes.find((t) => t.id === insumosId) ?? null;
 
@@ -248,6 +250,8 @@ export default function MapaCompletoScreen() {
   const painelId = selecionado?.id ?? null;
   const [painelAnteriorId, setPainelAnteriorId] = useState(painelId);
   if (painelId !== painelAnteriorId) {
+    // O primeiro painel (área carregada) ainda pode abrir na linha do tempo; trocar ou fechar, não
+    if (painelAnteriorId !== null) setAbrirCiclo(false);
     setPainelAnteriorId(painelId);
     setCercandoId(null);
   }
@@ -422,12 +426,15 @@ export default function MapaCompletoScreen() {
         setModoMarcador(true);
         break;
       case 'redesenhar': {
-        // Cerca salva fica desatualizada com o contorno novo (RF-032)
-        const temCerca = await existeCercaSalva(area.id).catch(() => false);
+        // Cerca e sementes do ciclo ficam desatualizadas com o contorno novo (RF-032, RN-010)
+        const [temCerca, temCiclo] = await Promise.all([
+          existeCercaSalva(area.id).catch(() => false),
+          area.tipo === 'lavoura' ? existeCicloAtivo(area.id).catch(() => false) : false,
+        ]);
         abrirConfirmacao({
           acao: 'redesenhar',
           area,
-          itens: consequenciasRedesenho(ocupacoes.get(area.id)?.cabecas ?? 0, temCerca),
+          itens: consequenciasRedesenho(ocupacoes.get(area.id)?.cabecas ?? 0, temCerca, temCiclo),
         });
         break;
       }
@@ -506,14 +513,6 @@ export default function MapaCompletoScreen() {
       await atualizarTalhao(editando.id, { nome, tipo });
       setEditandoId(null);
     }, 'Não foi possível salvar a área.');
-  };
-
-  const salvarSafra = (safra: DadosSafra) => {
-    if (!areaSafra) return;
-    comSalvando(async () => {
-      await atualizarTalhao(areaSafra.id, safra);
-      setSafraId(null);
-    }, 'Não foi possível salvar a safra.');
   };
 
   const salvarMarcadorNovo = ({ tipo, titulo, descricao }: DadosSalvarMarcador) => {
@@ -676,10 +675,11 @@ export default function MapaCompletoScreen() {
             setSelecionadoId(null);
             setAnimalEmDestaque(null);
           }}
-          onSafra={() => setSafraId(selecionado.id)}
           onAltura={enquadrarSelecionada}
           cercando={cercando}
           onCercando={(ativo) => setCercandoId(ativo ? selecionado.id : null)}
+          podeCriarCultura={admin}
+          abrirLinhaDoTempo={abrirCiclo && selecionado.id === talhaoInicialId}
         />
       ) : mostrarNovaArea ? (
         <View style={[estilos.rodapeNovaArea, { bottom: base + Spacing.two }]} pointerEvents="box-none">
@@ -824,14 +824,6 @@ export default function MapaCompletoScreen() {
         erro={erroSalvar}
         onSalvar={salvarEdicao}
         onClose={() => setEditandoId(null)}
-      />
-
-      <SafraLavouraSheet
-        visible={areaSafra !== null}
-        area={areaSafra}
-        salvando={salvando}
-        onSalvar={salvarSafra}
-        onClose={() => setSafraId(null)}
       />
 
       <InsumosAreaSheet

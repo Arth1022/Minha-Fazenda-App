@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -10,8 +11,11 @@ import {
   type ViewStyle,
 } from 'react-native';
 
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+
 import { AppIcon, type AppIconName } from '@/components/ui';
 import { AgroColors, Radius, Spacing } from '@/constants/theme';
+import { formatDataBR } from '@/utils/date';
 
 /* Peças visuais da tela de Mapa, no padrão do protótipo (PDF "Minha Fazenda"). */
 
@@ -140,6 +144,53 @@ export function CampoMapa({
       />
       {unidade ? <Text style={estilos.campoUnidade}>{unidade}</Text> : null}
     </View>
+  );
+}
+
+/**
+ * Campo de data no padrão do mapa ("25/11/2026" com o calendário à direita):
+ * tocar abre o calendário nativo.
+ */
+export function CampoDataMapa({
+  valor,
+  onChange,
+  acessibilidade,
+  minimo,
+  maximo,
+}: {
+  valor: Date;
+  onChange: (data: Date) => void;
+  acessibilidade: string;
+  minimo?: Date;
+  maximo?: Date;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const aoEscolher = (evento: DateTimePickerEvent, data?: Date) => {
+    // No Android o calendário é um diálogo: fecha a cada escolha; no iOS fica na tela
+    setAberto(Platform.OS === 'ios');
+    if (evento.type === 'set' && data) onChange(data);
+  };
+  return (
+    <>
+      <Pressable
+        onPress={() => setAberto((atual) => !atual)}
+        accessibilityRole="button"
+        accessibilityLabel={`${acessibilidade}: ${formatDataBR(valor)}`}
+        style={({ pressed }) => [estilos.campo, pressed && estilos.pressionado]}>
+        <Text style={estilos.campoTexto}>{formatDataBR(valor)}</Text>
+        <AppIcon name="calendar" size={20} color={TEXTO_SUAVE} />
+      </Pressable>
+      {aberto ? (
+        <DateTimePicker
+          value={valor}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'inline' : 'default'}
+          minimumDate={minimo}
+          maximumDate={maximo}
+          onChange={aoEscolher}
+        />
+      ) : null}
+    </>
   );
 }
 

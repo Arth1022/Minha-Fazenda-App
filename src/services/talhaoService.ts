@@ -3,6 +3,7 @@ import { and, asc, count, eq, gte, isNull, lte, ne, sql } from 'drizzle-orm';
 import { COR_POR_TIPO_AREA } from '@/constants/areas';
 import {
   calculosCerca,
+  ciclosPlantio,
   db,
   marcadoresMapa,
   movimentacoes,
@@ -11,6 +12,7 @@ import {
   type Talhao,
   type TipoTalhao,
 } from '@/database';
+import { cancelarLembretesDoCiclo } from '@/services/notificacoes';
 import { calcularPerimetroM, type Coordenada, extrairMetadadosEspaciais } from '@/utils/geoMath';
 
 export interface DadosCriarTalhao {
@@ -113,9 +115,26 @@ async function exigirPastoVazio(areaId: string, acao: string): Promise<void> {
   }
 }
 
+/** Ciclo de plantio ativo da área (só lavoura tem). */
+async function cicloAtivoId(areaId: string): Promise<string | null> {
+  const [ciclo] = await db
+    .select({ id: ciclosPlantio.id })
+    .from(ciclosPlantio)
+    .where(and(eq(ciclosPlantio.areaId, areaId), eq(ciclosPlantio.status, 'ativo')))
+    .limit(1);
+  return ciclo?.id ?? null;
+}
+
+/** O ciclo deixa de valer (área saiu de lavoura ou do mapa): cancelado, fica no histórico. */
+const cancelarCicloAtivo = (areaId: string) =>
+  db
+    .update(ciclosPlantio)
+    .set({ status: 'cancelado', encerradoEm: new Date() })
+    .where(and(eq(ciclosPlantio.areaId, areaId), eq(ciclosPlantio.status, 'ativo')));
+
 export interface DadosAtualizarTalhao {
   nome?: string;
-  /** Trocar o tipo troca a cor; sair de lavoura apaga a safra */
+  /** Trocar o tipo troca a cor; sair de lavoura encerra a safra e cancela o ciclo ativo */
   tipo?: TipoTalhao;
   cultura?: string | null;
   faseLavoura?: FaseLavoura | null;
@@ -166,6 +185,9 @@ export async function atualizarTalhao(id: string, dados: DadosAtualizarTalhao): 
     });
   }
 
+  // Saiu de lavoura: o ciclo ativo é cancelado junto (RN-004) e os avisos dele saem
+  const cicloCancelado = dados.tipo !== undefined && dados.tipo !== 'lavoura' ? await cicloAtivoId(id) : null;
+
   db.transaction((tx) => {
     tx.update(talhoes)
       .set({
@@ -174,21 +196,38 @@ export async function atualizarTalhao(id: string, dados: DadosAtualizarTalhao): 
       })
       .where(eq(talhoes.id, id))
       .run();
-    // Contorno novo: a cerca salva foi calculada com o perímetro antigo (RF-032, RN-010)
+    // Contorno novo: a cerca e as sementes foram calculadas com o contorno antigo (RF-032, RN-010)
     if (dados.coordenadas !== undefined) {
       tx.update(calculosCerca).set({ desatualizado: true }).where(eq(calculosCerca.areaId, id)).run();
+      tx.update(ciclosPlantio)
+        .set({ calculoDesatualizado: true })
+        .where(and(eq(ciclosPlantio.areaId, id), eq(ciclosPlantio.status, 'ativo')))
+        .run();
+    }
+    if (cicloCancelado) {
+      tx.update(ciclosPlantio)
+        .set({ status: 'cancelado', encerradoEm: new Date() })
+        .where(eq(ciclosPlantio.id, cicloCancelado))
+        .run();
     }
   });
+  if (cicloCancelado) await cancelarLembretesDoCiclo(cicloCancelado).catch(() => undefined);
 }
 
 /** Exclusão lógica (soft delete) para manter o registro na fila de sincronização com o PostGIS. */
 export async function deletarTalhao(id: string): Promise<void> {
   await exigirPastoVazio(id, 'excluir a área');
+  const ciclo = await cicloAtivoId(id);
   await db
     .update(talhoes)
     .set({ syncStatus: 'deleted' })
     .where(eq(talhoes.id, id));
   await db.delete(marcadoresMapa).where(eq(marcadoresMapa.talhaoId, id));
+  // Lavoura que sai do mapa: o ciclo ativo vira cancelado (o histórico fica) e os avisos saem
+  if (ciclo) {
+    await cancelarCicloAtivo(id);
+    await cancelarLembretesDoCiclo(ciclo).catch(() => undefined);
+  }
 }
 
 /**

@@ -404,7 +404,7 @@ export const ordenhas = sqliteTable(
   (table) => [index('ordenhas_data_registro_idx').on(table.dataRegistro)]
 );
 
-export const ENTIDADES_NOTIFICACAO = ['animal', 'ordenha'] as const;
+export const ENTIDADES_NOTIFICACAO = ['animal', 'ordenha', 'ciclo'] as const;
 export type EntidadeNotificacao = (typeof ENTIDADES_NOTIFICACAO)[number];
 
 /**
@@ -984,9 +984,121 @@ export const calculosCerca = sqliteTable(
   (table) => [uniqueIndex('calculos_cerca_area_idx').on(table.areaId)]
 );
 
+/** Etapas da linha do tempo do plantio (RF-038): o tipo diz o papel dela no ciclo. */
+export const TIPOS_ETAPA = ['preparo', 'plantio', 'trato', 'colheita'] as const;
+export type TipoEtapa = (typeof TIPOS_ETAPA)[number];
+
+/** Ativo (no máximo um por área), encerrado pela colheita ou cancelado. */
+export const STATUS_CICLO = ['ativo', 'encerrado', 'cancelado'] as const;
+export type StatusCiclo = (typeof STATUS_CICLO)[number];
+
+/** Etapa de um modelo de cultura: dias em relação ao plantio (negativo: antes dele). */
+export interface EtapaModelo {
+  nome: string;
+  tipo: TipoEtapa;
+  dias: number;
+}
+
+/**
+ * Modelos de cultura criados pelo admin (RF-042). Os prontos (milho silagem,
+ * braquiária, mombaça) ficam no código e não ocupam linha aqui. As etapas vão
+ * em JSON: são lidas sempre junto com o modelo e nunca consultadas sozinhas.
+ */
+export const modelosCultura = sqliteTable('modelos_cultura', {
+  id: id(),
+  nome: text('nome').notNull(),
+  /** Taxa de semeadura sugerida (kg/ha); null: informar ao plantar */
+  taxaKgHa: real('taxa_kg_ha'),
+  /** Embalagem da semente (kg) */
+  sacoKg: real('saco_kg').notNull().default(20),
+  etapas: text('etapas', { mode: 'json' }).$type<EtapaModelo[]>().notNull(),
+  criadoPor: criadoPor(),
+  ...timestamps,
+});
+
+/**
+ * Ciclo de plantio de uma lavoura (M4): uma cultura por ciclo e no máximo um
+ * ativo por área (RN-009, garantido pelo índice parcial). Guarda a conta das
+ * sementes feita ao plantar (RF-036). A colheita feita encerra o ciclo (RF-041).
+ * O resumo do ciclo ativo (cultura, fase, plantio) é copiado para a área na
+ * mesma transação: rótulo e selo do mapa saem da tabela de áreas, sem JOIN.
+ */
+export const ciclosPlantio = sqliteTable(
+  'ciclos_plantio',
+  {
+    id: id(),
+    areaId: text('area_id')
+      .notNull()
+      .references(() => talhoes.id, { onDelete: 'cascade' }),
+    /** Nome da cultura como aparece na tela ("Milho silagem") */
+    cultura: text('cultura').notNull(),
+    /**
+     * Modelo que gerou a linha do tempo: chave de um pronto ou id de
+     * `modelos_cultura`. Sem FK: os prontos vivem no código, e as etapas já
+     * foram copiadas para `etapas_ciclo`.
+     */
+    modeloId: text('modelo_id'),
+    dataPlantio: integer('data_plantio', { mode: 'timestamp_ms' }).notNull(),
+    /** Conta das sementes no plantio (RF-036) */
+    areaHa: real('area_ha').notNull(),
+    taxaKgHa: real('taxa_kg_ha').notNull(),
+    sacoKg: real('saco_kg').notNull(),
+    sementesKg: real('sementes_kg').notNull(),
+    sacos: integer('sacos').notNull(),
+    /** A área foi redesenhada depois da conta (RN-010) */
+    calculoDesatualizado: integer('calculo_desatualizado', { mode: 'boolean' }).notNull().default(false),
+    status: text('status', { enum: STATUS_CICLO }).notNull().default('ativo'),
+    /** Quando foi colhido ou cancelado */
+    encerradoEm: integer('encerrado_em', { mode: 'timestamp_ms' }),
+    criadoPor: criadoPor(),
+    ...timestamps,
+  },
+  (table) => [
+    // RN-009 / RF-037: no máximo um ciclo ativo por área
+    uniqueIndex('ciclos_plantio_area_ativo_idx')
+      .on(table.areaId)
+      .where(sql`${table.status} = 'ativo'`),
+    // Ciclos anteriores da área, do mais recente para o mais antigo
+    index('ciclos_plantio_area_plantio_idx').on(table.areaId, table.dataPlantio),
+  ]
+);
+
+/**
+ * Etapas da linha do tempo de um ciclo (RF-038/RF-039): geradas do modelo com
+ * as datas previstas a partir do plantio. Dá para mudar a data prevista, marcar
+ * feita (só acréscimo, RN-007: não há "desfazer") e anotar.
+ */
+export const etapasCiclo = sqliteTable(
+  'etapas_ciclo',
+  {
+    id: id(),
+    cicloId: text('ciclo_id')
+      .notNull()
+      .references(() => ciclosPlantio.id, { onDelete: 'cascade' }),
+    ordem: integer('ordem').notNull(),
+    nome: text('nome').notNull(),
+    tipo: text('tipo', { enum: TIPOS_ETAPA }).notNull(),
+    previstaEm: integer('prevista_em', { mode: 'timestamp_ms' }).notNull(),
+    realizadaEm: integer('realizada_em', { mode: 'timestamp_ms' }),
+    observacao: text('observacao'),
+    ...timestamps,
+  },
+  (table) => [uniqueIndex('etapas_ciclo_ciclo_ordem_idx').on(table.cicloId, table.ordem)]
+);
+
 export const talhoesRelations = relations(talhoes, ({ many }) => ({
   marcadores: many(marcadoresMapa),
   movimentacoes: many(movimentacoes),
+  ciclos: many(ciclosPlantio),
+}));
+
+export const ciclosPlantioRelations = relations(ciclosPlantio, ({ one, many }) => ({
+  area: one(talhoes, { fields: [ciclosPlantio.areaId], references: [talhoes.id] }),
+  etapas: many(etapasCiclo),
+}));
+
+export const etapasCicloRelations = relations(etapasCiclo, ({ one }) => ({
+  ciclo: one(ciclosPlantio, { fields: [etapasCiclo.cicloId], references: [ciclosPlantio.id] }),
 }));
 
 export const movimentacoesRelations = relations(movimentacoes, ({ one }) => ({
@@ -1007,3 +1119,9 @@ export type Movimentacao = typeof movimentacoes.$inferSelect;
 export type NovaMovimentacao = typeof movimentacoes.$inferInsert;
 export type CalculoCerca = typeof calculosCerca.$inferSelect;
 export type NovoCalculoCerca = typeof calculosCerca.$inferInsert;
+export type ModeloCultura = typeof modelosCultura.$inferSelect;
+export type NovoModeloCultura = typeof modelosCultura.$inferInsert;
+export type CicloPlantio = typeof ciclosPlantio.$inferSelect;
+export type NovoCicloPlantio = typeof ciclosPlantio.$inferInsert;
+export type EtapaCiclo = typeof etapasCiclo.$inferSelect;
+export type NovaEtapaCiclo = typeof etapasCiclo.$inferInsert;

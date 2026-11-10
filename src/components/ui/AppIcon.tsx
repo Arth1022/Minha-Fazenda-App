@@ -50,10 +50,13 @@ export type AppIconName =
   | 'mapPinOff'
   | 'scanQr'
   | 'moreVertical'
-  | 'ruler';
+  | 'ruler'
+  | 'calendar';
 
 /** Ícones só de traços (Lucide), desenhados pela lista de caminhos. */
 const PATH_ICONS: Partial<Record<AppIconName, string[]>> = {
+  // Lucide "calendar" (o retângulo de cantos arredondados escrito como caminho)
+  calendar: ['M8 2v4', 'M16 2v4', 'M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z', 'M3 10h18'],
   ruler: [
     'M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z',
     'm14.5 12.5 2-2',
