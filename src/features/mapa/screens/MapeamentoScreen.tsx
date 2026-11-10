@@ -7,9 +7,10 @@ import { APP_NAME } from '@/constants/app';
 import { COR_POR_TIPO_AREA } from '@/constants/areas';
 import { AgroColors, Radius, Spacing } from '@/constants/theme';
 import { useConsultaAoVivo, useLiveQuery, type Talhao } from '@/database';
+import { TABELAS_TAREFAS, tarefasDe, type Tarefa } from '@/services/cicloService';
 import { ocupacaoDasAreas, TABELAS_OCUPACAO } from '@/services/movimentacaoService';
 import { listarTalhoesAtivos } from '@/services/talhaoService';
-import { podeEditarGeometria } from '@/services/usuario';
+import { podeEditarGeometria, usuarioAtual } from '@/services/usuario';
 import { CamadaDivisaFazenda } from '../components/CamadaDivisaFazenda';
 import { CamadaTalhoesSalvos } from '../components/CamadaTalhoesSalvos';
 import { BotaoMapa, CoresTexto } from '../components/elementos';
@@ -47,6 +48,10 @@ export default function MapeamentoScreen() {
     []
   );
   const ocupacoes = useMemo(() => mapaDeOcupacao(linhasOcupacao), [linhasOcupacao]);
+  // Tarefas de quem está com o celular (M6): o atalho aparece quando há alguma
+  const euId = usuarioAtual().id;
+  const { dados: tarefas } = useConsultaAoVivo<Tarefa[]>(() => tarefasDe(euId), TABELAS_TAREFAS, euId, []);
+  const paraFazer = tarefas.filter((t) => t.etapa.realizadaEm === null && t.cicloStatus === 'ativo').length;
 
   // Com erro na consulta, a tela segue (sem talhões) em vez de ficar presa em "…"
   const carregado = updatedAt !== undefined || error !== undefined;
@@ -102,6 +107,24 @@ export default function MapeamentoScreen() {
           botao="Desenhar área"
           onPress={() => abrirMapa({ desenhar: 'area' })}
         />
+      ) : null}
+
+      {tarefas.length > 0 ? (
+        <Pressable
+          onPress={() => router.push('/tarefas' as Href)}
+          accessibilityRole="button"
+          style={({ pressed }) => [estilos.tarefas, pressed && estilos.pressionado]}>
+          <View style={estilos.tarefasIcone}>
+            <AppIcon name="check" size={22} color={AgroColors.forest} />
+          </View>
+          <View style={estilos.tarefasTextos}>
+            <Text style={estilos.tarefasTitulo}>Minhas tarefas</Text>
+            <Text style={estilos.tarefasSub}>
+              {paraFazer === 0 ? 'Nada para fazer agora' : paraFazer === 1 ? '1 para fazer' : `${paraFazer} para fazer`}
+            </Text>
+          </View>
+          <AppIcon name="chevronRight" size={20} color={CoresTexto.suave} />
+        </Pressable>
       ) : null}
 
       {carregado && talhoes.length > 0 ? (
@@ -202,6 +225,29 @@ const BORDA_CARTAO = '#E3E7E4';
 
 const estilos = StyleSheet.create({
   pressionado: { opacity: 0.8 },
+  tarefas: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    backgroundColor: AgroColors.cardBg,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    borderColor: BORDA_CARTAO,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    minHeight: 62,
+  },
+  tarefasIcone: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: AgroColors.forestTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tarefasTextos: { flex: 1 },
+  tarefasTitulo: { fontSize: 16.5, lineHeight: 22, fontWeight: '600', color: CoresTexto.escuro },
+  tarefasSub: { fontSize: 13.5, lineHeight: 18, color: CoresTexto.suave },
   titulos: { gap: 2, marginTop: Spacing.two },
   titulo: {
     fontSize: 25,

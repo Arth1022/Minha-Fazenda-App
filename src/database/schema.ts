@@ -1073,7 +1073,8 @@ export const ciclosPlantio = sqliteTable(
 /**
  * Etapas da linha do tempo de um ciclo (RF-038/RF-039): geradas do modelo com
  * as datas previstas a partir do plantio. Dá para mudar a data prevista, marcar
- * feita (só acréscimo, RN-007: não há "desfazer") e anotar.
+ * feita (só acréscimo, RN-007: não há "desfazer") e anotar. Atribuída a um
+ * colaborador, a etapa vira tarefa dele (M6, RF-067).
  */
 export const etapasCiclo = sqliteTable(
   'etapas_ciclo',
@@ -1088,9 +1089,20 @@ export const etapasCiclo = sqliteTable(
     previstaEm: integer('prevista_em', { mode: 'timestamp_ms' }).notNull(),
     realizadaEm: integer('realizada_em', { mode: 'timestamp_ms' }),
     observacao: text('observacao'),
+    /** Colaborador responsável (tarefa, M6). Sem FK: as pessoas vêm do login/API, não de tabela local */
+    responsavelId: text('responsavel_id'),
+    /** Nome do responsável copiado: a tela mostra "João" sem depender da lista online */
+    responsavelNome: text('responsavel_nome'),
+    atribuidaEm: integer('atribuida_em', { mode: 'timestamp_ms' }),
+    /** Quem atribuiu (recebe o aviso quando a tarefa for concluída, RF-070) */
+    atribuidaPor: text('atribuida_por'),
     ...timestamps,
   },
-  (table) => [uniqueIndex('etapas_ciclo_ciclo_ordem_idx').on(table.cicloId, table.ordem)]
+  (table) => [
+    uniqueIndex('etapas_ciclo_ciclo_ordem_idx').on(table.cicloId, table.ordem),
+    // "Minhas tarefas" (RF-068): as etapas da pessoa, por data
+    index('etapas_ciclo_responsavel_idx').on(table.responsavelId, table.previstaEm),
+  ]
 );
 
 /**

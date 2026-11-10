@@ -30,6 +30,10 @@ export const CANAIS: Record<CanalId, { nome: string; descricao: string }> = {
     nome: 'Lavouras',
     descricao: 'Etapas do plantio chegando ou atrasadas',
   },
+  tarefas: {
+    nome: 'Tarefas',
+    descricao: 'Tarefas recebidas e concluídas pela equipe',
+  },
 };
 
 /** Cria (ou atualiza) os canais. Idempotente; no Android 13+ precisa vir antes do pedido de permissão. */

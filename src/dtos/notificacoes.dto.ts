@@ -3,7 +3,7 @@ import type { EntidadeNotificacao } from '@/database';
 export type { EntidadeNotificacao, NotificacaoAgendadaRow } from '@/database';
 
 /** Canais de notificação do Android (ver `CANAIS` em services/notificacoes/canais). */
-export type CanalId = 'ordenha' | 'saude' | 'reproducao' | 'maquinas' | 'lavoura';
+export type CanalId = 'ordenha' | 'saude' | 'reproducao' | 'maquinas' | 'lavoura' | 'tarefas';
 
 /** Dia da semana no padrão do expo-notifications: 1 = domingo ... 7 = sábado. */
 export type DiaSemana = 1 | 2 | 3 | 4 | 5 | 6 | 7;

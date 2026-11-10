@@ -7,3 +7,8 @@ import { usuarioAtual, type Usuario } from './usuarioAtual';
 export function podeEditarGeometria(usuario: Usuario = usuarioAtual()): boolean {
   return usuario.papel === 'admin';
 }
+
+/** Atribuir etapas do plantio como tarefa de alguém é do admin (RF-067). */
+export function podeAtribuirTarefas(usuario: Usuario = usuarioAtual()): boolean {
+  return usuario.papel === 'admin';
+}

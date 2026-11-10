@@ -5,6 +5,7 @@
  * Inicialização do app: `configurarNotificacoes()` e `sincronizarVinculos()`.
  * Permissão: `pedirPermissaoNotificacoes()` no primeiro tratamento ou cobertura registrado.
  */
+export { avisarPessoa, type AvisoParaPessoa } from './aviso';
 export { CANAIS } from './canais';
 export { parseHorario } from './gatilhos';
 export {
