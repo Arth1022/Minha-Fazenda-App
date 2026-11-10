@@ -82,7 +82,8 @@
     "test:auditoria": "tsx --tsconfig tsconfig.test.json __tests__/auditoriaMaquinas.test.ts",
     "test:agro": "tsx --tsconfig tsconfig.test.json __tests__/agriculturaMapa.test.ts",
     "test:areas": "tsx --tsconfig tsconfig.test.json __tests__/areasMapa.test.ts",
-    "test": "npm run test:regras && npm run test:db && npm run test:notificacoes && npm run test:migrations && npm run test:doses && npm run test:cadastro && npm run test:talhoes && npm run test:maquinas && npm run test:auditoria && npm run test:agro && npm run test:areas"
+    "test:reparo": "tsx --tsconfig tsconfig.test.json __tests__/reparoMigracoes.test.ts",
+    "test": "npm run test:regras && npm run test:db && npm run test:notificacoes && npm run test:migrations && npm run test:reparo && npm run test:doses && npm run test:cadastro && npm run test:talhoes && npm run test:maquinas && npm run test:auditoria && npm run test:agro && npm run test:areas"
   },
   "private": true
 }
