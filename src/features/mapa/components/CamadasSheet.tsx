@@ -44,6 +44,12 @@ export function CamadasSheet({ visible, camadas, onChange, onClose, onRedesenhar
             onChange={(areas) => onChange({ ...camadas, areas })}
           />
           <SwitchField
+            label="Rebanho"
+            helperText="Quantas cabeças há em cada pasto"
+            value={camadas.rebanho}
+            onChange={(rebanho) => onChange({ ...camadas, rebanho })}
+          />
+          <SwitchField
             label="Pontos de atenção"
             helperText="Pragas, plantas daninhas e erosão marcadas no campo"
             value={camadas.pontos}

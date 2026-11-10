@@ -4,5 +4,6 @@
  */
 export { db } from './client';
 export { useLiveQuery } from 'drizzle-orm/expo-sqlite';
+export { useConsultaAoVivo, type ConsultaAoVivo } from './consultaAoVivo';
 export * from './schema';
 export { useDatabaseMigrations } from './migracoes';

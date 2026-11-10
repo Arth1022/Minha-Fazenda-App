@@ -20,6 +20,7 @@ import {
 import type { Animal, AnimalComFase, Fase } from '@/dtos';
 import { AnimalCard } from '../components/AnimalCard';
 import { BuscarAnimalModal } from '../components/BuscarAnimalModal';
+import { LotesCard } from '../components/lotes/LotesCard';
 import { NovoAnimalForm } from '../components/NovoAnimalForm';
 import { ResumoAnimalCard } from '../components/ResumoAnimalCard';
 import { useRebanho } from '../hooks/useRebanho';
@@ -161,6 +162,8 @@ export default function RebanhoScreen() {
       )}
 
       {selectedAnimal && <ResumoAnimalCard animal={selectedAnimal} />}
+
+      <LotesCard />
 
       <NovoAnimalForm
         visible={modalVisible}
