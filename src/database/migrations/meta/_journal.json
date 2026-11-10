@@ -162,6 +162,13 @@
       "when": 1794344734910,
       "tag": "0022_plantio_na_area",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1794346080716,
+      "tag": "0023_trajetos_por_area",
+      "breakpoints": true
     }
   ]
 }

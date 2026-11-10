@@ -66,6 +66,7 @@ export const MOTIVO_FIM_LABEL: Partial<Record<MotivoFimUso, string>> = {
   parada: 'Encerrada pelo app',
   pausa: 'Encerrada pelo app',
   velocidade: 'Encerrada pelo app',
+  fora: 'Encerrada pelo app',
   assumida: 'Assumida por outra pessoa',
 };
 

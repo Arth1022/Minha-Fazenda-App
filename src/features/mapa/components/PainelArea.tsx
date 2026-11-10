@@ -5,7 +5,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COR_POR_TIPO_AREA } from '@/constants/areas';
 import { AgroColors, MaxContentWidth, Radius, Shadows, Spacing } from '@/constants/theme';
 import { useConsultaAoVivo, type CalculoCerca, type Talhao } from '@/database';
+import {
+  formatarDuracao,
+  segundosNaAreaDesde,
+  TABELAS_USOS_AREA,
+  usosDaArea,
+  type UsoNaArea,
+} from '@/features/maquinas';
 import { calculoCercaDaArea, TABELAS_CERCA } from '@/services/cercaService';
+import { inicioDoDia } from '@/utils/date';
 import { useAlturaTeclado } from '../hooks/useAlturaTeclado';
 import {
   podeCercar,
@@ -15,12 +23,17 @@ import {
   type EstadoArea,
 } from '../services/areas';
 import { resumoDaCerca } from '../services/cerca';
+import { textoHa } from '../services/trajetos';
 import type { OcupacaoArea } from '../services/ocupacao';
 import { CoresTexto } from './elementos';
 import { CercarArea } from './painel/CercarArea';
 import { ConteudoLavoura } from './painel/ConteudoLavoura';
 import { ConteudoPasto } from './painel/ConteudoPasto';
 import { BotaoRedondo, LinhaNavegacao } from './painel/elementosPainel';
+import { UsosDaArea } from './painel/UsosDaArea';
+
+/** O que o painel mostra no lugar do resumo: "Cercar" (tela 21) ou as horas de máquina. */
+export type VistaArea = 'resumo' | 'cercar' | 'maquinas';
 
 const TOM_ESTADO: Record<EstadoArea, { fundo: string; texto: string }> = {
   ocupado: { fundo: AgroColors.forestTint, texto: AgroColors.forest },
@@ -46,10 +59,11 @@ export interface PainelAreaProps {
   onDestaque: (areaId: string | null) => void;
   /** Altura do painel, para a câmera enquadrar a área acima dele */
   onAltura?: (altura: number) => void;
-  /** Mostrando "Cercar" (tela 21) no lugar do resumo */
-  cercando: boolean;
-  /** Abre ("Cerca" do painel ou "⋮") ou fecha o "Cercar" */
-  onCercando: (ativo: boolean) => void;
+  /** Resumo, "Cercar" ou horas de máquina (a tela do mapa guarda: o voltar do Android é dela) */
+  vista: VistaArea;
+  onVista: (vista: VistaArea) => void;
+  /** Uso de máquina tocado na lista: o resumo dele abre no mapa (RF-066) */
+  onAbrirUso: (usoId: string) => void;
   /** Admin cria cultura nova no "Plantar" (RF-042) */
   podeCriarCultura: boolean;
   /** Lavoura: abre direto na linha do tempo do ciclo (toque no aviso de uma etapa) */
@@ -72,8 +86,9 @@ export function PainelArea({
   onFechar,
   onDestaque,
   onAltura,
-  cercando,
-  onCercando,
+  vista,
+  onVista,
+  onAbrirUso,
   podeCriarCultura,
   abrirLinhaDoTempo = false,
 }: PainelAreaProps) {
@@ -87,6 +102,20 @@ export function PainelArea({
     []
   );
   const cerca = cercas[0] ?? null;
+  const cercando = vista === 'cercar';
+  // Máquinas que passaram na área (RF-066): a lista e o tempo de hoje, pelo índice da área
+  const { dados: usos } = useConsultaAoVivo<UsoNaArea[]>(
+    () => usosDaArea(area.id),
+    TABELAS_USOS_AREA,
+    area.id,
+    []
+  );
+  const { dados: segundosHoje } = useConsultaAoVivo<number>(
+    () => segundosNaAreaDesde(area.id, inicioDoDia(new Date())),
+    TABELAS_USOS_AREA,
+    area.id,
+    0
+  );
 
   // Cerca (RF-028 a RF-032): pasto, lavoura e reserva; "outro" não tem
   const linhaCerca = !podeCercar(area.tipo) ? null : (
@@ -95,9 +124,26 @@ export function PainelArea({
         rotulo={cerca ? 'Cerca' : 'Cercar esta área'}
         valor={cerca ? (cerca.desatualizado ? 'desatualizada' : resumoDaCerca(cerca)) : null}
         alerta={cerca?.desatualizado ?? false}
-        onPress={() => onCercando(true)}
+        onPress={() => onVista('cercar')}
       />
     );
+
+  // "Horas de máquina — 52 min hoje" (tela 15); sem uso nenhum na área, não aparece
+  const linhaMaquinas =
+    usos.length === 0 ? null : (
+      <LinhaNavegacao
+        icone="tractor"
+        rotulo="Horas de máquina"
+        valor={segundosHoje > 0 ? `${formatarDuracao(segundosHoje * 1000)} hoje` : `último ${textoHa(usos[0].inicio)}`}
+        onPress={() => onVista('maquinas')}
+      />
+    );
+  const linhasDoFim = (
+    <>
+      {linhaMaquinas}
+      {linhaCerca}
+    </>
+  );
 
   const cabecalho = (
     <View style={estilos.cabecalho}>
@@ -137,8 +183,10 @@ export function PainelArea({
             area={area}
             calculo={cerca}
             alturaTeclado={alturaTeclado}
-            onFechar={() => onCercando(false)}
+            onFechar={() => onVista('resumo')}
           />
+        ) : vista === 'maquinas' ? (
+          <UsosDaArea area={area} usos={usos} onAbrir={onAbrirUso} onFechar={() => onVista('resumo')} />
         ) : area.tipo === 'pasto' ? (
           <ConteudoPasto
             area={area}
@@ -149,13 +197,13 @@ export function PainelArea({
             destaque={destaque}
             tecladoAberto={alturaTeclado > 0}
             onDestaque={onDestaque}
-            linhaCerca={linhaCerca}
+            linhasDoFim={linhasDoFim}
           />
         ) : area.tipo === 'lavoura' ? (
           <ConteudoLavoura
             area={area}
             cabecalho={cabecalho}
-            linhaCerca={linhaCerca}
+            linhasDoFim={linhasDoFim}
             alturaTeclado={alturaTeclado}
             podeCriarCultura={podeCriarCultura}
             abrirLinhaDoTempo={abrirLinhaDoTempo}
@@ -163,7 +211,7 @@ export function PainelArea({
         ) : (
           <>
             {cabecalho}
-            {linhaCerca}
+            <View>{linhasDoFim}</View>
           </>
         )}
       </View>

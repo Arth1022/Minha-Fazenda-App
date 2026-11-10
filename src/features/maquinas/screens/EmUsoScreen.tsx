@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { router, type Href } from 'expo-router';
 
 import { Badge, Button, Card, EmptyState, Header, InfoBanner, ScreenContainer, type BadgeVariant } from '@/components/ui';
 import { AgroColors, Spacing, Typography } from '@/constants/theme';
@@ -103,6 +104,10 @@ export default function EmUsoScreen() {
         ) : null}
 
         {rastro.length > 1 ? <DesenhoRastro pontos={rastro} altura={200} /> : null}
+        {uso.rastreado ? (
+          // Traçado ao vivo no mapa da fazenda, com as áreas (tela 24)
+          <Button label="Ver no mapa" variant="outline" fullWidth onPress={() => router.push('/mapa-fazenda' as Href)} />
+        ) : null}
 
         <View style={styles.acoes}>
           <Button label="Abastecer" variant="outline" onPress={() => fluxos.abrir('abastecer', maquina, contexto)} style={styles.acao} />

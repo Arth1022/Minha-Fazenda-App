@@ -19,10 +19,12 @@ export interface CamadasSheetProps {
   onClose: () => void;
   /** Só admin com a divisa já marcada: desenhar o contorno da fazenda de novo */
   onRedesenharDivisa?: () => void;
+  /** Abre a camada Trajetos das máquinas (tela 26) */
+  onTrajetos?: () => void;
 }
 
 /** Fundo do mapa e o que aparece por cima dele; a escolha fica salva no celular. */
-export function CamadasSheet({ visible, camadas, onChange, onClose, onRedesenharDivisa }: CamadasSheetProps) {
+export function CamadasSheet({ visible, camadas, onChange, onClose, onRedesenharDivisa, onTrajetos }: CamadasSheetProps) {
   return (
     <BottomSheet visible={visible} title="Camadas" subtitle="O que aparece no mapa" onClose={onClose}>
       <View style={estilos.conteudo}>
@@ -56,6 +58,13 @@ export function CamadasSheet({ visible, camadas, onChange, onClose, onRedesenhar
             onChange={(pontos) => onChange({ ...camadas, pontos })}
           />
         </View>
+
+        {onTrajetos ? (
+          <View style={estilos.bloco}>
+            <RotuloCampo titulo="Máquinas" />
+            <LinkMapa rotulo="Ver os trajetos das máquinas" icone="tractor" onPress={onTrajetos} />
+          </View>
+        ) : null}
 
         {onRedesenharDivisa ? (
           <View style={estilos.bloco}>

@@ -1,9 +1,9 @@
-import { and, asc, desc, eq, gt, gte, isNotNull, isNull, lt, ne, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, ne, or, sql } from 'drizzle-orm';
 
-import { db, maquinas, paradasUso, pontosGps, usosMaquina } from '@/database';
+import { db, maquinas, paradasUso, pontosGps, talhoes as tabelaAreas, usosArea, usosMaquina } from '@/database';
 import type { AtividadeUso, MotivoFimUso, UsoMaquina } from '@/dtos';
 import { usuarioAtual, type Usuario } from '@/services/usuario';
-import { faixaDeTrabalhoKmh } from '../services/padroes';
+import { faixaDeTrabalhoKmh, MOTIVOS_AUTOMATICOS, TEMPOS } from '../services/padroes';
 import { deveDescartar, resumirRastro, type PontoLido, type ResumoRastro } from '../services/rastro';
 import { talhoesParaRastro } from './talhoes';
 
@@ -134,6 +134,19 @@ export async function iniciarUso(
       .get();
     if (outraDaPessoa) throw new Error(`Você está usando ${outraDaPessoa.nome}: desligue antes de ligar outra.`);
 
+    // Uso novo: o "Desfazer" dos usos anteriores da pessoa acabou; os pontos guardados saem
+    tx.delete(pontosGps)
+      .where(
+        inArray(
+          pontosGps.usoId,
+          tx
+            .select({ id: usosMaquina.id })
+            .from(usosMaquina)
+            .where(and(eq(usosMaquina.operadorId, operador.id), isNotNull(usosMaquina.fim)))
+        )
+      )
+      .run();
+
     const implementoId = dados.implementoId ?? null;
     if (implementoId) {
       const implemento = tx.select().from(maquinas).where(eq(maquinas.id, implementoId)).get();
@@ -254,13 +267,10 @@ export async function fecharUso(uso: UsoMaquina, opcoes: OpcoesEncerrar = {}): P
   }
 
   const ultimo = resumo?.rastro[resumo.rastro.length - 1];
+  // Fim automático guarda os pontos por um tempo: o "Desfazer" (RF-050) retoma com o rastro inteiro
+  const automatico = MOTIVOS_AUTOMATICOS.has(opcoes.motivo ?? 'manual');
   const encerrado = db.transaction((tx) => {
-    tx.update(paradasUso)
-      .set({ fim })
-      .where(and(eq(paradasUso.usoId, uso.id), isNull(paradasUso.fim)))
-      .run();
-    tx.delete(pontosGps).where(eq(pontosGps.usoId, uso.id)).run();
-    return tx
+    const fechado = tx
       .update(usosMaquina)
       .set({
         fim,
@@ -288,9 +298,134 @@ export async function fecharUso(uso: UsoMaquina, opcoes: OpcoesEncerrar = {}): P
       .where(and(eq(usosMaquina.id, uso.id), isNull(usosMaquina.fim)))
       .returning()
       .get();
+    if (!fechado) return undefined;
+    tx.update(paradasUso)
+      .set({ fim })
+      .where(and(eq(paradasUso.usoId, uso.id), isNull(paradasUso.fim)))
+      .run();
+    if (!automatico) tx.delete(pontosGps).where(eq(pontosGps.usoId, uso.id)).run();
+    // Tempo e KM por área numa tabela própria: o painel da área lê pelo índice (RF-057, RF-066)
+    if (resumo && resumo.talhoes.length > 0) {
+      tx.insert(usosArea)
+        .values(
+          resumo.talhoes.map((t) => ({
+            usoId: uso.id,
+            areaId: t.talhaoId,
+            inicio: uso.inicio,
+            segundos: t.segundos,
+            km: t.km,
+          }))
+        )
+        .onConflictDoNothing()
+        .run();
+    }
+    return fechado;
   });
   if (!encerrado) throw new Error('A máquina não está em uso');
   return { uso: encerrado, descartado: false };
+}
+
+/**
+ * "Desfazer" do fim automático (RF-050): o uso volta a correr de onde parou,
+ * com os pontos guardados. Só o último uso de quem está com o celular, fechado
+ * por regra do app há menos de 12 h, com a máquina e a pessoa livres. As regras
+ * passam a olhar só os pontos de agora em diante (para não fechar de novo).
+ */
+export async function reabrirUso(usoId: string, agora = new Date()): Promise<UsoMaquina> {
+  const operador = usuarioAtual();
+  return db.transaction((tx) => {
+    const uso = tx.select().from(usosMaquina).where(eq(usosMaquina.id, usoId)).get();
+    if (!uso) throw new Error('Uso não encontrado');
+    if (!uso.fim || !uso.fimMotivo || !MOTIVOS_AUTOMATICOS.has(uso.fimMotivo)) {
+      throw new Error('Só dá para desfazer um encerramento feito pelo app.');
+    }
+    if (agora.getTime() - uso.fim.getTime() > TEMPOS.desfazerMs) {
+      throw new Error('Passou o tempo de desfazer este encerramento.');
+    }
+    if (uso.operadorId !== operador.id) throw new Error('Só quem estava usando a máquina pode desfazer.');
+    const depois = tx
+      .select({ id: usosMaquina.id })
+      .from(usosMaquina)
+      .where(and(eq(usosMaquina.operadorId, operador.id), gt(usosMaquina.inicio, uso.inicio)))
+      .get();
+    if (depois) throw new Error('Você já ligou outra máquina depois deste uso.');
+    const ocupada = tx
+      .select({ id: usosMaquina.id })
+      .from(usosMaquina)
+      .where(and(eq(usosMaquina.maquinaId, uso.maquinaId), isNull(usosMaquina.fim)))
+      .get();
+    if (ocupada) throw new Error('A máquina já está em uso de novo.');
+
+    tx.delete(usosArea).where(eq(usosArea.usoId, usoId)).run();
+    return tx
+      .update(usosMaquina)
+      .set({
+        fim: null,
+        fimMotivo: null,
+        fimLat: null,
+        fimLng: null,
+        kmTotal: null,
+        kmTrabalhando: null,
+        segTrabalhando: null,
+        segDeslocando: null,
+        segParada: null,
+        segPausa: null,
+        segSemSinal: null,
+        areaEstimadaHa: null,
+        qualidade: null,
+        rastro: null,
+        talhoes: null,
+        paradaAvisadaEm: null,
+        continuaAte: null,
+        regrasDesde: agora,
+      })
+      .where(eq(usosMaquina.id, usoId))
+      .returning()
+      .get();
+  });
+}
+
+/** Pontos de usos encerrados há mais de 12 h: o "Desfazer" já passou (abertura do app). */
+export async function limparPontosAntigos(agora = new Date()): Promise<void> {
+  const limite = new Date(agora.getTime() - TEMPOS.desfazerMs);
+  await db
+    .delete(pontosGps)
+    .where(
+      inArray(
+        pontosGps.usoId,
+        db
+          .select({ id: usosMaquina.id })
+          .from(usosMaquina)
+          .where(and(isNotNull(usosMaquina.fim), lt(usosMaquina.fim, limite)))
+      )
+    );
+}
+
+/**
+ * Usos encerrados antes da tabela por área: copia o "por talhão" do JSON deles
+ * uma vez (abertura do app). Depois da primeira vez a consulta não acha nada.
+ */
+export async function preencherUsosPorArea(): Promise<number> {
+  const pendentes = await db
+    .select({ id: usosMaquina.id, inicio: usosMaquina.inicio, talhoes: usosMaquina.talhoes })
+    .from(usosMaquina)
+    .where(
+      and(
+        isNotNull(usosMaquina.fim),
+        isNotNull(usosMaquina.talhoes),
+        sql`${usosMaquina.talhoes} <> '[]'`,
+        sql`not exists (select 1 from ${usosArea} where ${usosArea.usoId} = ${usosMaquina.id})`
+      )
+    );
+  if (pendentes.length === 0) return 0;
+  const existentes = new Set((await db.select({ id: tabelaAreas.id }).from(tabelaAreas)).map((a) => a.id));
+  const linhas = pendentes.flatMap((uso) =>
+    (uso.talhoes ?? [])
+      .filter((t) => existentes.has(t.talhaoId))
+      .map((t) => ({ usoId: uso.id, areaId: t.talhaoId, inicio: uso.inicio, segundos: t.segundos, km: t.km }))
+  );
+  if (linhas.length > 0) await db.insert(usosArea).values(linhas).onConflictDoNothing();
+  return pendentes.length;
 }
 
 export interface DadosUsoManual {

@@ -86,7 +86,8 @@
     "test:rebanhomapa": "tsx --tsconfig tsconfig.test.json __tests__/rebanhoMapa.test.ts",
     "test:cerca": "tsx --tsconfig tsconfig.test.json __tests__/cercaMapa.test.ts",
     "test:plantio": "tsx --tsconfig tsconfig.test.json __tests__/plantioMapa.test.ts",
-    "test": "npm run test:regras && npm run test:db && npm run test:notificacoes && npm run test:migrations && npm run test:reparo && npm run test:doses && npm run test:cadastro && npm run test:talhoes && npm run test:maquinas && npm run test:auditoria && npm run test:agro && npm run test:areas && npm run test:rebanhomapa && npm run test:cerca && npm run test:plantio"
+    "test:trajetos": "tsx --tsconfig tsconfig.test.json __tests__/trajetosMapa.test.ts",
+    "test": "npm run test:regras && npm run test:db && npm run test:notificacoes && npm run test:migrations && npm run test:reparo && npm run test:doses && npm run test:cadastro && npm run test:talhoes && npm run test:maquinas && npm run test:auditoria && npm run test:agro && npm run test:areas && npm run test:rebanhomapa && npm run test:cerca && npm run test:plantio && npm run test:trajetos"
   },
   "private": true
 }

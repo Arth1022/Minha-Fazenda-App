@@ -15,7 +15,23 @@ import { router, useLocalSearchParams } from 'expo-router';
 
 import { AppIcon, ConfirmacaoSheet, type ItemConfirmacao } from '@/components/ui';
 import { AgroColors, MaxContentWidth, Shadows, Spacing } from '@/constants/theme';
-import { useConsultaAoVivo, useLiveQuery, type Talhao } from '@/database';
+import { useConsultaAoVivo, useLiveQuery, type PontoRastro, type Talhao } from '@/database';
+import {
+  iniciarRastro,
+  reabrirUso,
+  sessaoCompleta,
+  simplificarLinha,
+  TABELAS_POSICOES,
+  TABELAS_SESSAO,
+  TABELAS_TRAJETOS,
+  trajetosDoPeriodo,
+  ultimasPosicoes,
+  useOperacaoMaquina,
+  useUsoAtual,
+  type PosicaoDaMaquina,
+  type SessaoCompleta,
+  type TrajetoDoPeriodo,
+} from '@/features/maquinas';
 import { existeCercaSalva } from '@/services/cercaService';
 import { existeCicloAtivo } from '@/services/cicloService';
 import {
@@ -31,7 +47,7 @@ import {
   deletarTalhao,
   listarTalhoesAtivos,
 } from '@/services/talhaoService';
-import { podeEditarGeometria } from '@/services/usuario';
+import { podeEditarGeometria, usuarioAtual } from '@/services/usuario';
 import { calcularPerimetroKm, calcularPerimetroM, type Coordenada } from '@/utils/geoMath';
 import { BarraBuscaMapa, BotaoQuadrado, type AnimalBuscado } from '../components/BarraBuscaMapa';
 import { CamadaDesenho } from '../components/CamadaDesenho';
@@ -43,13 +59,23 @@ import {
 } from '../components/CamadaMarcadoresMapa';
 import { CamadasSheet } from '../components/CamadasSheet';
 import { CamadaTalhoesSalvos } from '../components/CamadaTalhoesSalvos';
+import { CamadaTrajetos, type MarcaDeMaquina, type TrajetoNoMapa } from '../components/CamadaTrajetos';
 import { BotaoMapa, CoresTexto } from '../components/elementos';
 import { InsumosAreaSheet } from '../components/InsumosAreaSheet';
 import { MapaBase, type MapaBaseHandle, type VistaMapa } from '../components/MapaBase';
 import { OpcoesAreaSheet } from '../components/OpcoesAreaSheet';
-import { PainelArea } from '../components/PainelArea';
+import { PainelArea, type VistaArea } from '../components/PainelArea';
+import { PainelGravando, SeloGravando } from '../components/painel/PainelGravando';
+import { PainelSessao } from '../components/painel/PainelSessao';
 import { SalvarAreaSheet, type DadosSalvarArea } from '../components/SalvarAreaSheet';
 import { SalvarFazendaSheet } from '../components/SalvarFazendaSheet';
+import {
+  BarraTrajetos,
+  ListaTrajetos,
+  PeriodoTrajetosSheet,
+  type ItemTrajeto,
+  type MaquinaDoFiltro,
+} from '../components/Trajetos';
 import { SalvarMarcadorSheet, type DadosSalvarMarcador } from '../components/SalvarMarcadorSheet';
 import { lerCamadas, salvarCamadas, type CamadasMapa } from '../data/camadasMapa';
 import {
@@ -68,6 +94,13 @@ import {
 } from '../services/areas';
 import { formatarDistancia, formatarHectares } from '../services/calculos';
 import { identificacaoAnimal, mapaDeOcupacao, type LinhaOcupacao } from '../services/ocupacao';
+import {
+  corDaMaquina,
+  intervaloDoPeriodo,
+  podeDesfazer,
+  textoHa,
+  type PeriodoTrajetos,
+} from '../services/trajetos';
 import { vistaDaFazenda } from '../services/vista';
 
 const ZOOM_BUSCA = 15;
@@ -102,11 +135,13 @@ interface Confirmacao {
 export default function MapaCompletoScreen() {
   const insets = useSafeAreaInsets();
   const { height: alturaTela } = useWindowDimensions();
-  const { talhao: talhaoInicialId, desenhar, vista } = useLocalSearchParams<{
+  const { talhao: talhaoInicialId, desenhar, vista, uso: usoInicialId } = useLocalSearchParams<{
     talhao?: string;
     desenhar?: 'divisa' | 'area';
     /** "ciclo": abre a linha do tempo da lavoura (toque no aviso de uma etapa) */
     vista?: 'ciclo';
+    /** Resumo de um uso de máquina (toque no aviso de fim automático, com o "Desfazer") */
+    uso?: string;
   }>();
   const { data: talhoes, updatedAt, error } = useLiveQuery(listarTalhoesAtivos());
   const { data: marcadores } = useLiveQuery(listarMarcadoresAtivos());
@@ -146,8 +181,13 @@ export default function MapaCompletoScreen() {
   const [opcoesVisivel, setOpcoesVisivel] = useState(false);
   const [insumosId, setInsumosId] = useState<string | null>(null);
   const [insumosVisivel, setInsumosVisivel] = useState(false);
-  // Área cujo painel mostra o "Cercar" (tela 21) no lugar do resumo
-  const [cercandoId, setCercandoId] = useState<string | null>(null);
+  // O que o painel da área mostra no lugar do resumo ("Cercar", horas de máquina), com a área
+  const [vistaArea, setVistaArea] = useState<{ areaId: string; vista: VistaArea } | null>(null);
+  // Resumo de um uso de máquina (tela 25): fim da sessão, lista de trajetos, painel da área ou aviso
+  const [sessaoId, setSessaoId] = useState<string | null>(usoInicialId ?? null);
+  // Camada Trajetos (tela 26): período e máquina filtrada; null fora dela
+  const [trajetos, setTrajetos] = useState<{ periodo: PeriodoTrajetos; maquinaId: string | null } | null>(null);
+  const [periodoVisivel, setPeriodoVisivel] = useState(false);
   // Aviso de etapa tocado: o primeiro painel abre na linha do tempo do ciclo
   const [abrirCiclo, setAbrirCiclo] = useState(vista === 'ciclo');
   const [confirmacao, setConfirmacao] = useState<Confirmacao | null>(null);
@@ -193,6 +233,8 @@ export default function MapaCompletoScreen() {
   const comecarDesenho = useCallback(
     (novoAlvo: AlvoDesenho) => {
       setSelecionadoId(null);
+      setSessaoId(null);
+      setTrajetos(null);
       setMarcadorId(null);
       setModoMarcador(false);
       setAlvo(novoAlvo);
@@ -246,37 +288,123 @@ export default function MapaCompletoScreen() {
   const areaOpcoes = talhoes.find((t) => t.id === opcoesId) ?? null;
   const areaInsumos = talhoes.find((t) => t.id === insumosId) ?? null;
 
-  // O "Cercar" vale para o painel aberto: fechar ou trocar de área volta ao resumo
+  // "Cercar" e horas de máquina valem para o painel aberto: fechar ou trocar de área volta ao resumo
   const painelId = selecionado?.id ?? null;
   const [painelAnteriorId, setPainelAnteriorId] = useState(painelId);
   if (painelId !== painelAnteriorId) {
     // O primeiro painel (área carregada) ainda pode abrir na linha do tempo; trocar ou fechar, não
     if (painelAnteriorId !== null) setAbrirCiclo(false);
     setPainelAnteriorId(painelId);
-    setCercandoId(null);
+    setVistaArea(null);
   }
-  const cercando = painelId !== null && cercandoId === painelId;
+  const vistaDoPainel: VistaArea =
+    painelId !== null && vistaArea?.areaId === painelId ? vistaArea.vista : 'resumo';
 
-  // Painel fechado: a próxima abertura (mesmo da mesma área) enquadra de novo
+  // Máquina em uso neste celular (tela 24): o traçado ao vivo e o cartão com "Encerrar sessão"
+  const atual = useUsoAtual();
+  const operacao = useOperacaoMaquina();
+  const rastroAoVivo = useMemo<PontoRastro[]>(
+    () => (atual?.uso.rastreado ? simplificarLinha(atual.pontos, 3).map((p): PontoRastro => [p.lng, p.lat]) : []),
+    [atual]
+  );
+  const corAoVivo = atual ? corDaMaquina(atual.maquina.id) : null;
+
+  // Resumo do uso aberto (tela 25); a consulta anterior não vale para outro id
+  const { dados: sessaoLida } = useConsultaAoVivo<SessaoCompleta | null>(
+    () => (sessaoId ? sessaoCompleta(sessaoId) : Promise.resolve(null)),
+    TABELAS_SESSAO,
+    sessaoId ?? '',
+    null
+  );
+  const sessao = sessaoLida && sessaoLida.uso.id === sessaoId ? sessaoLida : null;
+
+  // Camada Trajetos: os usos do período (pelo índice de início) e a última posição de cada máquina
+  const intervalo = trajetos ? intervaloDoPeriodo(trajetos.periodo) : null;
+  const { dados: doPeriodo } = useConsultaAoVivo<TrajetoDoPeriodo[]>(
+    () => (intervalo ? trajetosDoPeriodo(intervalo.desde, intervalo.ate) : Promise.resolve([])),
+    TABELAS_TRAJETOS,
+    intervalo ? `${trajetos?.periodo}:${intervalo.desde.getTime()}` : '',
+    []
+  );
+  const { dados: posicoes } = useConsultaAoVivo<PosicaoDaMaquina[]>(
+    () => (trajetos ? ultimasPosicoes() : Promise.resolve([])),
+    TABELAS_POSICOES,
+    trajetos ? 'posicoes' : '',
+    []
+  );
+  const filtroMaquina = trajetos?.maquinaId ?? null;
+  const doFiltro = trajetos ? doPeriodo.filter((t) => !filtroMaquina || t.maquinaId === filtroMaquina) : [];
+  const trajetosNoMapa: TrajetoNoMapa[] = doFiltro.map((t) => ({
+    id: t.id,
+    cor: corDaMaquina(t.maquinaId),
+    rastro: t.rastro ?? [],
+  }));
+  const marcasDasMaquinas: MarcaDeMaquina[] = trajetos
+    ? posicoes
+        .filter((p) => !filtroMaquina || p.maquinaId === filtroMaquina)
+        .map((p) => ({
+          id: p.usoId,
+          cor: corDaMaquina(p.maquinaId),
+          coordenada: [p.lng, p.lat],
+          texto: `${p.maquinaNome} · ${p.emUso ? 'agora' : textoHa(p.em)}`,
+        }))
+    : [];
+  const maquinasDoFiltro: MaquinaDoFiltro[] = [];
+  for (const t of doPeriodo) {
+    if (!maquinasDoFiltro.some((m) => m.id === t.maquinaId)) {
+      maquinasDoFiltro.push({ id: t.maquinaId, nome: t.maquinaNome, cor: corDaMaquina(t.maquinaId) });
+    }
+  }
+  const itensDaLista: ItemTrajeto[] = doFiltro.map((t) => ({
+    id: t.id,
+    maquinaNome: t.maquinaNome,
+    cor: corDaMaquina(t.maquinaId),
+    operador: t.operador,
+    km: t.kmTotal,
+    duracaoMs: (t.fim ?? t.inicio).getTime() - t.inicio.getTime(),
+  }));
+  // O uso do resumo, quando não está entre os desenhados da camada (ex.: aberto pelo painel da área)
+  const rastroDaSessao = sessao?.uso.rastro ?? null;
+  const sessaoNoMapa: TrajetoNoMapa | null =
+    sessao && rastroDaSessao && rastroDaSessao.length > 1 && !trajetosNoMapa.some((t) => t.id === sessao.uso.id)
+      ? { id: sessao.uso.id, cor: corDaMaquina(sessao.maquina.id), rastro: rastroDaSessao }
+      : null;
+  const marcaDaSessao: MarcaDeMaquina[] =
+    sessao && sessaoNoMapa && rastroDaSessao
+      ? [
+          {
+            id: sessao.uso.id,
+            cor: sessaoNoMapa.cor,
+            coordenada: rastroDaSessao[rastroDaSessao.length - 1],
+            texto: `${sessao.maquina.nome} · ${textoHa(sessao.uso.fim ?? new Date())}`,
+          },
+        ]
+      : [];
+
+  // Painel fechado: a próxima abertura (mesmo da mesma área ou do mesmo uso) enquadra de novo
   useEffect(() => {
-    if (!selecionado) enquadradaRef.current = null;
-  }, [selecionado]);
+    if (!selecionado && !sessaoId) enquadradaRef.current = null;
+  }, [selecionado, sessaoId]);
 
   const destinoDestacado =
     selecionado && destaqueDestino?.areaId === selecionado.id ? destaqueDestino.destinoId : null;
 
-  // Voltar do Android sai do desenho, do ponto de atenção, do "Cercar" ou fecha o painel antes de sair da tela
+  // Voltar do Android sai do desenho, do ponto de atenção, do resumo do uso, do "Cercar", fecha o
+  // painel e sai da camada Trajetos, nessa ordem, antes de sair da tela
+  const temOQueFechar = modoDesenho || modoMarcador || sessaoId !== null || selecionado !== null || trajetos !== null;
   useEffect(() => {
-    if (!modoDesenho && !modoMarcador && !selecionado) return;
+    if (!temOQueFechar) return;
     const inscricao = BackHandler.addEventListener('hardwareBackPress', () => {
       if (modoMarcador) sairDoModoMarcador();
       else if (modoDesenho) sairDoDesenho();
-      else if (cercando) setCercandoId(null);
-      else setSelecionadoId(null);
+      else if (sessaoId) setSessaoId(null);
+      else if (vistaDoPainel !== 'resumo') setVistaArea(null);
+      else if (selecionado) setSelecionadoId(null);
+      else setTrajetos(null);
       return true;
     });
     return () => inscricao.remove();
-  }, [modoDesenho, modoMarcador, selecionado, cercando, sairDoDesenho, sairDoModoMarcador]);
+  }, [temOQueFechar, modoDesenho, modoMarcador, sessaoId, vistaDoPainel, selecionado, sairDoDesenho, sairDoModoMarcador]);
 
   // Contorno novo de uma área existente: grava direto, mantendo nome, tipo e histórico
   useEffect(() => {
@@ -399,6 +527,50 @@ export default function MapaCompletoScreen() {
     });
   };
 
+  /** Mostra o trajeto do resumo inteiro no pedaço de mapa acima do painel */
+  const enquadrarSessao = (alturaPainel: number) => {
+    if (!sessao || !rastroDaSessao || rastroDaSessao.length < 2) return;
+    const chave = `uso:${sessao.uso.id}`;
+    if (enquadradaRef.current === chave) return;
+    enquadradaRef.current = chave;
+    let [minLng, minLat, maxLng, maxLat] = [Infinity, Infinity, -Infinity, -Infinity];
+    for (const [lng, lat] of rastroDaSessao) {
+      minLng = Math.min(minLng, lng);
+      maxLng = Math.max(maxLng, lng);
+      minLat = Math.min(minLat, lat);
+      maxLat = Math.max(maxLat, lat);
+    }
+    const cima = topo + FOLGA_TOPO;
+    const baixo = Math.min(alturaPainel + FOLGA_PAINEL, alturaTela - cima - MAPA_MINIMO);
+    mapaRef.current?.enquadrar([maxLng, maxLat], [minLng, minLat], {
+      top: cima,
+      bottom: Math.max(baixo, FOLGA_PAINEL),
+      left: 40,
+      right: 40,
+    });
+  };
+
+  /** "Encerrar sessão" (tela 24): grava o uso e mostra o resumo dele no mapa (tela 25) */
+  const encerrarSessao = async () => {
+    if (!atual) return;
+    const resultado = await operacao.desligar(atual.maquina.id);
+    if (!resultado) return;
+    if (resultado.descartado) {
+      Alert.alert('Uso descartado', 'A máquina ficou ligada menos de 1 minuto, quase sem andar: não foi registrado.');
+    } else if (resultado.uso) {
+      setSelecionadoId(null);
+      setSessaoId(resultado.uso.id);
+    }
+  };
+
+  /** "Desfazer" do fim automático (RF-050): o uso volta a correr e o GPS liga de novo */
+  const desfazerFim = async () => {
+    if (!sessao) return;
+    await reabrirUso(sessao.uso.id);
+    if (sessao.uso.rastreado) await iniciarRastro(sessao.maquina.nome);
+    setSessaoId(null);
+  };
+
   const abrirConfirmacao = (nova: Confirmacao) => {
     setConfirmacao(nova);
     setConfirmando(true);
@@ -412,7 +584,7 @@ export default function MapaCompletoScreen() {
     switch (opcao) {
       case 'cercar':
         setSelecionadoId(area.id);
-        setCercandoId(area.id);
+        setVistaArea({ areaId: area.id, vista: 'cercar' });
         break;
       case 'insumos':
         setInsumosId(area.id);
@@ -565,6 +737,25 @@ export default function MapaCompletoScreen() {
               onPressTalhao={selecionarTalhao}
             />
           ) : null}
+          {trajetos ? (
+            <CamadaTrajetos
+              id="trajetos"
+              trajetos={trajetosNoMapa}
+              marcas={marcasDasMaquinas}
+              destaqueId={sessaoId}
+              onPress={setSessaoId}
+            />
+          ) : null}
+          {sessaoNoMapa ? (
+            <CamadaTrajetos id="sessao" trajetos={[sessaoNoMapa]} marcas={marcaDaSessao} destaqueId={sessaoNoMapa.id} />
+          ) : null}
+          {atual && corAoVivo && rastroAoVivo.length > 0 && !modoDesenho ? (
+            <CamadaTrajetos
+              id="gravando"
+              trajetos={[{ id: atual.uso.id, cor: corAoVivo, rastro: rastroAoVivo }]}
+              ponta={{ coordenada: rastroAoVivo[rastroAoVivo.length - 1], cor: corAoVivo }}
+            />
+          ) : null}
           {camadas.pontos ? (
             <CamadaMarcadoresMapa
               marcadores={marcadores}
@@ -586,6 +777,12 @@ export default function MapaCompletoScreen() {
           <View style={estilos.mira}>
             <View style={estilos.miraPonto} />
           </View>
+        </View>
+      ) : null}
+
+      {atual && !trajetos && !modoDesenho && !modoMarcador ? (
+        <View style={[estilos.seloGravando, { top: topo + 64 }]} pointerEvents="none">
+          <SeloGravando />
         </View>
       ) : null}
 
@@ -623,6 +820,19 @@ export default function MapaCompletoScreen() {
             </Text>
           </View>
         </View>
+      ) : trajetos ? (
+        <BarraTrajetos
+          topo={topo}
+          periodo={trajetos.periodo}
+          maquinas={maquinasDoFiltro}
+          maquinaId={trajetos.maquinaId}
+          onVoltar={() => {
+            setTrajetos(null);
+            setSessaoId(null);
+          }}
+          onPeriodo={() => setPeriodoVisivel(true)}
+          onMaquina={(maquinaId) => setTrajetos({ ...trajetos, maquinaId })}
+        />
       ) : (
         <BarraBuscaMapa
           topo={topo}
@@ -655,7 +865,17 @@ export default function MapaCompletoScreen() {
         />
       )}
 
-      {selecionado ? (
+      {sessao && !modoDesenho && !modoMarcador ? (
+        <PainelSessao
+          key={sessao.uso.id}
+          sessao={sessao}
+          cor={corDaMaquina(sessao.maquina.id)}
+          podeDesfazer={podeDesfazer(sessao.uso, usuarioAtual().id)}
+          onDesfazer={desfazerFim}
+          onFechar={() => setSessaoId(null)}
+          onAltura={enquadrarSessao}
+        />
+      ) : selecionado ? (
         <PainelArea
           // Remonta ao trocar de área: o onLayout dispara de novo e a câmera reenquadra
           key={selecionado.id}
@@ -676,10 +896,21 @@ export default function MapaCompletoScreen() {
             setAnimalEmDestaque(null);
           }}
           onAltura={enquadrarSelecionada}
-          cercando={cercando}
-          onCercando={(ativo) => setCercandoId(ativo ? selecionado.id : null)}
+          vista={vistaDoPainel}
+          onVista={(nova) => setVistaArea(nova === 'resumo' ? null : { areaId: selecionado.id, vista: nova })}
+          onAbrirUso={setSessaoId}
           podeCriarCultura={admin}
           abrirLinhaDoTempo={abrirCiclo && selecionado.id === talhaoInicialId}
+        />
+      ) : trajetos ? (
+        <ListaTrajetos itens={itensDaLista} periodo={trajetos.periodo} base={base} onAbrir={setSessaoId} />
+      ) : atual && corAoVivo && !modoDesenho && !modoMarcador ? (
+        <PainelGravando
+          atual={atual}
+          cor={corAoVivo}
+          base={base}
+          encerrando={operacao.ocupado}
+          onEncerrar={encerrarSessao}
         />
       ) : mostrarNovaArea ? (
         <View style={[estilos.rodapeNovaArea, { bottom: base + Spacing.two }]} pointerEvents="box-none">
@@ -866,11 +1097,28 @@ export default function MapaCompletoScreen() {
         }}
       />
 
+      <PeriodoTrajetosSheet
+        visible={periodoVisivel}
+        periodo={trajetos?.periodo ?? 'hoje'}
+        onEscolher={(periodo) => {
+          setPeriodoVisivel(false);
+          setSessaoId(null);
+          setTrajetos({ periodo, maquinaId: trajetos?.maquinaId ?? null });
+        }}
+        onClose={() => setPeriodoVisivel(false)}
+      />
+
       <CamadasSheet
         visible={camadasVisivel}
         camadas={camadas}
         onChange={mudarCamadas}
         onClose={() => setCamadasVisivel(false)}
+        onTrajetos={() => {
+          setCamadasVisivel(false);
+          setSelecionadoId(null);
+          setSessaoId(null);
+          setTrajetos({ periodo: 'hoje', maquinaId: null });
+        }}
         onRedesenharDivisa={
           admin && fazenda
             ? () => {
@@ -886,6 +1134,7 @@ export default function MapaCompletoScreen() {
 
 const estilos = StyleSheet.create({
   raiz: { flex: 1, backgroundColor: AgroColors.mapTerrainBg },
+  seloGravando: { position: 'absolute', left: MARGEM + 4 },
   carregando: { alignItems: 'center', justifyContent: 'center' },
   pressionado: { opacity: 0.8 },
 

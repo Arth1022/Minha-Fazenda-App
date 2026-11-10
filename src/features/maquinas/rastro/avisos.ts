@@ -2,7 +2,7 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
 import type { MotivoFimUso } from '@/dtos';
-import { CATEGORIA_PARADA, ACOES_AVISO, ROTA_EM_USO } from './constantes';
+import { CATEGORIA_PARADA, ACOES_AVISO, ROTA_EM_USO, rotaDoResumoNoMapa } from './constantes';
 
 /**
  * Notificações do uso da máquina: a pergunta "Parada há 20 min" (com os botões
@@ -51,14 +51,17 @@ const TEXTO_FIM: Partial<Record<MotivoFimUso, string>> = {
   parada: 'Ficou parada sem resposta: o uso foi encerrado na hora do último movimento.',
   pausa: 'A pausa passou de 3 horas: o uso foi encerrado.',
   velocidade: 'O celular passou da velocidade da máquina: o uso foi encerrado no último ponto compatível.',
+  fora: 'Saiu da divisa da fazenda: o uso foi encerrado no último ponto dentro dela.',
 };
 
-export async function avisarEncerradoPeloApp(nomeMaquina: string, motivo: MotivoFimUso): Promise<void> {
+/** Aviso do fim automático; tocar abre o resumo no mapa, com o "Desfazer" (RF-050). */
+export async function avisarEncerradoPeloApp(nomeMaquina: string, motivo: MotivoFimUso, usoId: string): Promise<void> {
   if (!disponivel) return;
   await Notifications.scheduleNotificationAsync({
     content: {
       title: `Uso de ${nomeMaquina} encerrado pelo app`,
-      body: TEXTO_FIM[motivo] ?? 'O uso foi encerrado.',
+      body: `${TEXTO_FIM[motivo] ?? 'O uso foi encerrado.'} Toque para ver ou desfazer.`,
+      data: { url: rotaDoResumoNoMapa(usoId), usoId },
     },
     trigger: { channelId: CANAL },
   });

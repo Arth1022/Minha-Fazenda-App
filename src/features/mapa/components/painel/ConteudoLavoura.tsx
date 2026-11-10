@@ -32,8 +32,8 @@ export interface ConteudoLavouraProps {
   area: Talhao;
   /** Cabeçalho da área (nome, selo, "⋮", X): só no resumo */
   cabecalho: React.ReactNode;
-  /** "Cercar esta área" (fase 3), no fim da lista */
-  linhaCerca: React.ReactNode;
+  /** "Horas de máquina" e "Cercar esta área", no fim da lista */
+  linhasDoFim: React.ReactNode;
   alturaTeclado: number;
   /** Admin cria cultura nova no "Plantar" (RF-042) */
   podeCriarCultura: boolean;
@@ -49,7 +49,7 @@ export interface ConteudoLavouraProps {
 export function ConteudoLavoura({
   area,
   cabecalho,
-  linhaCerca,
+  linhasDoFim,
   alturaTeclado,
   podeCriarCultura,
   abrirLinhaDoTempo = false,
@@ -174,7 +174,7 @@ export function ConteudoLavoura({
             onPress={() => setVista({ tipo: 'anteriores' })}
           />
         ) : null}
-        {linhaCerca}
+        {linhasDoFim}
       </View>
     </>
   );

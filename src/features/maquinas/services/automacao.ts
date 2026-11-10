@@ -1,4 +1,4 @@
-import { distanciaM } from './geo';
+import { dentroDoPoligono, distanciaM, type Poligono } from './geo';
 import { TEMPOS } from './padroes';
 import { limparPontos, trechoAndou, ultimoMovimento, type PontoLido } from './rastro';
 
@@ -24,6 +24,8 @@ export interface SituacaoDoUso {
   paradaAvisadaEm: number | null;
   /** Respondeu "Continua": não pergunta até esta hora */
   continuaAte: number | null;
+  /** Divisa da fazenda; sem divisa marcada, a regra de saída não vale */
+  fazenda?: Poligono | null;
 }
 
 export type DecisaoAutomatica =
@@ -32,7 +34,7 @@ export type DecisaoAutomatica =
   | { tipo: 'avisarParada'; paradaDesde: number }
   /** A máquina andou durante a pausa: a pausa acaba sozinha */
   | { tipo: 'retomar'; em: number }
-  | { tipo: 'encerrar'; fim: number; motivo: 'parada' | 'pausa' | 'velocidade' };
+  | { tipo: 'encerrar'; fim: number; motivo: 'parada' | 'pausa' | 'velocidade' | 'fora' };
 
 /**
  * Celular fora da máquina: os pontos mais recentes, por mais de 1 min, acima da
@@ -55,6 +57,26 @@ export function fimPorVelocidade(pontos: PontoLido[], maxKmh: number): number | 
   return ultimo.em - ultimoCompativel.em >= TEMPOS.excessoVelocidadeMs ? ultimoCompativel.em : null;
 }
 
+/**
+ * Saiu da divisa da fazenda (RF-049): depois do último ponto dentro dela, mais
+ * de 10 min só de pontos fora. Só vale se o uso esteve dentro em algum momento
+ * (ligar na estrada não encerra). Devolve a hora do último ponto dentro, ou null.
+ */
+export function fimPorSaidaDaFazenda(pontos: PontoLido[], fazenda: Poligono): number | null {
+  const limpos = limparPontos(pontos);
+  let ultimoDentro = -1;
+  for (let i = limpos.length - 1; i >= 0; i--) {
+    if (dentroDoPoligono(limpos[i], fazenda)) {
+      ultimoDentro = i;
+      break;
+    }
+  }
+  if (ultimoDentro < 0 || ultimoDentro === limpos.length - 1) return null;
+  const dentro = limpos[ultimoDentro];
+  const ultimo = limpos[limpos.length - 1];
+  return ultimo.em - dentro.em >= TEMPOS.foraDaFazendaMs ? dentro.em : null;
+}
+
 /** A máquina andou depois de `desde`? (algum trecho que passou do tremor do GPS) */
 function andouDesde(pontos: PontoLido[], desde: number): number | null {
   const limpos = limparPontos(pontos).filter((p) => p.em >= desde);
@@ -69,6 +91,12 @@ export function decidirAutomacao(s: SituacaoDoUso): DecisaoAutomatica {
   if (s.velocidadeMaxKmh !== null && !s.estacionario) {
     const fim = fimPorVelocidade(s.pontos, s.velocidadeMaxKmh);
     if (fim !== null) return { tipo: 'encerrar', fim, motivo: 'velocidade' };
+  }
+
+  // 1b. Saiu da fazenda (a máquina foi embora pela estrada)
+  if (s.fazenda) {
+    const fim = fimPorSaidaDaFazenda(s.pontos, s.fazenda);
+    if (fim !== null) return { tipo: 'encerrar', fim, motivo: 'fora' };
   }
 
   // 2. Em pausa: volta sozinha se andar; passou de 3 h, encerra
