@@ -30,9 +30,10 @@ export interface FichaTopoProps<K extends string> {
   subtitulo: string;
   /** Botões redondos na linha do nome, encostados à direita (QR Code, editar) */
   acoes: AcaoFichaTopo[];
-  abas: AbaFichaTopo<K>[];
-  aba: K;
-  onAbaChange: (aba: K) => void;
+  /** Sem abas (ex.: tela do lote), o topo termina no perfil */
+  abas?: AbaFichaTopo<K>[];
+  aba?: K;
+  onAbaChange?: (aba: K) => void;
 }
 
 /**
@@ -46,7 +47,7 @@ export function FichaTopo<K extends string>({
   etiqueta,
   subtitulo,
   acoes,
-  abas,
+  abas = [],
   aba,
   onAbaChange,
 }: FichaTopoProps<K>) {
@@ -97,29 +98,34 @@ export function FichaTopo<K extends string>({
         </View>
       </View>
 
-      <View style={styles.abas} accessibilityRole="tablist">
-        {abas.map(({ key, label, contador }) => {
-          const ativa = key === aba;
-          return (
-            <Pressable
-              key={key}
-              onPress={() => onAbaChange(key)}
-              style={styles.aba}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: ativa }}>
-              <View style={styles.abaConteudo}>
-                <Text style={[styles.abaTexto, ativa && styles.abaTextoAtiva]}>{label}</Text>
-                {contador ? (
-                  <View style={styles.contador}>
-                    <Text style={styles.contadorTexto}>{contador}</Text>
-                  </View>
-                ) : null}
-              </View>
-              <View style={[styles.sublinhado, ativa && styles.sublinhadoAtivo]} />
-            </Pressable>
-          );
-        })}
-      </View>
+      {abas.length > 0 ? (
+        <View style={styles.abas} accessibilityRole="tablist">
+          {abas.map(({ key, label, contador }) => {
+            const ativa = key === aba;
+            return (
+              <Pressable
+                key={key}
+                onPress={() => onAbaChange?.(key)}
+                style={styles.aba}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: ativa }}>
+                <View style={styles.abaConteudo}>
+                  <Text style={[styles.abaTexto, ativa && styles.abaTextoAtiva]}>{label}</Text>
+                  {contador ? (
+                    <View style={styles.contador}>
+                      <Text style={styles.contadorTexto}>{contador}</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <View style={[styles.sublinhado, ativa && styles.sublinhadoAtivo]} />
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : (
+        // Sem abas, um respiro no fim do topo verde
+        <View style={styles.semAbas} />
+      )}
     </View>
   );
 }
@@ -202,6 +208,7 @@ const styles = StyleSheet.create({
     ...Typography.bodyMedium,
     color: 'rgba(255, 255, 255, 0.85)',
   },
+  semAbas: { height: Spacing.sm },
   abas: {
     flexDirection: 'row',
     paddingHorizontal: Spacing.two,

@@ -4,13 +4,20 @@ import { ActivityIndicator, Keyboard, Pressable, StyleSheet, Text, TextInput, Vi
 import { AppIcon } from '@/components/ui';
 import { COR_POR_TIPO_AREA } from '@/constants/areas';
 import { AgroColors, Radius, Shadows, Spacing } from '@/constants/theme';
-import type { Talhao } from '@/database';
+import { useConsultaAoVivo, type Talhao } from '@/database';
+import { buscarAnimais } from '@/features/rebanho/services/busca';
+import { animaisComLocal, TABELAS_ANIMAIS_COM_LOCAL } from '@/services/movimentacaoService';
 import { buscarAreas, detalheDaArea } from '../services/areas';
 import { buscarLocais, type ResultadoBusca } from '../services/busca';
+import { identificacaoAnimal, type OcupacaoArea } from '../services/ocupacao';
 import { CoresTexto } from './elementos';
 
 const MARGEM = 12;
-const MAX_AREAS = 6;
+const MAX_AREAS = 4;
+const MAX_ANIMAIS = 5;
+
+/** Animal do rebanho com o pasto e o lote em que está (resultado da busca). */
+export type AnimalBuscado = Awaited<ReturnType<typeof animaisComLocal>>[number];
 
 /** Botão branco quadrado do canto do mapa (camadas, centralizar no GPS). */
 export function BotaoQuadrado({
@@ -35,11 +42,17 @@ export function BotaoQuadrado({
 
 /**
  * O que a busca procura: lugares (antes da divisa, para achar a terra; usa a
- * internet) ou as áreas da fazenda (offline, enquanto digita).
+ * internet) ou as áreas e os animais da fazenda (offline, enquanto digita).
  */
 export type ModoBuscaMapa =
   | { tipo: 'locais'; onEscolher: (resultado: ResultadoBusca) => void }
-  | { tipo: 'areas'; areas: Talhao[]; onEscolher: (area: Talhao) => void };
+  | {
+      tipo: 'areas';
+      areas: Talhao[];
+      ocupacoes?: ReadonlyMap<string, OcupacaoArea>;
+      onEscolher: (area: Talhao) => void;
+      onEscolherAnimal: (animal: AnimalBuscado) => void;
+    };
 
 /** Voltar + campo de busca, com a lista de resultados embaixo. */
 export function BarraBuscaMapa({
@@ -64,6 +77,18 @@ export function BarraBuscaMapa({
     () => (areas ? buscarAreas(areas, texto).slice(0, MAX_AREAS) : []),
     [areas, texto],
   );
+  // Os animais só são lidos do banco enquanto há o que buscar
+  const buscandoAnimais = modo.tipo === 'areas' && texto.trim().length > 0;
+  const { dados: rebanho } = useConsultaAoVivo<AnimalBuscado[]>(
+    () => (buscandoAnimais ? animaisComLocal() : Promise.resolve([])),
+    TABELAS_ANIMAIS_COM_LOCAL,
+    buscandoAnimais ? 'animais' : 'parado',
+    [],
+  );
+  const animaisEncontrados = useMemo(
+    () => (buscandoAnimais ? buscarAnimais(rebanho, texto).slice(0, MAX_ANIMAIS) : []),
+    [buscandoAnimais, rebanho, texto],
+  );
 
   const limpar = () => {
     Keyboard.dismiss();
@@ -84,6 +109,12 @@ export function BarraBuscaMapa({
     if (modo.tipo !== 'areas') return;
     limpar();
     modo.onEscolher(area);
+  };
+
+  const escolherAnimal = (animal: AnimalBuscado) => {
+    if (modo.tipo !== 'areas') return;
+    limpar();
+    modo.onEscolherAnimal(animal);
   };
 
   const buscarLocal = async () => {
@@ -113,16 +144,18 @@ export function BarraBuscaMapa({
   const aoEnviar = () => {
     if (modo.tipo === 'locais') buscarLocal();
     else if (areasEncontradas[0]) escolherArea(areasEncontradas[0]);
+    else if (animaisEncontrados[0]) escolherAnimal(animaisEncontrados[0]);
   };
 
   const digitando = texto.trim().length > 0;
-  const erroAreas = modo.tipo === 'areas' && digitando && areasEncontradas.length === 0
-    ? 'Nenhuma área com esse nome.'
-    : null;
-  const mensagem = modo.tipo === 'locais' ? erro : erroAreas;
+  const nadaNaFazenda =
+    modo.tipo === 'areas' && digitando && areasEncontradas.length === 0 && animaisEncontrados.length === 0;
+  const mensagem = modo.tipo === 'locais' ? erro : nadaNaFazenda ? 'Nenhuma área ou animal com esse nome.' : null;
   const listaAberta =
     mensagem !== null ||
-    (modo.tipo === 'locais' ? (locais?.length ?? 0) > 0 : areasEncontradas.length > 0);
+    (modo.tipo === 'locais'
+      ? (locais?.length ?? 0) > 0
+      : areasEncontradas.length > 0 || animaisEncontrados.length > 0);
 
   return (
     <View style={[estilos.topo, { top: topo }]} pointerEvents="box-none">
@@ -150,11 +183,13 @@ export function BarraBuscaMapa({
               }
             }}
             onSubmitEditing={aoEnviar}
-            placeholder={modo.tipo === 'locais' ? 'Cidade, endereço ou coordenada' : 'Buscar área'}
+            placeholder={modo.tipo === 'locais' ? 'Cidade, endereço ou coordenada' : 'Buscar área ou animal'}
             placeholderTextColor={CoresTexto.suave}
             returnKeyType="search"
             autoCorrect={false}
-            accessibilityLabel={modo.tipo === 'locais' ? 'Buscar cidade, endereço ou coordenada' : 'Buscar área'}
+            accessibilityLabel={
+              modo.tipo === 'locais' ? 'Buscar cidade, endereço ou coordenada' : 'Buscar área ou animal'
+            }
             style={estilos.buscaTexto}
           />
           {digitando ? (
@@ -208,11 +243,34 @@ export function BarraBuscaMapa({
                       {area.nome}
                     </Text>
                     <Text style={estilos.resultadoDetalhe} numberOfLines={1}>
-                      {detalheDaArea(area)}
+                      {detalheDaArea(area, modo.tipo === 'areas' ? modo.ocupacoes?.get(area.id) : undefined)}
                     </Text>
                   </View>
                 </Pressable>
               ))}
+          {animaisEncontrados.map((animal, indice) => (
+            <Pressable
+              key={animal.id}
+              onPress={() => escolherAnimal(animal)}
+              accessibilityRole="button"
+              style={({ pressed }) => [
+                estilos.resultado,
+                (indice > 0 || areasEncontradas.length > 0) && estilos.resultadoDivisor,
+                pressed && estilos.pressionado,
+              ]}>
+              <AppIcon name="cow" size={20} color={AgroColors.forest} />
+              <View style={estilos.resultadoTextos}>
+                <Text style={estilos.resultadoNome} numberOfLines={1}>
+                  {identificacaoAnimal(animal)}
+                </Text>
+                <Text style={estilos.resultadoDetalhe} numberOfLines={1}>
+                  {animal.areaNome
+                    ? [animal.areaNome, animal.loteNome ? `Lote ${animal.loteNome}` : null].filter(Boolean).join(' · ')
+                    : 'Sem local definido'}
+                </Text>
+              </View>
+            </Pressable>
+          ))}
         </View>
       ) : (
         controles

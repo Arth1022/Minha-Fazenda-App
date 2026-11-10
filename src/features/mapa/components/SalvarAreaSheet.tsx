@@ -5,7 +5,7 @@ import { BottomSheet, InfoBanner } from '@/components/ui';
 import { ORDEM_TIPOS_AREA, ROTULO_TIPO_AREA } from '@/constants/areas';
 import { AgroColors, Radius, Spacing } from '@/constants/theme';
 import type { Talhao, TipoTalhao } from '@/database';
-import { avisosTrocaDeTipo } from '../services/areas';
+import { avisosTrocaDeTipo, bloqueioTrocaDeTipo } from '../services/areas';
 import { formatarDistancia, formatarHectares } from '../services/calculos';
 import { BotaoMapa, CampoMapa, CoresTexto, GradeOpcoes, RotuloCampo } from './elementos';
 
@@ -20,6 +20,8 @@ export interface SalvarAreaSheetProps {
   visible: boolean;
   /** Com `area`, a folha edita o nome e o tipo dela; sem, salva a área recém-desenhada */
   area?: Talhao | null;
+  /** Animais no pasto agora: com animais, o pasto não troca de tipo (RN-011) */
+  cabecas?: number;
   areaHa: number;
   perimetroM: number;
   salvando: boolean;
@@ -35,6 +37,7 @@ export interface SalvarAreaSheetProps {
 export function SalvarAreaSheet({
   visible,
   area = null,
+  cabecas = 0,
   areaHa,
   perimetroM,
   salvando,
@@ -59,6 +62,7 @@ export function SalvarAreaSheet({
   }
 
   const avisos = area ? avisosTrocaDeTipo(area, tipo) : [];
+  const bloqueio = area ? bloqueioTrocaDeTipo(area, tipo, cabecas) : null;
 
   const salvar = () => {
     if (!nome.trim()) {
@@ -112,13 +116,16 @@ export function SalvarAreaSheet({
           <Text style={estilos.dica}>O tipo decide a cor no mapa e o que dá para fazer na área.</Text>
         </View>
 
-        {avisos.length > 0 ? (
+        {bloqueio ? (
+          <InfoBanner message={bloqueio} />
+        ) : avisos.length > 0 ? (
           <InfoBanner message={`Ao trocar para ${ROTULO_TIPO_AREA[tipo]}: ${avisos.join(' ')}`} />
         ) : null}
 
         <BotaoMapa
           rotulo={!editando ? 'Salvar área' : avisos.length > 0 ? 'Trocar tipo e salvar' : 'Salvar alterações'}
           onPress={salvar}
+          desabilitado={bloqueio !== null}
           carregando={salvando}
         />
       </View>

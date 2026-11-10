@@ -1,6 +1,6 @@
-import { and, asc, count, desc, eq, isNotNull, isNull, max, or } from 'drizzle-orm';
+import { and, asc, count, desc, eq, isNotNull, isNull, max, or, sql } from 'drizzle-orm';
 
-import { animais, db, pesagens, reproducoes } from '@/database';
+import { animais, db, movimentacoes, pesagens, reproducoes } from '@/database';
 import type { ReferenciaAnimal } from '../services/qrCode';
 import type {
   Animal,
@@ -223,7 +223,8 @@ export async function registrarParto(
 
 /**
  * Saída do rebanho: só muda o status, o registro nunca é apagado. Na venda,
- * guarda o valor e o peso; o peso também vira a última pesagem do animal.
+ * guarda o valor e o peso; o peso também vira a última pesagem do animal. O
+ * animal sai também do pasto em que estava (a lotação do pasto cai).
  */
 export async function registrarSaida(
   animalId: string,
@@ -250,6 +251,11 @@ export async function registrarSaida(
     if (pesoSaidaKg !== null) {
       tx.insert(pesagens).values({ animalId, data: saida.data, pesoKg: pesoSaidaKg }).run();
     }
+    // A saída do pasto é a data da saída do rebanho, nunca antes de ele ter entrado no pasto
+    tx.update(movimentacoes)
+      .set({ saidaEm: sql`max(${movimentacoes.entradaEm}, ${saida.data.getTime()})` })
+      .where(and(eq(movimentacoes.animalId, animalId), isNull(movimentacoes.saidaEm)))
+      .run();
   });
 }
 

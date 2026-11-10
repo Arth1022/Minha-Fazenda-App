@@ -4,30 +4,67 @@ import { Alert, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'r
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { type Href, Tabs, router, usePathname } from 'expo-router';
 
-import { AppIcon, type AppIconName } from '@/components/ui/AppIcon';
 import { FloatingActionButton } from '@/components/ui/FloatingActionButton';
 import { AgroColors, MaxContentWidth, Shadows, Spacing } from '@/constants/theme';
 import { AcoesMaquinaModal, useQrCodeMaquina } from '@/features/maquinas';
 import { LeituraBrincoModais, useLeituraBrinco, useQrCodeAnimal } from '@/features/rebanho';
 import { BotaoLerQrCode } from '@/services/qrcode';
 
+/**
+ * Ícone desenhado para a aba (PNG com fundo transparente, pintado pelo
+ * `tintColor`). Os arquivos têm respiros diferentes em volta do desenho; com a
+ * fração da altura que o desenho ocupa, todos aparecem com a mesma altura.
+ */
+interface IconeAba {
+  fonte: number;
+  /** Largura ÷ altura do arquivo */
+  proporcao: number;
+  /** Fração da altura do arquivo ocupada pelo desenho */
+  ocupacao: number;
+}
+
 interface TabConfig {
   href: Href;
   label: string;
-  icon: AppIconName;
+  icone: IconeAba;
 }
+
+/** Altura visível do desenho de cada ícone, em pt */
+const ALTURA_DESENHO = 21;
 
 const HOME_HREF: Href = '/';
 
 const LEFT_TABS: TabConfig[] = [
-  { href: '/mapa', label: 'Mapa', icon: 'map' },
-  { href: '/rebanho', label: 'Rebanho', icon: 'cow' },
+  {
+    href: '/mapa',
+    label: 'Mapa',
+    icone: { fonte: require('@/assets/images/tabIcons/mapa_icon.png'), proporcao: 1.5, ocupacao: 0.63 },
+  },
+  {
+    href: '/rebanho',
+    label: 'Rebanho',
+    icone: { fonte: require('@/assets/images/tabIcons/vaca_icon.png'), proporcao: 1.09, ocupacao: 0.71 },
+  },
 ];
 
 const RIGHT_TABS: TabConfig[] = [
-  { href: '/estoque', label: 'Estoque', icon: 'package' },
-  { href: '/maquinas', label: 'Máquinas', icon: 'tractor' },
+  {
+    href: '/estoque',
+    label: 'Estoque',
+    icone: { fonte: require('@/assets/images/tabIcons/tasks_icon.png'), proporcao: 1, ocupacao: 0.55 },
+  },
+  {
+    href: '/maquinas',
+    label: 'Máquinas',
+    icone: { fonte: require('@/assets/images/tabIcons/trator_icon.png'), proporcao: 1.094, ocupacao: 0.71 },
+  },
 ];
+
+/** Caixa da imagem para o desenho ficar com ALTURA_DESENHO (o respiro transparente sobra em volta). */
+function tamanhoDoIcone({ proporcao, ocupacao }: IconeAba) {
+  const altura = ALTURA_DESENHO / ocupacao;
+  return { width: altura * proporcao, height: altura };
+}
 
 /**
  * Barra inferior customizada: abas laterais e Início no botão central.
@@ -58,10 +95,12 @@ function TabBar() {
             existe faz o Android (Fabric) perder o borderRadius e a pílula fica quadrada. */}
         <View style={styles.iconPill}>
           {isFocused ? <View style={styles.iconPillFundo} /> : null}
-          <AppIcon
-            name={tab.icon}
-            size={22}
-            color={isFocused ? AgroColors.forest : AgroColors.textMuted}
+          <Image
+            source={tab.icone.fonte}
+            style={tamanhoDoIcone(tab.icone)}
+            contentFit="contain"
+            tintColor={isFocused ? AgroColors.forest : AgroColors.textMuted}
+            accessible={false}
           />
         </View>
         <Text

@@ -1,9 +1,10 @@
-import { and, asc, eq, gte, isNull, lte, ne, sql } from 'drizzle-orm';
+import { and, asc, count, eq, gte, isNull, lte, ne, sql } from 'drizzle-orm';
 
 import { COR_POR_TIPO_AREA } from '@/constants/areas';
 import {
   db,
   marcadoresMapa,
+  movimentacoes,
   talhoes,
   type FaseLavoura,
   type Talhao,
@@ -93,6 +94,24 @@ export function listarTalhoesNoViewport(limites: LimitesViewport) {
     .orderBy(asc(talhoes.createdAt));
 }
 
+/** Animais no pasto agora (movimentações abertas, pelo índice da área). */
+async function animaisPresentes(areaId: string): Promise<number> {
+  const [linha] = await db
+    .select({ total: count() })
+    .from(movimentacoes)
+    .where(and(eq(movimentacoes.areaId, areaId), isNull(movimentacoes.saidaEm)));
+  return linha?.total ?? 0;
+}
+
+/** RN-011: pasto com animais não é excluído nem troca de tipo antes de eles saírem. */
+async function exigirPastoVazio(areaId: string, acao: string): Promise<void> {
+  const presentes = await animaisPresentes(areaId);
+  if (presentes > 0) {
+    const quantos = presentes === 1 ? 'o animal' : `os ${presentes} animais`;
+    throw new Error(`Mova ${quantos} para outro pasto antes de ${acao}.`);
+  }
+}
+
 export interface DadosAtualizarTalhao {
   nome?: string;
   /** Trocar o tipo troca a cor; sair de lavoura apaga a safra */
@@ -117,6 +136,7 @@ export async function atualizarTalhao(id: string, dados: DadosAtualizarTalhao): 
     mudancas.nome = nomeLimpo;
   }
   if (dados.tipo !== undefined) {
+    if (dados.tipo !== 'pasto') await exigirPastoVazio(id, 'trocar o tipo');
     mudancas.tipo = dados.tipo;
     mudancas.cor = COR_POR_TIPO_AREA[dados.tipo];
     if (dados.tipo !== 'lavoura') {
@@ -156,6 +176,7 @@ export async function atualizarTalhao(id: string, dados: DadosAtualizarTalhao): 
 
 /** Exclusão lógica (soft delete) para manter o registro na fila de sincronização com o PostGIS. */
 export async function deletarTalhao(id: string): Promise<void> {
+  await exigirPastoVazio(id, 'excluir a área');
   await db
     .update(talhoes)
     .set({ syncStatus: 'deleted' })

@@ -35,6 +35,9 @@ export interface ResumoTabProps {
   /** Abre a lista de crias (cada uma leva à ficha dela) */
   onVerCrias: () => void;
   onVerReproducao: () => void;
+  /** Cartão "Onde está": pasto de agora (ou sem local), há quantos dias e o lote */
+  local: { titulo: string; detalhe: string | null; cor: string };
+  onVerLocal: () => void;
 }
 
 /** Aba Resumo: o alerta, o que fazer hoje, peso, crias e a reprodução em andamento. */
@@ -47,6 +50,8 @@ export function ResumoTab({
   onVerPesagens,
   onVerCrias,
   onVerReproducao,
+  local,
+  onVerLocal,
 }: ResumoTabProps) {
   const { animal, peso, podeReproduzir } = ficha;
   // Métricas do período todo (primeira à última pesagem), não só a última variação
@@ -153,6 +158,22 @@ export function ResumoTab({
           </FichaCard>
         ) : null}
       </View>
+
+      <FichaCard>
+        <Pressable
+          onPress={onVerLocal}
+          style={({ pressed }) => [styles.onde, pressed && styles.pressed]}
+          accessibilityRole="button"
+          accessibilityLabel={`Onde está: ${local.titulo}`}>
+          <View style={[styles.ondeBarra, { backgroundColor: local.cor }]} />
+          <View style={styles.ondeTextos}>
+            <Text style={styles.metricaRotulo}>Onde está</Text>
+            <Text style={styles.metricaValor}>{local.titulo}</Text>
+            {local.detalhe ? <Text style={styles.metricaDetalhe}>{local.detalhe}</Text> : null}
+          </View>
+          <AppIcon name="chevronRight" size={IconSize.md} color={AgroColors.textMuted} />
+        </Pressable>
+      </FichaCard>
 
       {animal.producaoLeiteL !== null || animal.racaoKgDia !== null ? (
         <View style={styles.linha}>
@@ -261,6 +282,9 @@ function Etapa({
 }
 
 const styles = StyleSheet.create({
+  onde: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  ondeBarra: { width: 6, alignSelf: 'stretch', borderRadius: 3 },
+  ondeTextos: { flex: 1, gap: 2 },
   coluna: {
     gap: Spacing.three,
   },

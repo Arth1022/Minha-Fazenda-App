@@ -4,8 +4,8 @@ import type { EstiloMapa } from '../components/MapaBase';
 
 /**
  * Camadas do mapa ligadas neste celular (RF-013). É preferência do aparelho:
- * fica no kv-store, não nas tabelas da fazenda, e não sobe no sync. Rebanho e
- * trajetos entram aqui quando os módulos chegarem ao mapa.
+ * fica no kv-store, não nas tabelas da fazenda, e não sobe no sync. Trajetos
+ * entram aqui quando as máquinas chegarem ao mapa.
  */
 export interface CamadasMapa {
   estilo: EstiloMapa;
@@ -13,9 +13,11 @@ export interface CamadasMapa {
   areas: boolean;
   /** Pontos de atenção (praga, daninha, erosão) */
   pontos: boolean;
+  /** Rebanho: o selo de cabeças em cada pasto ocupado */
+  rebanho: boolean;
 }
 
-export const CAMADAS_PADRAO: CamadasMapa = { estilo: 'satelite', areas: true, pontos: true };
+export const CAMADAS_PADRAO: CamadasMapa = { estilo: 'satelite', areas: true, pontos: true, rebanho: true };
 
 const CHAVE = 'mapa.camadas';
 
@@ -28,6 +30,7 @@ export function lerCamadas(): CamadasMapa {
       estilo: lido?.estilo === 'mapa' ? 'mapa' : CAMADAS_PADRAO.estilo,
       areas: typeof lido?.areas === 'boolean' ? lido.areas : CAMADAS_PADRAO.areas,
       pontos: typeof lido?.pontos === 'boolean' ? lido.pontos : CAMADAS_PADRAO.pontos,
+      rebanho: typeof lido?.rebanho === 'boolean' ? lido.rebanho : CAMADAS_PADRAO.rebanho,
     };
   } catch {
     return CAMADAS_PADRAO;

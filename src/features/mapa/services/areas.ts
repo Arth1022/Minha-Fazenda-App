@@ -10,6 +10,7 @@ import {
   ROTULO_CULTURA_LAVOURA,
   ROTULO_FASE_LAVOURA,
 } from './calculos';
+import { legendaDescanso, situacaoDoPasto, type OcupacaoArea } from './ocupacao';
 
 /**
  * Regras das áreas do mapa (fase 1): o tipo decide a cor e o que o painel
@@ -47,13 +48,25 @@ export interface SituacaoArea {
 }
 
 type DadosSafra = Pick<Talhao, 'tipo' | 'cultura' | 'faseLavoura' | 'dataPlantio'>;
+type DadosArea = DadosSafra & Pick<Talhao, 'areaHectares'>;
 
 /**
- * Situação da área para o rótulo, o selo e o contorno. Lavoura: pela safra
- * registrada (vazia, plantada, colhida). Pasto ocupado/em descanso chega com o
- * rebanho no mapa; reserva mostra "APP"; outro, só o nome.
+ * Situação da área para o rótulo, o selo e o contorno. Pasto: ocupado (o selo
+ * de cabeças mostra quantos) ou em descanso, pelos animais que estão nele.
+ * Lavoura: pela safra registrada (vazia, plantada, colhida). Reserva mostra
+ * "APP"; outro, só o nome.
  */
-export function situacaoDaArea(area: DadosSafra): SituacaoArea {
+export function situacaoDaArea(
+  area: DadosArea,
+  ocupacao?: OcupacaoArea,
+  agora = new Date()
+): SituacaoArea {
+  if (area.tipo === 'pasto') {
+    const pasto = situacaoDoPasto(area.areaHectares, ocupacao, agora);
+    return pasto.estado === 'ocupado'
+      ? { estado: 'ocupado', legenda: null }
+      : { estado: 'descanso', legenda: legendaDescanso(pasto.diasDescanso) };
+  }
   if (area.tipo === 'reserva') return { estado: null, legenda: 'APP' };
   if (area.tipo !== 'lavoura') return { estado: null, legenda: null };
   if (area.faseLavoura === 'pousio') return { estado: 'colhida', legenda: 'Colhida' };
@@ -71,7 +84,7 @@ export interface SafraResumo {
 }
 
 /** Card da safra no painel da lavoura; null se não há safra registrada. */
-export function resumoDaSafra(area: DadosSafra, agora = new Date()): SafraResumo | null {
+export function resumoDaSafra(area: DadosArea, agora = new Date()): SafraResumo | null {
   if (area.tipo !== 'lavoura' || !area.cultura) return null;
   const { estado } = situacaoDaArea(area);
   const fase = area.faseLavoura ? ROTULO_FASE_LAVOURA[area.faseLavoura] : null;
@@ -116,11 +129,37 @@ export function avisosTrocaDeTipo(area: DadosSafra, novoTipo: TipoTalhao): strin
 }
 
 /**
- * "Redesenhar Pasto 1?" (RF-008): o que muda e o que continua. Lotação, cerca e
- * ciclo entram aqui quando esses módulos chegarem ao mapa.
+ * "Redesenhar Pasto 1?" (RF-008): o que muda e o que continua. Cerca e ciclo
+ * entram aqui quando esses módulos chegarem ao mapa.
  */
-export function consequenciasRedesenho(): ItemConfirmacao[] {
-  return [{ icone: 'check', texto: 'Nome, tipo e histórico continuam', tom: 'ok' }];
+export function consequenciasRedesenho(cabecas = 0): ItemConfirmacao[] {
+  const itens: ItemConfirmacao[] = [];
+  if (cabecas > 0) {
+    itens.push({
+      icone: 'cow',
+      texto: cabecas === 1 ? 'A lotação do animal muda' : `A lotação dos ${cabecas} animais muda`,
+    });
+  }
+  itens.push({ icone: 'check', texto: 'Nome, tipo e histórico continuam', tom: 'ok' });
+  return itens;
+}
+
+/** "N animais" com o singular certo. */
+const textoAnimais = (n: number) => (n === 1 ? '1 animal' : `${n} animais`);
+
+/** RN-011: área com animais só é excluída depois que eles saem. */
+export function bloqueioExclusao(cabecas: number): string | null {
+  return cabecas > 0 ? `Mova os ${textoAnimais(cabecas)} para outro pasto antes de excluir.` : null;
+}
+
+/** RN-011: pasto com animais só troca de tipo depois que eles saem. */
+export function bloqueioTrocaDeTipo(
+  area: Pick<Talhao, 'tipo'>,
+  novoTipo: TipoTalhao,
+  cabecas: number
+): string | null {
+  if (area.tipo !== 'pasto' || novoTipo === 'pasto' || cabecas === 0) return null;
+  return `Mova os ${textoAnimais(cabecas)} para outro pasto antes de trocar o tipo.`;
 }
 
 /** "Excluir Pasto 1?": os pontos de atenção saem junto; o registro fica guardado. */
@@ -152,11 +191,11 @@ export function resumoDaArea(area: AreaMedida): string {
   ].join(' · ');
 }
 
-/** Linha de detalhe da lista: "Lavoura · Milho". */
-export function detalheDaArea(area: DadosSafra): string {
-  return [ROTULO_CURTO_TIPO_AREA[area.tipo], situacaoDaArea(area).legenda]
-    .filter(Boolean)
-    .join(' · ');
+/** Linha de detalhe da lista: "Lavoura · Milho", "Pasto · 18 cabeças", "Pasto · Descanso · 8 dias". */
+export function detalheDaArea(area: DadosArea, ocupacao?: OcupacaoArea, agora = new Date()): string {
+  const { estado, legenda } = situacaoDaArea(area, ocupacao, agora);
+  const cabecas = estado === 'ocupado' && ocupacao ? `${ocupacao.cabecas} cabeças` : null;
+  return [ROTULO_CURTO_TIPO_AREA[area.tipo], cabecas ?? legenda].filter(Boolean).join(' · ');
 }
 
 /** 0 = mais provável; null = não combina com o termo. */
@@ -189,11 +228,14 @@ const OPACIDADE = { normal: 0.35, normalAtiva: 0.55, parada: 0.14, paradaAtiva: 
  * GeoJSON dos polígonos das áreas: cor do tipo, contorno contínuo (em uso) ou
  * tracejado (parada) e a opacidade de cada um. Os rótulos ficam fora (MarkerView).
  */
-export function colecaoDasAreas(areas: Talhao[]): GeoJSON.FeatureCollection {
+export function colecaoDasAreas(
+  areas: Talhao[],
+  ocupacoes?: ReadonlyMap<string, OcupacaoArea>
+): GeoJSON.FeatureCollection {
   return {
     type: 'FeatureCollection',
     features: areas.map((area): GeoJSON.Feature => {
-      const parada = contornoTracejado(situacaoDaArea(area).estado);
+      const parada = contornoTracejado(situacaoDaArea(area, ocupacoes?.get(area.id)).estado);
       return {
         type: 'Feature',
         id: `poly-${area.id}`,

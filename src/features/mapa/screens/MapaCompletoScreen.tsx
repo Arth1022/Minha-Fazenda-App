@@ -15,13 +15,14 @@ import { router, useLocalSearchParams } from 'expo-router';
 
 import { AppIcon, ConfirmacaoSheet, type ItemConfirmacao } from '@/components/ui';
 import { AgroColors, MaxContentWidth, Shadows, Spacing } from '@/constants/theme';
-import { useLiveQuery, type Talhao } from '@/database';
+import { useConsultaAoVivo, useLiveQuery, type Talhao } from '@/database';
 import {
   contarPontosAbertos,
   criarMarcador,
   listarMarcadoresAtivos,
   resolverMarcador,
 } from '@/services/marcadorService';
+import { ocupacaoDasAreas, TABELAS_OCUPACAO } from '@/services/movimentacaoService';
 import {
   atualizarTalhao,
   criarTalhao,
@@ -30,7 +31,7 @@ import {
 } from '@/services/talhaoService';
 import { podeEditarGeometria } from '@/services/usuario';
 import { calcularPerimetroKm, calcularPerimetroM, type Coordenada } from '@/utils/geoMath';
-import { BarraBuscaMapa, BotaoQuadrado } from '../components/BarraBuscaMapa';
+import { BarraBuscaMapa, BotaoQuadrado, type AnimalBuscado } from '../components/BarraBuscaMapa';
 import { CamadaDesenho } from '../components/CamadaDesenho';
 import { CamadaDivisaFazenda } from '../components/CamadaDivisaFazenda';
 import {
@@ -57,12 +58,14 @@ import {
 } from '../data/fazendaMapa';
 import { useDesenhoTalhao, type ResultadoDesenhoTalhao } from '../hooks/useDesenhoTalhao';
 import {
+  bloqueioExclusao,
   consequenciasExclusao,
   consequenciasRedesenho,
   perimetroDaAreaM,
   type OpcaoArea,
 } from '../services/areas';
 import { formatarDistancia, formatarHectares } from '../services/calculos';
+import { identificacaoAnimal, mapaDeOcupacao, type LinhaOcupacao } from '../services/ocupacao';
 import { vistaDaFazenda } from '../services/vista';
 
 const ZOOM_BUSCA = 15;
@@ -84,6 +87,8 @@ interface Confirmacao {
   acao: 'redesenhar' | 'excluir';
   area: Pick<Talhao, 'id' | 'nome'>;
   itens: ItemConfirmacao[];
+  /** Não dá para confirmar agora (RN-011: pasto com animais) */
+  bloqueio?: string | null;
 }
 
 /**
@@ -101,6 +106,14 @@ export default function MapaCompletoScreen() {
   }>();
   const { data: talhoes, updatedAt, error } = useLiveQuery(listarTalhoesAtivos());
   const { data: marcadores } = useLiveQuery(listarMarcadoresAtivos());
+  // Animais em cada pasto: uma leitura do índice, refeita uma vez por movimentação gravada
+  const { dados: linhasOcupacao } = useConsultaAoVivo<LinhaOcupacao[]>(
+    () => ocupacaoDasAreas(),
+    TABELAS_OCUPACAO,
+    'ocupacao',
+    [],
+  );
+  const ocupacoes = useMemo(() => mapaDeOcupacao(linhasOcupacao), [linhasOcupacao]);
   const carregado = updatedAt !== undefined || error !== undefined;
   const fazenda = useFazendaMapa();
   const admin = podeEditarGeometria();
@@ -130,6 +143,10 @@ export default function MapaCompletoScreen() {
   const [opcoesVisivel, setOpcoesVisivel] = useState(false);
   const [confirmacao, setConfirmacao] = useState<Confirmacao | null>(null);
   const [confirmando, setConfirmando] = useState(false);
+  // Destino escolhido ao mover animais (tracejado branco) e o animal achado na busca, cada um
+  // guardado com a área do painel: em outra área, não valem
+  const [destaqueDestino, setDestaqueDestino] = useState<{ areaId: string; destinoId: string } | null>(null);
+  const [animalEmDestaque, setAnimalEmDestaque] = useState<{ areaId: string; texto: string } | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [erroSalvar, setErroSalvar] = useState<string | undefined>();
 
@@ -215,6 +232,7 @@ export default function MapaCompletoScreen() {
         : (marcadores.find((m) => m.id === marcadorId) ?? null),
     [modoDesenho, modoMarcador, camadas.pontos, marcadores, marcadorId],
   );
+  const pastos = useMemo(() => talhoes.filter((t) => t.tipo === 'pasto'), [talhoes]);
   const editando = talhoes.find((t) => t.id === editandoId) ?? null;
   const areaSafra = talhoes.find((t) => t.id === safraId) ?? null;
   const areaOpcoes = talhoes.find((t) => t.id === opcoesId) ?? null;
@@ -223,6 +241,9 @@ export default function MapaCompletoScreen() {
   useEffect(() => {
     if (!selecionado) enquadradaRef.current = null;
   }, [selecionado]);
+
+  const destinoDestacado =
+    selecionado && destaqueDestino?.areaId === selecionado.id ? destaqueDestino.destinoId : null;
 
   // Voltar do Android sai do desenho, do ponto de atenção ou fecha o painel antes de sair da tela
   useEffect(() => {
@@ -284,6 +305,7 @@ export default function MapaCompletoScreen() {
         return;
       }
       setMarcadorId(null);
+      setAnimalEmDestaque(null);
       setSelecionadoId((atual) => (atual === id ? null : id));
     },
     [modoMarcador, modoDesenho, talhoes, aoTocarMapa, adicionarPonto],
@@ -322,6 +344,18 @@ export default function MapaCompletoScreen() {
     if (!camadas.areas) mudarCamadas({ ...camadas, areas: true });
     setMarcadorId(null);
     setSelecionadoId(area.id);
+  };
+
+  /** Animal escolhido na busca: abre o pasto em que está (RF-027); sem local, abre a ficha dele */
+  const escolherAnimalDaBusca = (animal: AnimalBuscado) => {
+    if (!animal.areaId) {
+      router.push({ pathname: '/animal/[id]', params: { id: animal.id } });
+      return;
+    }
+    setAnimalEmDestaque({ areaId: animal.areaId, texto: identificacaoAnimal(animal) });
+    if (!camadas.areas) mudarCamadas({ ...camadas, areas: true });
+    setMarcadorId(null);
+    setSelecionadoId(animal.areaId);
   };
 
   const topo = insets.top + MARGEM;
@@ -363,11 +397,20 @@ export default function MapaCompletoScreen() {
         setModoMarcador(true);
         break;
       case 'redesenhar':
-        abrirConfirmacao({ acao: 'redesenhar', area, itens: consequenciasRedesenho() });
+        abrirConfirmacao({
+          acao: 'redesenhar',
+          area,
+          itens: consequenciasRedesenho(ocupacoes.get(area.id)?.cabecas ?? 0),
+        });
         break;
       case 'excluir': {
         const pontosAbertos = await contarPontosAbertos(area.id).catch(() => 0);
-        abrirConfirmacao({ acao: 'excluir', area, itens: consequenciasExclusao(pontosAbertos) });
+        abrirConfirmacao({
+          acao: 'excluir',
+          area,
+          itens: consequenciasExclusao(pontosAbertos),
+          bloqueio: bloqueioExclusao(ocupacoes.get(area.id)?.cabecas ?? 0),
+        });
         break;
       }
     }
@@ -486,9 +529,12 @@ export default function MapaCompletoScreen() {
           {mostrarAreas ? (
             <CamadaTalhoesSalvos
               talhoes={talhoes}
+              ocupacoes={ocupacoes}
               selecionadoId={selecionado?.id ?? null}
+              destacadoId={destinoDestacado}
               // Rótulo em cima do mapa atrapalharia o toque nos cantos e no ponto de atenção
               mostrarNomes={!modoDesenho && !modoMarcador}
+              mostrarRebanho={camadas.rebanho}
               onPressTalhao={selecionarTalhao}
             />
           ) : null}
@@ -556,7 +602,13 @@ export default function MapaCompletoScreen() {
           onVoltar={() => router.back()}
           modo={
             fazenda
-              ? { tipo: 'areas', areas: talhoes, onEscolher: escolherAreaDaBusca }
+              ? {
+                  tipo: 'areas',
+                  areas: talhoes,
+                  ocupacoes,
+                  onEscolher: escolherAreaDaBusca,
+                  onEscolherAnimal: escolherAnimalDaBusca,
+                }
               : { tipo: 'locais', onEscolher: (r) => mapaRef.current?.voarPara(r.coordenada, ZOOM_BUSCA) }
           }
           controles={
@@ -581,11 +633,21 @@ export default function MapaCompletoScreen() {
           // Remonta ao trocar de área: o onLayout dispara de novo e a câmera reenquadra
           key={selecionado.id}
           area={selecionado}
+          ocupacao={ocupacoes.get(selecionado.id)}
+          pastos={pastos}
+          ocupacoes={ocupacoes}
+          destaque={animalEmDestaque?.areaId === selecionado.id ? animalEmDestaque.texto : null}
+          onDestaque={(destinoId) =>
+            setDestaqueDestino(destinoId ? { areaId: selecionado.id, destinoId } : null)
+          }
           onOpcoes={() => {
             setOpcoesId(selecionado.id);
             setOpcoesVisivel(true);
           }}
-          onFechar={() => setSelecionadoId(null)}
+          onFechar={() => {
+            setSelecionadoId(null);
+            setAnimalEmDestaque(null);
+          }}
           onSafra={() => setSafraId(selecionado.id)}
           onAltura={enquadrarSelecionada}
         />
@@ -725,6 +787,7 @@ export default function MapaCompletoScreen() {
       <SalvarAreaSheet
         visible={editando !== null}
         area={editando}
+        cabecas={editando ? (ocupacoes.get(editando.id)?.cabecas ?? 0) : 0}
         areaHa={editando?.areaHectares ?? 0}
         perimetroM={editando ? perimetroDaAreaM(editando) : 0}
         salvando={salvando}
@@ -759,6 +822,7 @@ export default function MapaCompletoScreen() {
         itens={confirmacao?.itens ?? []}
         confirmar={confirmacao?.acao === 'excluir' ? 'Excluir' : 'Redesenhar'}
         perigo={confirmacao?.acao === 'excluir'}
+        bloqueio={confirmacao?.bloqueio ?? null}
         onConfirmar={confirmar}
         onClose={() => setConfirmando(false)}
       />

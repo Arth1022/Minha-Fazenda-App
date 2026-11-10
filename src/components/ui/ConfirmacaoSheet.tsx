@@ -22,6 +22,8 @@ export interface ConfirmacaoSheetProps {
   confirmar: string;
   /** Ação destrutiva: botão e ícone vermelhos */
   perigo?: boolean;
+  /** Não dá para confirmar agora (ex.: pasto com animais): mostra o motivo e só "Entendi" */
+  bloqueio?: string | null;
   carregando?: boolean;
   onConfirmar: () => void;
   onClose: () => void;
@@ -37,6 +39,7 @@ export function ConfirmacaoSheet({
   itens,
   confirmar,
   perigo = false,
+  bloqueio = null,
   carregando = false,
   onConfirmar,
   onClose,
@@ -82,6 +85,23 @@ export function ConfirmacaoSheet({
             })}
           </View>
 
+          {bloqueio ? (
+            <View style={estilos.bloqueio}>
+              <AppIcon name="alert" size={20} color={AgroColors.health} />
+              <Text style={estilos.bloqueioTexto}>{bloqueio}</Text>
+            </View>
+          ) : null}
+
+          {bloqueio ? (
+            <Button
+              label="Entendi"
+              variant="outline"
+              size="lg"
+              onPress={onClose}
+              style={estilos.botaoEntendi}
+              textStyle={estilos.textoCancelar}
+            />
+          ) : (
           <View style={estilos.botoes}>
             <Button
               label="Cancelar"
@@ -101,6 +121,7 @@ export function ConfirmacaoSheet({
               style={estilos.botao}
             />
           </View>
+          )}
         </View>
       </View>
     </Modal>
@@ -149,4 +170,18 @@ const estilos = StyleSheet.create({
   botao: { flex: 1 },
   botaoCancelar: { flex: 1, borderColor: AgroColors.borderStrong, backgroundColor: AgroColors.cardBg },
   textoCancelar: { color: AgroColors.textPrimary },
+  botaoEntendi: {
+    marginTop: Spacing.two,
+    borderColor: AgroColors.borderStrong,
+    backgroundColor: AgroColors.cardBg,
+  },
+  bloqueio: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.sm,
+    padding: Spacing.md,
+    borderRadius: Radius.lg,
+    backgroundColor: AgroColors.healthBg,
+  },
+  bloqueioTexto: { ...Typography.body, flex: 1, fontWeight: '600', color: AgroColors.health },
 });

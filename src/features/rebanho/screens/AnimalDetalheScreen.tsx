@@ -4,8 +4,12 @@ import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon, Header, ScreenContainer } from '@/components/ui';
+import { COR_POR_TIPO_AREA } from '@/constants/areas';
 import { AgroColors, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import type { DiaDaTrilha, Tratamento, TratamentoAtivo } from '@/dtos';
+import { MoverParaPastoSheet } from '@/features/mapa';
+import { definirLote } from '@/services/loteService';
+import { moverAnimais } from '@/services/movimentacaoService';
 import { CriasSheet } from '../components/ficha/CriasSheet';
 import { EditarTratamentoModal } from '../components/ficha/EditarTratamentoModal';
 import { PesagensSheet } from '../components/ficha/PesagensSheet';
@@ -16,15 +20,20 @@ import { RegistrarMenu, type TipoRegistro } from '../components/ficha/RegistrarM
 import { ReproducaoTab } from '../components/ficha/ReproducaoTab';
 import { ResumoTab } from '../components/ficha/ResumoTab';
 import { SaudeTab } from '../components/ficha/SaudeTab';
+import { OndeEstaSheet } from '../components/local/OndeEstaSheet';
+import { EscolherLoteSheet } from '../components/lotes/EscolherLoteSheet';
+import { LoteFormSheet } from '../components/lotes/LoteFormSheet';
 import { NovoAnimalForm } from '../components/NovoAnimalForm';
 import { NovoTratamentoForm } from '../components/NovoTratamentoForm';
 import { RegistroForm } from '../components/registros/RegistroForm';
 import { confirmarDia, desfazerDia } from '../data/doses';
 import { confirmarPrenhez } from '../data/reproducoes';
 import { useFichaAnimal } from '../hooks/useFichaAnimal';
+import { useLocalDoAnimal } from '../hooks/useLocalDoAnimal';
 import { useRebanho } from '../hooks/useRebanho';
 import { dosesParaHoje } from '../services/ficha';
 import { historicoDePeso } from '../services/indicadores';
+import { resumoDoLocal } from '../services/local';
 
 /** Espaço no fim da rolagem para o botão "Registrar" não cobrir o último card. */
 const ESPACO_DO_BOTAO = 96;
@@ -59,6 +68,12 @@ export default function AnimalDetalheScreen() {
   const [criasVisible, setCriasVisible] = useState(false);
   const [editarAnimal, setEditarAnimal] = useState(false);
   const [qrVisible, setQrVisible] = useState(false);
+  // "Onde está" (pasto e lote): folhas que abrem uma depois da outra
+  const [localVisible, setLocalVisible] = useState(false);
+  const [moverVisible, setMoverVisible] = useState(false);
+  const [loteVisible, setLoteVisible] = useState(false);
+  const [novoLoteVisible, setNovoLoteVisible] = useState(false);
+  const local = useLocalDoAnimal(id ?? '', ficha?.animal.loteId ?? null);
 
   if (!ficha || !id) {
     return (
@@ -133,6 +148,11 @@ export default function AnimalDetalheScreen() {
             onVerPesagens={() => setPesagensVisible(true)}
             onVerCrias={() => setCriasVisible(true)}
             onVerReproducao={() => setAba('reproducao')}
+            local={{
+              ...resumoDoLocal(local.atual, local.lote?.nome ?? null),
+              cor: local.atual ? COR_POR_TIPO_AREA[local.atual.areaTipo] : AgroColors.borderStrong,
+            }}
+            onVerLocal={() => setLocalVisible(true)}
           />
         ) : null}
 
@@ -220,6 +240,61 @@ export default function AnimalDetalheScreen() {
       />
 
       <QrCodeAnimalModal visible={qrVisible} animal={animal} onClose={() => setQrVisible(false)} />
+
+      <OndeEstaSheet
+        visible={localVisible}
+        identificacao={identificacao}
+        historico={local.historico}
+        atual={local.atual}
+        loteNome={local.lote?.nome ?? null}
+        onMover={() => {
+          setLocalVisible(false);
+          setMoverVisible(true);
+        }}
+        onTrocarLote={() => {
+          setLocalVisible(false);
+          setLoteVisible(true);
+        }}
+        onClose={() => setLocalVisible(false)}
+      />
+
+      {moverVisible ? (
+        <MoverParaPastoSheet
+          titulo={local.atual ? `Mover ${animal.nome || brinco}` : `Colocar ${animal.nome || brinco} num pasto`}
+          subtitulo={local.atual ? `Hoje no ${local.atual.areaNome}` : 'Hoje sem local definido'}
+          quantidade={1}
+          origemId={local.atual?.areaId ?? null}
+          permitirSemLocal
+          onConfirmar={async (destinoId) => {
+            await moverAnimais({ animalIds: [id], destinoId });
+          }}
+          onClose={() => setMoverVisible(false)}
+        />
+      ) : null}
+
+      {loteVisible ? (
+        <EscolherLoteSheet
+          identificacao={identificacao}
+          lotes={local.lotes}
+          loteAtualId={animal.loteId}
+          onEscolher={(loteId) => definirLote([id], loteId)}
+          onNovoLote={() => {
+            setLoteVisible(false);
+            setNovoLoteVisible(true);
+          }}
+          onClose={() => setLoteVisible(false)}
+        />
+      ) : null}
+
+      {novoLoteVisible ? (
+        <LoteFormSheet
+          onClose={() => setNovoLoteVisible(false)}
+          onSalvo={async (lote) => {
+            setNovoLoteVisible(false);
+            await definirLote([id], lote.id);
+          }}
+        />
+      ) : null}
 
       {/* Montado só aberto: cada abertura começa com os dados atuais do cadastro */}
       {editarAnimal ? (

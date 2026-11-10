@@ -20,6 +20,8 @@ import m0015 from './0015_auditoria_maquinas.sql';
 import m0016 from './0016_divisa_fazenda_config.sql';
 import m0017 from './0017_agricultura_mapa.sql';
 import m0018 from './0018_areas_no_mapa.sql';
+import m0019 from './0019_rebanho_no_mapa.sql';
+import m0020 from './0020_lotes_pasto.sql';
 
   export default {
     journal,
@@ -42,7 +44,9 @@ m0014,
 m0015,
 m0016,
 m0017,
-m0018
+m0018,
+m0019,
+m0020
     }
   }
   

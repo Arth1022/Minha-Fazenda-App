@@ -97,7 +97,10 @@ function regrasPuras() {
   const colhida = areaFake({ tipo: 'lavoura', cultura: 'milho', faseLavoura: 'pousio' });
 
   const sPasto = situacaoDaArea(pasto);
-  check(sPasto.estado === null && sPasto.legenda === null, 'pasto ainda sem legenda (ocupação chega com o rebanho no mapa)');
+  check(
+    sPasto.estado === 'descanso' && sPasto.legenda === 'Descanso',
+    'pasto que nunca teve animais está em descanso (RN-008)'
+  );
   check(situacaoDaArea(reserva).legenda === 'APP', 'reserva mostra "APP" embaixo do nome, como no protótipo');
   check(situacaoDaArea(outro).legenda === null, 'outro mostra só o nome');
   const sVazia = situacaoDaArea(vazia);
@@ -160,7 +163,8 @@ function regrasPuras() {
   );
   check(resumoDaArea(areaFake({ tipo: 'lavoura', perimetroM: 420 })).endsWith('420 m'), 'perímetro curto em metros');
   check(detalheDaArea(plantada) === 'Lavoura · Milho', 'detalhe da lista: tipo e situação');
-  check(detalheDaArea(pasto) === 'Pasto', 'detalhe da lista sem situação: só o tipo');
+  check(detalheDaArea(outro) === 'Outro', 'detalhe da lista sem situação: só o tipo');
+  check(detalheDaArea(pasto) === 'Pasto · Descanso', 'pasto sem animais: "Pasto · Descanso"');
 
   // Busca de áreas (sem acento, por nome ou tipo, mais prováveis primeiro)
   const lista = [plantada, vazia, areaFake({ id: 'p1', nome: 'Pasto da frente' }), reserva];
@@ -170,14 +174,16 @@ function regrasPuras() {
   check(buscarAreas(lista, '  ').length === 0, 'sem termo, a busca não sugere nada');
 
   // Camada do mapa
-  const colecao = colecaoDasAreas([vazia, areaFake({ id: 'a2', tipo: 'pasto' })]);
-  check(colecao.features.length === 2, 'camada: um polígono por área (rótulos ficam no MarkerView)');
+  const ocupado = new Map([['a2', { cabecas: 18, desde: AGORA, ultimaSaida: null }]]);
+  const colecao = colecaoDasAreas([vazia, areaFake({ id: 'a2', tipo: 'pasto' }), areaFake({ id: 'a3', tipo: 'pasto' })], ocupado);
+  check(colecao.features.length === 3, 'camada: um polígono por área (rótulos ficam no MarkerView)');
   check(
     colecao.features[0].properties?.cor === COR_POR_TIPO_AREA.lavoura &&
       colecao.features[0].properties?.contorno === 'tracejado' &&
       colecao.features[1].properties?.cor === COR_POR_TIPO_AREA.pasto &&
-      colecao.features[1].properties?.contorno === 'continuo',
-    'camada: cor vem do tipo e o contorno do estado'
+      colecao.features[1].properties?.contorno === 'continuo' &&
+      colecao.features[2].properties?.contorno === 'tracejado',
+    'camada: cor vem do tipo; contorno contínuo no pasto ocupado e tracejado no vazio'
   );
 }
 
@@ -187,9 +193,12 @@ function permissoesECamadas() {
   check(!podeEditarGeometria({ id: 'c2', nome: 'Sem papel' }), 'usuário sem papel é tratado como colaborador');
 
   check(JSON.stringify(lerCamadas()) === JSON.stringify(CAMADAS_PADRAO), 'camadas começam no padrão (satélite, tudo ligado)');
-  salvarCamadas({ estilo: 'mapa', areas: false, pontos: true });
+  salvarCamadas({ estilo: 'mapa', areas: false, pontos: true, rebanho: false });
   const salvas = lerCamadas();
-  check(salvas.estilo === 'mapa' && !salvas.areas && salvas.pontos, 'camadas escolhidas ficam salvas no celular');
+  check(
+    salvas.estilo === 'mapa' && !salvas.areas && salvas.pontos && !salvas.rebanho,
+    'camadas escolhidas (inclusive Rebanho) ficam salvas no celular'
+  );
   Storage.setItemSync('mapa.camadas', '{quebrado');
   check(JSON.stringify(lerCamadas()) === JSON.stringify(CAMADAS_PADRAO), 'valor corrompido volta ao padrão');
   Storage.setItemSync('mapa.camadas', JSON.stringify({ estilo: 'xyz', areas: 'sim', pontos: false }));

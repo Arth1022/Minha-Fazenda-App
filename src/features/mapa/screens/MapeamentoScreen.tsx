@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 
@@ -6,7 +6,8 @@ import { AppIcon, Header, ScreenContainer, type AppIconName } from '@/components
 import { APP_NAME } from '@/constants/app';
 import { COR_POR_TIPO_AREA } from '@/constants/areas';
 import { AgroColors, Radius, Spacing } from '@/constants/theme';
-import { useLiveQuery, type Talhao } from '@/database';
+import { useConsultaAoVivo, useLiveQuery, type Talhao } from '@/database';
+import { ocupacaoDasAreas, TABELAS_OCUPACAO } from '@/services/movimentacaoService';
 import { listarTalhoesAtivos } from '@/services/talhaoService';
 import { podeEditarGeometria } from '@/services/usuario';
 import { CamadaDivisaFazenda } from '../components/CamadaDivisaFazenda';
@@ -18,6 +19,7 @@ import { ModalCalculadoraSementes } from '../components/ModalCalculadoraSementes
 import { useFazendaMapa } from '../data/fazendaMapa';
 import { detalheDaArea } from '../services/areas';
 import { formatarHectares } from '../services/calculos';
+import { mapaDeOcupacao, type LinhaOcupacao, type OcupacaoArea } from '../services/ocupacao';
 import { resumoFazenda, vistaDaFazenda } from '../services/vista';
 
 const ROTA_MAPA = '/mapa-fazenda';
@@ -40,6 +42,13 @@ export default function MapeamentoScreen() {
   const { data: talhoes, updatedAt, error } = useLiveQuery(listarTalhoesAtivos());
   const fazenda = useFazendaMapa();
   const admin = podeEditarGeometria();
+  const { dados: linhasOcupacao } = useConsultaAoVivo<LinhaOcupacao[]>(
+    () => ocupacaoDasAreas(),
+    TABELAS_OCUPACAO,
+    'ocupacao',
+    []
+  );
+  const ocupacoes = useMemo(() => mapaDeOcupacao(linhasOcupacao), [linhasOcupacao]);
   const [calculadora, setCalculadora] = useState<'sementes' | 'cerca' | null>(null);
 
   // Com erro na consulta, a tela segue (sem talhões) em vez de ficar presa em "…"
@@ -99,7 +108,7 @@ export default function MapeamentoScreen() {
       ) : null}
 
       {carregado && talhoes.length > 0 ? (
-        <ListaAreas talhoes={talhoes} podeDesenhar={admin && fazenda !== null} />
+        <ListaAreas talhoes={talhoes} ocupacoes={ocupacoes} podeDesenhar={admin && fazenda !== null} />
       ) : null}
 
       <Text style={estilos.secao}>Calculadoras</Text>
@@ -165,7 +174,15 @@ function CartaoEtapa({
 }
 
 /** Áreas já criadas: tocar abre o mapa no painel dela (lá estão as ações e o "⋮"). */
-function ListaAreas({ talhoes, podeDesenhar }: { talhoes: Talhao[]; podeDesenhar: boolean }) {
+function ListaAreas({
+  talhoes,
+  ocupacoes,
+  podeDesenhar,
+}: {
+  talhoes: Talhao[];
+  ocupacoes: ReadonlyMap<string, OcupacaoArea>;
+  podeDesenhar: boolean;
+}) {
   return (
     <View style={estilos.cartao}>
       <View>
@@ -192,7 +209,7 @@ function ListaAreas({ talhoes, podeDesenhar }: { talhoes: Talhao[]; podeDesenhar
                 {talhao.nome}
               </Text>
               <Text style={estilos.talhaoTipo} numberOfLines={1}>
-                {detalheDaArea(talhao)}
+                {detalheDaArea(talhao, ocupacoes.get(talhao.id))}
               </Text>
             </View>
             <Text style={estilos.talhaoArea}>{formatarHectares(talhao.areaHectares)}</Text>

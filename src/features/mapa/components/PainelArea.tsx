@@ -1,11 +1,12 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AppIcon, type AppIconName } from '@/components/ui';
+import { AppIcon } from '@/components/ui';
 import { COR_POR_TIPO_AREA } from '@/constants/areas';
 import { AgroColors, MaxContentWidth, Radius, Shadows, Spacing } from '@/constants/theme';
 import type { Talhao } from '@/database';
+import { useAlturaTeclado } from '../hooks/useAlturaTeclado';
 import {
   resumoDaArea,
   resumoDaSafra,
@@ -13,7 +14,10 @@ import {
   situacaoDaArea,
   type EstadoArea,
 } from '../services/areas';
+import type { OcupacaoArea } from '../services/ocupacao';
 import { BotaoMapa, CoresTexto } from './elementos';
+import { ConteudoPasto } from './painel/ConteudoPasto';
+import { BotaoRedondo } from './painel/elementosPainel';
 
 const TOM_ESTADO: Record<EstadoArea, { fundo: string; texto: string }> = {
   ocupado: { fundo: AgroColors.forestTint, texto: AgroColors.forest },
@@ -25,11 +29,20 @@ const TOM_ESTADO: Record<EstadoArea, { fundo: string; texto: string }> = {
 
 export interface PainelAreaProps {
   area: Talhao;
+  /** Animais no pasto (cabeças, desde quando, última saída) */
+  ocupacao: OcupacaoArea | undefined;
+  /** Pastos e ocupação da fazenda: destinos ao mover animais */
+  pastos: readonly Talhao[];
+  ocupacoes: ReadonlyMap<string, OcupacaoArea>;
+  /** Animal achado na busca do mapa ("Estrela · 10388 está neste pasto") */
+  destaque?: string | null;
   /** "⋮": renomear, redesenhar, ponto de atenção, excluir */
   onOpcoes: () => void;
   onFechar: () => void;
   /** Lavoura: registrar ou atualizar a safra */
   onSafra: () => void;
+  /** Destino escolhido ao mover animais, para o mapa destacar */
+  onDestaque: (areaId: string | null) => void;
   /** Altura do painel, para a câmera enquadrar a área acima dele */
   onAltura?: (altura: number) => void;
 }
@@ -37,40 +50,73 @@ export interface PainelAreaProps {
 /**
  * Painel inferior da área tocada (RF-004): cor do tipo, nome, selo da situação,
  * "Tipo · área · perímetro" e o conteúdo do tipo. Fica sobre o mapa sem
- * escurecer nem bloquear: dá para tocar em outra área com ele aberto.
+ * escurecer nem bloquear: dá para tocar em outra área com ele aberto. Sobe com
+ * o teclado (no Android edge-to-edge a janela não encolhe).
  */
-export function PainelArea({ area, onOpcoes, onFechar, onSafra, onAltura }: PainelAreaProps) {
+export function PainelArea({
+  area,
+  ocupacao,
+  pastos,
+  ocupacoes,
+  destaque = null,
+  onOpcoes,
+  onFechar,
+  onSafra,
+  onDestaque,
+  onAltura,
+}: PainelAreaProps) {
   const insets = useSafeAreaInsets();
-  const { estado } = situacaoDaArea(area);
+  const alturaTeclado = useAlturaTeclado();
+  const { estado } = situacaoDaArea(area, ocupacao);
   const safra = resumoDaSafra(area);
 
+  const cabecalho = (
+    <View style={estilos.cabecalho}>
+      <View style={estilos.titulos}>
+        <View style={estilos.linhaNome}>
+          <View style={[estilos.cor, { backgroundColor: COR_POR_TIPO_AREA[area.tipo] }]} />
+          <Text style={estilos.nome} numberOfLines={1}>
+            {area.nome}
+          </Text>
+          {estado ? (
+            <View style={[estilos.selo, { backgroundColor: TOM_ESTADO[estado].fundo }]}>
+              <Text style={[estilos.seloTexto, { color: TOM_ESTADO[estado].texto }]}>
+                {ROTULO_ESTADO_AREA[estado]}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+        <Text style={estilos.resumo}>{resumoDaArea(area)}</Text>
+      </View>
+      <BotaoRedondo icone="moreVertical" rotulo="Mais opções da área" onPress={onOpcoes} />
+      <BotaoRedondo icone="x" rotulo="Fechar painel da área" onPress={onFechar} />
+    </View>
+  );
+
   return (
-    <View style={estilos.camada} pointerEvents="box-none">
+    <View style={[estilos.camada, { bottom: alturaTeclado }]} pointerEvents="box-none">
       <View
-        style={[estilos.painel, { paddingBottom: insets.bottom + Spacing.three }]}
+        style={[
+          estilos.painel,
+          { paddingBottom: (alturaTeclado > 0 ? 0 : insets.bottom) + Spacing.three },
+        ]}
         onLayout={(e) => onAltura?.(e.nativeEvent.layout.height)}>
         <View style={estilos.alca} />
 
-        <View style={estilos.cabecalho}>
-          <View style={estilos.titulos}>
-            <View style={estilos.linhaNome}>
-              <View style={[estilos.cor, { backgroundColor: COR_POR_TIPO_AREA[area.tipo] }]} />
-              <Text style={estilos.nome} numberOfLines={1}>
-                {area.nome}
-              </Text>
-              {estado ? (
-                <View style={[estilos.selo, { backgroundColor: TOM_ESTADO[estado].fundo }]}>
-                  <Text style={[estilos.seloTexto, { color: TOM_ESTADO[estado].texto }]}>
-                    {ROTULO_ESTADO_AREA[estado]}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-            <Text style={estilos.resumo}>{resumoDaArea(area)}</Text>
-          </View>
-          <BotaoRedondo icone="moreVertical" rotulo="Mais opções da área" onPress={onOpcoes} />
-          <BotaoRedondo icone="x" rotulo="Fechar painel da área" onPress={onFechar} />
-        </View>
+        {area.tipo === 'pasto' ? (
+          <ConteudoPasto
+            area={area}
+            ocupacao={ocupacao}
+            pastos={pastos}
+            ocupacoes={ocupacoes}
+            cabecalho={cabecalho}
+            destaque={destaque}
+            tecladoAberto={alturaTeclado > 0}
+            onDestaque={onDestaque}
+          />
+        ) : (
+          cabecalho
+        )}
 
         {area.tipo === 'lavoura' ? (
           <>
@@ -99,25 +145,11 @@ export function PainelArea({ area, onOpcoes, onFechar, onSafra, onAltura }: Pain
   );
 }
 
-function BotaoRedondo({ icone, rotulo, onPress }: { icone: AppIconName; rotulo: string; onPress: () => void }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      hitSlop={6}
-      accessibilityRole="button"
-      accessibilityLabel={rotulo}
-      style={({ pressed }) => [estilos.botaoRedondo, pressed && estilos.pressionado]}>
-      <AppIcon name={icone} size={22} color={CoresTexto.escuro} />
-    </Pressable>
-  );
-}
-
 const estilos = StyleSheet.create({
   camada: {
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: 0,
     alignItems: 'center',
   },
   painel: {
@@ -146,15 +178,6 @@ const estilos = StyleSheet.create({
   selo: { paddingHorizontal: Spacing.two, paddingVertical: 3, borderRadius: Radius.xs },
   seloTexto: { fontSize: 12.5, lineHeight: 16, fontWeight: '700' },
   resumo: { fontSize: 14.5, lineHeight: 20, color: CoresTexto.suave },
-  botaoRedondo: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: AgroColors.surfaceMuted,
-  },
-  pressionado: { opacity: 0.7 },
   cartao: {
     backgroundColor: AgroColors.surfaceMuted,
     borderRadius: Radius.xl,

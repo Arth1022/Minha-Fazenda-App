@@ -90,9 +90,22 @@ export const fazendaConfig = sqliteTable('fazenda_config', {
   ...timestamps,
 });
 
+/**
+ * Lotes: agrupamento opcional de animais, para mover vários de uma vez. O pasto
+ * do lote é o da última vez que ele foi movido inteiro (ver `movimentacoes`).
+ */
 export const lotes = sqliteTable('lotes', {
   id: id(),
   nome: text('nome').notNull(),
+  /** Para que serve o lote (opcional) */
+  descricao: text('descricao'),
+  /**
+   * Pasto do lote: definido quando o lote é movido inteiro. Animal do lote em
+   * outro lugar aparece como "fora do pasto do lote"; null = lote sem local.
+   */
+  areaId: text('area_id').references((): AnySQLiteColumn => talhoes.id, { onDelete: 'set null' }),
+  /** Desde quando o lote está nesse pasto */
+  areaDesde: integer('area_desde', { mode: 'timestamp_ms' }),
   ...timestamps,
 });
 
@@ -893,8 +906,53 @@ export const marcadoresMapa = sqliteTable(
   ]
 );
 
+/**
+ * Movimentações de animais entre pastos (só acréscimo, RN-007): entrar num
+ * pasto abre uma linha; sair dele preenche `saida_em`. O local atual do animal
+ * é a linha aberta (no máximo uma por animal, garantido pelo índice parcial);
+ * sem linha aberta, o animal está "sem local definido".
+ */
+export const movimentacoes = sqliteTable(
+  'movimentacoes',
+  {
+    id: id(),
+    animalId: text('animal_id')
+      .notNull()
+      .references(() => animais.id, { onDelete: 'cascade' }),
+    areaId: text('area_id')
+      .notNull()
+      .references(() => talhoes.id, { onDelete: 'cascade' }),
+    /** Lote movido inteiro junto com o animal; null quando ele foi movido sozinho */
+    loteId: text('lote_id').references(() => lotes.id, { onDelete: 'set null' }),
+    entradaEm: integer('entrada_em', { mode: 'timestamp_ms' }).notNull(),
+    saidaEm: integer('saida_em', { mode: 'timestamp_ms' }),
+    registradoPor: text('registrado_por'),
+    registradoPorId: text('registrado_por_id'),
+    ...timestamps,
+  },
+  (table) => [
+    // RN-001: um local atual por animal
+    uniqueIndex('movimentacoes_animal_aberta_idx')
+      .on(table.animalId)
+      .where(sql`${table.saidaEm} is null`),
+    // Histórico do animal (ficha)
+    index('movimentacoes_animal_entrada_idx').on(table.animalId, table.entradaEm),
+    // Ocupação de todas as áreas numa leitura só do índice (cabeças, desde, última saída)
+    index('movimentacoes_area_idx').on(table.areaId, table.saidaEm, table.entradaEm),
+    // Pasto do lote: a última vez que ele foi movido inteiro
+    index('movimentacoes_lote_entrada_idx').on(table.loteId, table.entradaEm),
+  ]
+);
+
 export const talhoesRelations = relations(talhoes, ({ many }) => ({
   marcadores: many(marcadoresMapa),
+  movimentacoes: many(movimentacoes),
+}));
+
+export const movimentacoesRelations = relations(movimentacoes, ({ one }) => ({
+  animal: one(animais, { fields: [movimentacoes.animalId], references: [animais.id] }),
+  area: one(talhoes, { fields: [movimentacoes.areaId], references: [talhoes.id] }),
+  lote: one(lotes, { fields: [movimentacoes.loteId], references: [lotes.id] }),
 }));
 
 export const marcadoresMapaRelations = relations(marcadoresMapa, ({ one }) => ({
@@ -905,3 +963,5 @@ export type Talhao = typeof talhoes.$inferSelect;
 export type NovoTalhao = typeof talhoes.$inferInsert;
 export type MarcadorMapa = typeof marcadoresMapa.$inferSelect;
 export type NovoMarcadorMapa = typeof marcadoresMapa.$inferInsert;
+export type Movimentacao = typeof movimentacoes.$inferSelect;
+export type NovaMovimentacao = typeof movimentacoes.$inferInsert;
