@@ -46,7 +46,6 @@ async function runAgriculturaMapaTest() {
   const lavouraMilho = await criarTalhao({
     nome: 'Lavoura da Sede',
     tipo: 'lavoura',
-    cor: '#EAB308',
     coordenadas: coordsLavoura20Ha,
     cultura: 'milho',
     faseLavoura: 'vegetativo',

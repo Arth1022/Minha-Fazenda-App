@@ -17,6 +17,8 @@ export interface ValidacaoPoligono {
 export interface MetadadosEspaciais {
   geometriaJson: GeometriaPoligono;
   areaHectares: number;
+  /** Perímetro geodésico do anel fechado, em metros inteiros */
+  perimetroM: number;
   centroLat: number;
   centroLng: number;
   minLat: number;
@@ -52,8 +54,8 @@ export function calcularAreaHectares(coordenadas: Coordenada[]): number {
 const RAIO_TERRA_KM = 6371.0088;
 const paraRad = (graus: number) => (graus * Math.PI) / 180;
 
-/** Calcula o perímetro geodésico (Haversine) do anel fechado em quilômetros com 2 casas decimais. */
-export function calcularPerimetroKm(coordenadas: Coordenada[]): number {
+/** Soma geodésica (Haversine) dos lados, sem arredondar; fecha o anel a partir de 3 pontos. */
+function somarLadosKm(coordenadas: Coordenada[]): number {
   if (coordenadas.length < 2) return 0;
   const anel =
     coordenadas.length >= 3 ? fecharAnelLinear(coordenadas) : coordenadas;
@@ -71,8 +73,17 @@ export function calcularPerimetroKm(coordenadas: Coordenada[]): number {
         Math.sin(dLng / 2) ** 2;
     totalKm += 2 * RAIO_TERRA_KM * Math.asin(Math.sqrt(a));
   }
+  return totalKm;
+}
 
-  return Number(totalKm.toFixed(2));
+/** Calcula o perímetro geodésico (Haversine) do anel fechado em quilômetros com 2 casas decimais. */
+export function calcularPerimetroKm(coordenadas: Coordenada[]): number {
+  return Number(somarLadosKm(coordenadas).toFixed(2));
+}
+
+/** Perímetro geodésico do anel fechado em metros inteiros (o que a cerca precisa). */
+export function calcularPerimetroM(coordenadas: Coordenada[]): number {
+  return Math.round(somarLadosKm(coordenadas) * 1000);
 }
 
 /** Valida se o polígono possui vértices suficientes e não apresenta linhas cruzadas (autointerseção). */
@@ -116,6 +127,7 @@ export function extrairMetadadosEspaciais(
       coordinates: [anel],
     },
     areaHectares: calcularAreaHectares(anel),
+    perimetroM: calcularPerimetroM(anel),
     centroLat,
     centroLng,
     minLat,

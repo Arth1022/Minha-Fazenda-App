@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, count, eq } from 'drizzle-orm';
 
 import {
   db,
@@ -77,4 +77,13 @@ export async function resolverMarcador(id: string): Promise<void> {
     .update(marcadoresMapa)
     .set({ resolvido: true, updatedAt: new Date() })
     .where(eq(marcadoresMapa.id, id));
+}
+
+/** Pontos de atenção ainda abertos dentro da área (aviso antes de excluir; usa o índice por talhão). */
+export async function contarPontosAbertos(talhaoId: string): Promise<number> {
+  const [linha] = await db
+    .select({ total: count() })
+    .from(marcadoresMapa)
+    .where(and(eq(marcadoresMapa.talhaoId, talhaoId), eq(marcadoresMapa.resolvido, false)));
+  return linha?.total ?? 0;
 }

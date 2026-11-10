@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 
 import { AppIcon, type AppIconName } from '@/components/ui';
+import { COR_POR_TIPO_AREA } from '@/constants/areas';
 import { AgroColors, Radius, Spacing } from '@/constants/theme';
 import type { Talhao } from '@/database';
 
@@ -214,7 +215,7 @@ export function SeletorTalhao({
     return (
       <View style={estilos.seletorVazio}>
         <Text style={estilos.seletorVazioTexto}>
-          Nenhum talhão desenhado ainda. Desenhe no mapa para usar a área dele aqui.
+          Nenhuma área desenhada ainda. Desenhe no mapa para usar a medida dela aqui.
         </Text>
       </View>
     );
@@ -232,7 +233,7 @@ export function SeletorTalhao({
             indice > 0 && estilos.seletorDivisor,
             pressed && estilos.pressionado,
           ]}>
-          <View style={[estilos.pontoCor, { backgroundColor: talhao.cor }]} />
+          <View style={[estilos.pontoCor, { backgroundColor: COR_POR_TIPO_AREA[talhao.tipo] }]} />
           <Text style={estilos.seletorNome} numberOfLines={1}>
             {talhao.nome}
           </Text>

@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 
 import { AppIcon, Header, ScreenContainer, type AppIconName } from '@/components/ui';
 import { APP_NAME } from '@/constants/app';
+import { COR_POR_TIPO_AREA } from '@/constants/areas';
 import { AgroColors, Radius, Spacing } from '@/constants/theme';
 import { useLiveQuery, type Talhao } from '@/database';
-import { deletarTalhao, listarTalhoesAtivos } from '@/services/talhaoService';
+import { listarTalhoesAtivos } from '@/services/talhaoService';
+import { podeEditarGeometria } from '@/services/usuario';
 import { CamadaDivisaFazenda } from '../components/CamadaDivisaFazenda';
 import { CamadaTalhoesSalvos } from '../components/CamadaTalhoesSalvos';
 import { BotaoMapa, CoresTexto } from '../components/elementos';
@@ -14,24 +16,14 @@ import { MapaBase } from '../components/MapaBase';
 import { ModalCalculadoraCercas } from '../components/ModalCalculadoraCercas';
 import { ModalCalculadoraSementes } from '../components/ModalCalculadoraSementes';
 import { useFazendaMapa } from '../data/fazendaMapa';
-import {
-  formatarHectares,
-  ROTULO_CULTURA_LAVOURA,
-  ROTULO_FASE_LAVOURA,
-} from '../services/calculos';
+import { detalheDaArea } from '../services/areas';
+import { formatarHectares } from '../services/calculos';
 import { resumoFazenda, vistaDaFazenda } from '../services/vista';
 
 const ROTA_MAPA = '/mapa-fazenda';
 
-const ROTULO_TIPO: Record<Talhao['tipo'], string> = {
-  pasto: 'Pasto',
-  lavoura: 'Lavoura',
-  reserva: 'Reserva',
-  outro: 'Outro',
-};
-
-/** Abre o mapa cheio; pode focar um talhão ou já começar a desenhar. */
-function abrirMapa(opcoes: { talhao?: string; desenhar?: 'divisa' | 'talhao' } = {}) {
+/** Abre o mapa cheio; pode abrir no painel de uma área ou já começar a desenhar. */
+function abrirMapa(opcoes: { talhao?: string; desenhar?: 'divisa' | 'area' } = {}) {
   const busca = Object.entries(opcoes)
     .filter(([, valor]) => valor)
     .map(([chave, valor]) => `${chave}=${encodeURIComponent(valor as string)}`)
@@ -41,17 +33,19 @@ function abrirMapa(opcoes: { talhao?: string; desenhar?: 'divisa' | 'talhao' } =
 
 /**
  * Aba Mapa. Fluxo em etapas: 1) marcar a divisa da fazenda; 2) separar a
- * fazenda em talhões. Depois, a lista permite criar mais, editar e excluir.
+ * fazenda em áreas (pasto, lavoura, reserva...). Depois, a lista abre cada
+ * área no mapa, com o painel das ações dela.
  */
 export default function MapeamentoScreen() {
   const { data: talhoes, updatedAt, error } = useLiveQuery(listarTalhoesAtivos());
   const fazenda = useFazendaMapa();
+  const admin = podeEditarGeometria();
   const [calculadora, setCalculadora] = useState<'sementes' | 'cerca' | null>(null);
 
   // Com erro na consulta, a tela segue (sem talhões) em vez de ficar presa em "…"
   const carregado = updatedAt !== undefined || error !== undefined;
   useEffect(() => {
-    if (error) console.warn('[Mapa] Falha ao listar talhões:', error);
+    if (error) console.warn('[Mapa] Falha ao listar as áreas:', error);
   }, [error]);
   const vista = vistaDaFazenda(fazenda, talhoes);
   // Remonta a prévia quando muda o que ela deve enquadrar (a câmera só lê a vista ao montar)
@@ -86,26 +80,26 @@ export default function MapeamentoScreen() {
         </View>
       </Pressable>
 
-      {!carregado ? null : !fazenda ? (
+      {!carregado || !admin ? null : !fazenda ? (
         <CartaoEtapa
           titulo="Comece pela divisa da fazenda"
-          texto="Marque o contorno da fazenda inteira. Depois você separa ela em talhões: cada pasto, lavoura ou reserva."
-          passos={['Ache sua terra no mapa', 'Toque nos cantos da divisa', 'Separe os talhões']}
+          texto="Marque o contorno da fazenda inteira. Depois você separa ela em áreas: cada pasto, lavoura ou reserva."
+          passos={['Ache sua terra no mapa', 'Toque nos cantos da divisa', 'Separe as áreas']}
           botao="Marcar a divisa"
           onPress={() => abrirMapa({ desenhar: 'divisa' })}
         />
       ) : talhoes.length === 0 ? (
         <CartaoEtapa
-          titulo="Agora separe os talhões"
-          texto="Talhão é cada divisão da terra: um pasto, uma lavoura, uma reserva. O app calcula a área sozinho."
-          passos={['Abra o mapa da fazenda', 'Toque nos cantos do talhão', 'Dê um nome e salve']}
-          botao="Desenhar talhão"
-          onPress={() => abrirMapa({ desenhar: 'talhao' })}
+          titulo="Agora separe as áreas"
+          texto="Cada área é uma divisão da terra: um pasto, uma lavoura, uma reserva. O app calcula a área e o perímetro sozinho."
+          passos={['Abra o mapa da fazenda', 'Toque nos cantos da área', 'Dê um nome e escolha o tipo']}
+          botao="Desenhar área"
+          onPress={() => abrirMapa({ desenhar: 'area' })}
         />
       ) : null}
 
       {carregado && talhoes.length > 0 ? (
-        <ListaTalhoes talhoes={talhoes} podeDesenhar={fazenda !== null} />
+        <ListaAreas talhoes={talhoes} podeDesenhar={admin && fazenda !== null} />
       ) : null}
 
       <Text style={estilos.secao}>Calculadoras</Text>
@@ -170,20 +164,15 @@ function CartaoEtapa({
   );
 }
 
-/** Talhões já criados: tocar abre no mapa (lá dá para editar), lixeira exclui. */
-function ListaTalhoes({ talhoes, podeDesenhar }: { talhoes: Talhao[]; podeDesenhar: boolean }) {
-  const excluir = (talhao: Talhao) => {
-    Alert.alert('Excluir talhão', `Excluir "${talhao.nome}" do mapa?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Excluir', style: 'destructive', onPress: () => deletarTalhao(talhao.id) },
-    ]);
-  };
-
+/** Áreas já criadas: tocar abre o mapa no painel dela (lá estão as ações e o "⋮"). */
+function ListaAreas({ talhoes, podeDesenhar }: { talhoes: Talhao[]; podeDesenhar: boolean }) {
   return (
     <View style={estilos.cartao}>
       <View>
-        <Text style={estilos.cartaoTitulo}>Seus talhões</Text>
-        <Text style={estilos.cartaoDica}>Toque num talhão para ver no mapa e editar.</Text>
+        <Text style={estilos.cartaoTitulo}>Áreas da fazenda</Text>
+        <Text style={estilos.cartaoDica}>
+          Toque numa área para abrir no mapa e ver o que dá para fazer nela.
+        </Text>
       </View>
       <View>
         {talhoes.map((talhao, indice) => (
@@ -191,40 +180,31 @@ function ListaTalhoes({ talhoes, podeDesenhar }: { talhoes: Talhao[]; podeDesenh
             key={talhao.id}
             onPress={() => abrirMapa({ talhao: talhao.id })}
             accessibilityRole="button"
-            accessibilityLabel={`Ver e editar ${talhao.nome}`}
+            accessibilityLabel={`Abrir ${talhao.nome} no mapa`}
             style={({ pressed }) => [
               estilos.talhao,
               indice > 0 && estilos.talhaoDivisor,
               pressed && estilos.pressionado,
             ]}>
-            <View style={[estilos.talhaoCor, { backgroundColor: talhao.cor }]} />
+            <View style={[estilos.talhaoCor, { backgroundColor: COR_POR_TIPO_AREA[talhao.tipo] }]} />
             <View style={estilos.talhaoTextos}>
               <Text style={estilos.talhaoNome} numberOfLines={1}>
                 {talhao.nome}
               </Text>
-              <Text style={estilos.talhaoTipo}>
-                {talhao.tipo === 'lavoura' && talhao.cultura
-                  ? `${ROTULO_CULTURA_LAVOURA[talhao.cultura] ?? talhao.cultura}${talhao.faseLavoura ? ` · ${ROTULO_FASE_LAVOURA[talhao.faseLavoura] ?? talhao.faseLavoura}` : ''}`
-                  : ROTULO_TIPO[talhao.tipo]}
+              <Text style={estilos.talhaoTipo} numberOfLines={1}>
+                {detalheDaArea(talhao)}
               </Text>
             </View>
             <Text style={estilos.talhaoArea}>{formatarHectares(talhao.areaHectares)}</Text>
-            <Pressable
-              onPress={() => excluir(talhao)}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel={`Excluir ${talhao.nome}`}
-              style={({ pressed }) => [estilos.talhaoExcluir, pressed && estilos.pressionado]}>
-              <AppIcon name="trash" size={18} color={CoresTexto.suave} />
-            </Pressable>
+            <AppIcon name="chevronRight" size={18} color={CoresTexto.suave} />
           </Pressable>
         ))}
       </View>
       {podeDesenhar ? (
         <BotaoMapa
-          rotulo="Desenhar outro talhão"
+          rotulo="Desenhar outra área"
           icone="pentagon"
-          onPress={() => abrirMapa({ desenhar: 'talhao' })}
+          onPress={() => abrirMapa({ desenhar: 'area' })}
         />
       ) : null}
     </View>
@@ -335,7 +315,6 @@ const estilos = StyleSheet.create({
   talhaoNome: { fontSize: 16, fontWeight: '600', color: CoresTexto.escuro },
   talhaoTipo: { fontSize: 13.5, color: CoresTexto.suave },
   talhaoArea: { fontSize: 15, fontWeight: '700', color: CoresTexto.escuro },
-  talhaoExcluir: { padding: 4 },
 
   secao: {
     fontSize: 17,

@@ -839,14 +839,21 @@ export interface GeometriaPoligono {
   coordinates: number[][][];
 }
 
+/**
+ * Áreas do mapa (na tela, "área"; "Lavoura/Talhão" é um dos tipos). O tipo
+ * decide as ações; a cor é a do tipo; exclusão é lógica (`sync_status`).
+ */
 export const talhoes = sqliteTable(
   'talhoes',
   {
     id: id(),
     nome: text('nome').notNull(),
     tipo: text('tipo', { enum: TIPOS_TALHAO }).notNull().default('pasto'),
+    /** Cor do tipo, gravada para o sync; a tela usa a do tipo */
     cor: text('cor').notNull(),
     areaHectares: real('area_hectares').notNull(),
+    /** Perímetro (m), calculado junto com a área; null só em área antiga ainda não recalculada */
+    perimetroM: real('perimetro_m'),
     geometriaJson: text('geometria_json', { mode: 'json' }).$type<GeometriaPoligono>().notNull(),
     centroLat: real('centro_lat').notNull(),
     centroLng: real('centro_lng').notNull(),

@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
 
+import { COR_POR_TIPO_AREA } from '@/constants/areas';
 import {
   atualizarTalhao,
   criarTalhao,
@@ -146,7 +147,6 @@ async function runTalhoesTest() {
     await rejeita(() =>
       criarTalhao({
         nome: 'Talhão Inválido',
-        cor: '#EF4444',
         coordenadas: poligonoEmOito,
       }),
     ),
@@ -157,7 +157,6 @@ async function runTalhoesTest() {
     await rejeita(() =>
       criarTalhao({
         nome: '   ',
-        cor: '#22C55E',
         coordenadas: pastoCoords,
       }),
     ),
@@ -167,7 +166,6 @@ async function runTalhoesTest() {
   const pasto1 = await criarTalhao({
     nome: 'Pasto 1',
     tipo: 'pasto',
-    cor: '#22C55E',
     coordenadas: pastoCoords,
   });
 
@@ -175,9 +173,9 @@ async function runTalhoesTest() {
   check(
     pasto1.nome === 'Pasto 1' &&
       pasto1.tipo === 'pasto' &&
-      pasto1.cor === '#22C55E' &&
+      pasto1.cor === COR_POR_TIPO_AREA.pasto &&
       pasto1.syncStatus === 'created',
-    'campos básicos e syncStatus = created gravados com sucesso',
+    'campos básicos, cor do tipo (pasto) e syncStatus = created gravados com sucesso',
   );
   check(
     pasto1.createdAt instanceof Date && pasto1.updatedAt instanceof Date,
@@ -198,7 +196,6 @@ async function runTalhoesTest() {
   const lavoura2 = await criarTalhao({
     nome: 'Lavoura 2',
     tipo: 'lavoura',
-    cor: '#EAB308',
     coordenadas: lavouraCoords,
   });
 
@@ -240,13 +237,15 @@ async function runTalhoesTest() {
     'deletarTalhao mantém o registro no banco com sync_status = deleted para sincronização',
   );
 
-  // Edição de talhão (nome, tipo, cor e contorno) num único UPDATE
-  const editavel = await criarTalhao({ nome: 'Pasto Velho', cor: '#22C55E', coordenadas: quadrado1Ha });
-  await atualizarTalhao(editavel.id, { nome: '  Pasto Novo ', tipo: 'lavoura', cor: '#EAB308' });
+  // Edição de área (nome, tipo e contorno) num único UPDATE; a cor acompanha o tipo
+  const editavel = await criarTalhao({ nome: 'Pasto Velho', coordenadas: quadrado1Ha });
+  await atualizarTalhao(editavel.id, { nome: '  Pasto Novo ', tipo: 'lavoura' });
   const [aposEdicao] = await db.select().from(talhoes).where(eq(talhoes.id, editavel.id));
   check(
-    aposEdicao.nome === 'Pasto Novo' && aposEdicao.tipo === 'lavoura' && aposEdicao.cor === '#EAB308',
-    'atualizarTalhao grava nome (sem espaços), tipo e cor',
+    aposEdicao.nome === 'Pasto Novo' &&
+      aposEdicao.tipo === 'lavoura' &&
+      aposEdicao.cor === COR_POR_TIPO_AREA.lavoura,
+    'atualizarTalhao grava nome (sem espaços), tipo e a cor do novo tipo',
   );
   check(
     aposEdicao.syncStatus === 'created',

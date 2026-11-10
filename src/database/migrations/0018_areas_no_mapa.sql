@@ -1,0 +1,2 @@
+ALTER TABLE `talhoes` ADD `perimetro_m` real;--> statement-breakpoint
+UPDATE `talhoes` SET `cor` = CASE `tipo` WHEN 'pasto' THEN '#E9C46A' WHEN 'lavoura' THEN '#E76F51' WHEN 'reserva' THEN '#2A9D8F' ELSE '#8E9AAF' END;

@@ -48,3 +48,8 @@ export {
   type AcaoFichaTopo,
   type FichaTopoProps,
 } from './FichaTopo';
+export {
+  ConfirmacaoSheet,
+  type ConfirmacaoSheetProps,
+  type ItemConfirmacao,
+} from './ConfirmacaoSheet';

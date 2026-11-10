@@ -1,0 +1,268 @@
+import { readFileSync } from 'node:fs';
+import { eq } from 'drizzle-orm';
+import Storage from 'expo-sqlite/kv-store';
+
+import { COR_POR_TIPO_AREA } from '@/constants/areas';
+import { CAMADAS_PADRAO, lerCamadas, salvarCamadas } from '@/features/mapa/data/camadasMapa';
+import {
+  avisosTrocaDeTipo,
+  buscarAreas,
+  colecaoDasAreas,
+  consequenciasExclusao,
+  consequenciasRedesenho,
+  contornoTracejado,
+  descreverSafra,
+  detalheDaArea,
+  opcoesDaArea,
+  perimetroDaAreaM,
+  resumoDaArea,
+  resumoDaSafra,
+  situacaoDaArea,
+} from '@/features/mapa/services/areas';
+import { contarPontosAbertos, criarMarcador, resolverMarcador } from '@/services/marcadorService';
+import {
+  atualizarTalhao,
+  criarTalhao,
+  preencherPerimetrosPendentes,
+} from '@/services/talhaoService';
+import { podeEditarGeometria } from '@/services/usuario';
+import type { Coordenada } from '@/utils/geoMath';
+import { db, initTestDatabase, sqlite, talhoes, type Talhao } from './support/database';
+
+function check(condition: boolean, message: string) {
+  if (!condition) throw new Error(message);
+  console.log(`✅ ${message}`);
+}
+
+/** ~100 m em graus de longitude/latitude perto do equador */
+const LADO = 0.0008983;
+const QUADRADO_1HA: Coordenada[] = [
+  [-47.0, 0.0],
+  [-47.0 + LADO, 0.0],
+  [-47.0 + LADO, LADO],
+  [-47.0, LADO],
+];
+const RETANGULO_2HA: Coordenada[] = [
+  [-47.0, 0.0],
+  [-47.0 + LADO * 2, 0.0],
+  [-47.0 + LADO * 2, LADO],
+  [-47.0, LADO],
+];
+
+const AGORA = new Date(2026, 10, 10, 12);
+const DIA = 24 * 60 * 60 * 1000;
+
+/** Área montada à mão (sem banco) para as regras puras. */
+function areaFake(parcial: Partial<Talhao>): Talhao {
+  return {
+    id: 'a1',
+    nome: 'Área',
+    tipo: 'pasto',
+    cor: COR_POR_TIPO_AREA.pasto,
+    areaHectares: 1.01,
+    perimetroM: 400,
+    geometriaJson: { type: 'Polygon', coordinates: [[...QUADRADO_1HA, QUADRADO_1HA[0]]] },
+    centroLat: LADO / 2,
+    centroLng: -47.0 + LADO / 2,
+    minLat: 0,
+    maxLat: LADO,
+    minLng: -47.0,
+    maxLng: -47.0 + LADO,
+    cultura: null,
+    faseLavoura: null,
+    dataPlantio: null,
+    syncStatus: 'created',
+    criadoPor: null,
+    createdAt: AGORA,
+    updatedAt: AGORA,
+    ...parcial,
+  };
+}
+
+function regrasPuras() {
+  // Situação: legenda do rótulo no mapa, selo do painel e contorno
+  const pasto = areaFake({ tipo: 'pasto' });
+  const reserva = areaFake({ tipo: 'reserva', nome: 'Reserva' });
+  const outro = areaFake({ tipo: 'outro', nome: 'Sede' });
+  const vazia = areaFake({ tipo: 'lavoura', nome: 'Talhão 4' });
+  const preparo = areaFake({ tipo: 'lavoura', cultura: 'milho', faseLavoura: 'preparo' });
+  const plantada = areaFake({
+    tipo: 'lavoura',
+    nome: 'Talhão 3',
+    cultura: 'milho',
+    faseLavoura: 'vegetativo',
+    dataPlantio: new Date(AGORA.getTime() - 32 * DIA),
+  });
+  const colher = areaFake({ tipo: 'lavoura', cultura: 'soja', faseLavoura: 'colheita' });
+  const colhida = areaFake({ tipo: 'lavoura', cultura: 'milho', faseLavoura: 'pousio' });
+
+  const sPasto = situacaoDaArea(pasto);
+  check(sPasto.estado === null && sPasto.legenda === null, 'pasto ainda sem legenda (ocupação chega com o rebanho no mapa)');
+  check(situacaoDaArea(reserva).legenda === 'APP', 'reserva mostra "APP" embaixo do nome, como no protótipo');
+  check(situacaoDaArea(outro).legenda === null, 'outro mostra só o nome');
+  const sVazia = situacaoDaArea(vazia);
+  check(sVazia.estado === 'vazia' && sVazia.legenda === 'Vazia', 'lavoura sem safra: "Vazia"');
+  const sPreparo = situacaoDaArea(preparo);
+  check(sPreparo.estado === 'vazia' && sPreparo.legenda === 'Em preparo', 'lavoura em preparo conta como vazia');
+  const sPlantada = situacaoDaArea(plantada);
+  check(sPlantada.estado === 'plantada' && sPlantada.legenda === 'Milho', 'lavoura plantada mostra a cultura');
+  check(situacaoDaArea(colher).estado === 'plantada', 'lavoura pronta para colher segue plantada');
+  const sColhida = situacaoDaArea(colhida);
+  check(sColhida.estado === 'colhida' && sColhida.legenda === 'Colhida', 'lavoura em pousio aparece como colhida');
+  check(
+    contornoTracejado('vazia') && contornoTracejado('colhida') && contornoTracejado('descanso') &&
+      !contornoTracejado('plantada') && !contornoTracejado('ocupado') && !contornoTracejado(null),
+    'contorno tracejado só para área parada (vazia, colhida, em descanso)'
+  );
+
+  // Card da safra no painel da lavoura
+  const safra = resumoDaSafra(plantada, AGORA);
+  check(
+    safra?.cultura === 'Milho' && safra.fase === null && safra.dias === 32,
+    'card da safra: cultura e dias desde o plantio ("Plantada" já está no selo)'
+  );
+  check(resumoDaSafra(colher, AGORA)?.fase === 'Pronta p/ colher', 'card da safra mostra a fase quando ela diz mais que o selo');
+  check(resumoDaSafra(preparo, AGORA)?.fase === 'Em preparo', 'lavoura em preparo: selo "Vazia", card "Em preparo"');
+  check(resumoDaSafra(vazia, AGORA) === null && resumoDaSafra(pasto, AGORA) === null, 'sem safra, sem card');
+
+  // Menu "⋮" por papel
+  check(
+    opcoesDaArea(true).join() === 'editar,redesenhar,pontoAtencao,excluir',
+    'admin: renomear/tipo, redesenhar, ponto de atenção e excluir'
+  );
+  check(opcoesDaArea(false).join() === 'editar,pontoAtencao', 'colaborador não vê redesenhar nem excluir (RN-012)');
+
+  // Trocar o tipo avisa o que deixa de valer
+  check(descreverSafra(plantada) === 'Milho · Plantada', 'descreve a safra registrada com os textos da folha "Safra"');
+  const avisos = avisosTrocaDeTipo(plantada, 'pasto');
+  check(avisos.length === 1 && avisos[0].includes('Milho · Plantada'), 'sair de lavoura com safra avisa que ela será apagada');
+  check(avisosTrocaDeTipo(plantada, 'lavoura').length === 0, 'manter o tipo não avisa nada');
+  check(avisosTrocaDeTipo(vazia, 'reserva').length === 0, 'lavoura sem safra troca de tipo sem aviso');
+  check(avisosTrocaDeTipo(pasto, 'lavoura').length === 0, 'pasto vira lavoura sem aviso');
+
+  // Confirmações (folha "Redesenhar Pasto 1?" / "Excluir Pasto 1?")
+  const redesenho = consequenciasRedesenho();
+  check(
+    redesenho.length === 1 && redesenho[0].tom === 'ok' && redesenho[0].texto === 'Nome, tipo e histórico continuam',
+    'redesenhar lembra que nome, tipo e histórico continuam'
+  );
+  check(consequenciasExclusao(0).map((i) => i.texto).join() === 'O histórico fica guardado', 'excluir sem pontos: só o histórico');
+  check(consequenciasExclusao(2)[0].texto.includes('Os 2 pontos de atenção'), 'excluir avisa os pontos de atenção que saem');
+
+  // Medidas e textos
+  const semPerimetro = areaFake({ perimetroM: null });
+  const calculado = perimetroDaAreaM(semPerimetro);
+  check(Math.abs(calculado - 400) <= 2, `área antiga sem perímetro gravado calcula do contorno (${calculado} m)`);
+  check(perimetroDaAreaM(areaFake({ perimetroM: 1234 })) === 1234, 'usa o perímetro gravado quando existe');
+  check(
+    resumoDaArea(areaFake({ tipo: 'pasto', areaHectares: 28.4, perimetroM: 2140 })) === 'Pasto · 28,4 ha · 2,14 km',
+    'resumo do painel: "Pasto · 28,4 ha · 2,14 km"'
+  );
+  check(resumoDaArea(areaFake({ tipo: 'lavoura', perimetroM: 420 })).endsWith('420 m'), 'perímetro curto em metros');
+  check(detalheDaArea(plantada) === 'Lavoura · Milho', 'detalhe da lista: tipo e situação');
+  check(detalheDaArea(pasto) === 'Pasto', 'detalhe da lista sem situação: só o tipo');
+
+  // Busca de áreas (sem acento, por nome ou tipo, mais prováveis primeiro)
+  const lista = [plantada, vazia, areaFake({ id: 'p1', nome: 'Pasto da frente' }), reserva];
+  check(buscarAreas(lista, 'talhao').map((a) => a.nome).join() === 'Talhão 3,Talhão 4', 'busca ignora acento');
+  check(buscarAreas(lista, 'talhão 4')[0]?.nome === 'Talhão 4', 'nome exato vem primeiro');
+  check(buscarAreas(lista, 'app')[0]?.nome === 'Reserva', 'acha pelo tipo (Reserva/APP)');
+  check(buscarAreas(lista, '  ').length === 0, 'sem termo, a busca não sugere nada');
+
+  // Camada do mapa
+  const colecao = colecaoDasAreas([vazia, areaFake({ id: 'a2', tipo: 'pasto' })]);
+  check(colecao.features.length === 2, 'camada: um polígono por área (rótulos ficam no MarkerView)');
+  check(
+    colecao.features[0].properties?.cor === COR_POR_TIPO_AREA.lavoura &&
+      colecao.features[0].properties?.contorno === 'tracejado' &&
+      colecao.features[1].properties?.cor === COR_POR_TIPO_AREA.pasto &&
+      colecao.features[1].properties?.contorno === 'continuo',
+    'camada: cor vem do tipo e o contorno do estado'
+  );
+}
+
+function permissoesECamadas() {
+  check(podeEditarGeometria(), 'usuário simulado (dono) pode desenhar e excluir áreas');
+  check(!podeEditarGeometria({ id: 'c1', nome: 'João', papel: 'colaborador' }), 'colaborador não mexe no polígono');
+  check(!podeEditarGeometria({ id: 'c2', nome: 'Sem papel' }), 'usuário sem papel é tratado como colaborador');
+
+  check(JSON.stringify(lerCamadas()) === JSON.stringify(CAMADAS_PADRAO), 'camadas começam no padrão (satélite, tudo ligado)');
+  salvarCamadas({ estilo: 'mapa', areas: false, pontos: true });
+  const salvas = lerCamadas();
+  check(salvas.estilo === 'mapa' && !salvas.areas && salvas.pontos, 'camadas escolhidas ficam salvas no celular');
+  Storage.setItemSync('mapa.camadas', '{quebrado');
+  check(JSON.stringify(lerCamadas()) === JSON.stringify(CAMADAS_PADRAO), 'valor corrompido volta ao padrão');
+  Storage.setItemSync('mapa.camadas', JSON.stringify({ estilo: 'xyz', areas: 'sim', pontos: false }));
+  const parcial = lerCamadas();
+  check(parcial.estilo === 'satelite' && parcial.areas && !parcial.pontos, 'campo estranho volta ao padrão, o válido fica');
+}
+
+async function banco() {
+  await initTestDatabase();
+
+  const lavoura = await criarTalhao({ nome: ' Talhão 3 ', tipo: 'lavoura', coordenadas: QUADRADO_1HA });
+  check(
+    lavoura.nome === 'Talhão 3' && lavoura.cor === COR_POR_TIPO_AREA.lavoura,
+    'criar área grava a cor do tipo (sem escolher cor)'
+  );
+  check(
+    lavoura.perimetroM !== null && Math.abs(lavoura.perimetroM - 400) <= 2,
+    `criar área grava o perímetro em metros (${lavoura.perimetroM} m)`
+  );
+
+  await atualizarTalhao(lavoura.id, { tipo: 'reserva' });
+  const [reserva] = await db.select().from(talhoes).where(eq(talhoes.id, lavoura.id));
+  check(reserva.tipo === 'reserva' && reserva.cor === COR_POR_TIPO_AREA.reserva, 'trocar o tipo troca a cor');
+
+  await atualizarTalhao(lavoura.id, { coordenadas: RETANGULO_2HA });
+  const [redesenhada] = await db.select().from(talhoes).where(eq(talhoes.id, lavoura.id));
+  check(
+    redesenhada.perimetroM !== null &&
+      Math.abs(redesenhada.perimetroM - 600) <= 3 &&
+      Math.abs(redesenhada.areaHectares - 2) <= 0.05 &&
+      redesenhada.nome === 'Talhão 3' &&
+      redesenhada.tipo === 'reserva',
+    `redesenhar recalcula área e perímetro e mantém nome e tipo (${redesenhada.areaHectares} ha, ${redesenhada.perimetroM} m)`
+  );
+
+  // Área antiga (sem perímetro no banco) é preenchida na abertura do app
+  await db.update(talhoes).set({ perimetroM: null }).where(eq(talhoes.id, lavoura.id));
+  const preenchidas = await preencherPerimetrosPendentes();
+  const [preenchida] = await db.select().from(talhoes).where(eq(talhoes.id, lavoura.id));
+  check(
+    preenchidas === 1 && preenchida.perimetroM !== null && Math.abs(preenchida.perimetroM - 600) <= 3,
+    'preencherPerimetrosPendentes calcula o perímetro das áreas antigas'
+  );
+  check((await preencherPerimetrosPendentes()) === 0, 'na segunda abertura não há nada a preencher');
+
+  // Aviso antes de excluir: conta só os pontos de atenção abertos da área
+  const ponto = await criarMarcador({ tipo: 'praga', titulo: 'Lagarta', lat: LADO / 2, lng: -47.0 + LADO / 2 });
+  check(ponto.talhaoId === lavoura.id && (await contarPontosAbertos(lavoura.id)) === 1, 'conta o ponto de atenção aberto dentro da área');
+  await resolverMarcador(ponto.id);
+  check((await contarPontosAbertos(lavoura.id)) === 0, 'ponto resolvido não entra na contagem');
+
+  // Migration 0018: a cor de cada área passa a ser a do tipo
+  await db.update(talhoes).set({ cor: '#123456' }).where(eq(talhoes.id, lavoura.id));
+  const sql = readFileSync('src/database/migrations/0018_areas_no_mapa.sql', 'utf8');
+  const normalizar = sql
+    .split('--> statement-breakpoint')
+    .map((trecho) => trecho.trim())
+    .find((trecho) => trecho.startsWith('UPDATE'));
+  check(normalizar !== undefined, 'migration 0018 tem o UPDATE que normaliza a cor');
+  sqlite.run(normalizar!);
+  const [normalizada] = await db.select().from(talhoes).where(eq(talhoes.id, lavoura.id));
+  check(normalizada.cor === COR_POR_TIPO_AREA.reserva, 'migration 0018 troca cor livre pela cor do tipo');
+}
+
+async function runAreasMapaTest() {
+  console.log('🗺️  MINHA FAZENDA - ÁREAS NO MAPA (FASE 1)\n');
+  regrasPuras();
+  permissoesECamadas();
+  await banco();
+  console.log('\n🎉 ÁREAS NO MAPA OK!');
+}
+
+runAreasMapaTest().catch((erro) => {
+  console.error('❌', erro);
+  process.exit(1);
+});
