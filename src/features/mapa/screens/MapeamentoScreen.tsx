@@ -11,7 +11,6 @@ import { listarTalhoesAtivos } from '@/services/talhaoService';
 import { podeEditarGeometria } from '@/services/usuario';
 import { CamadaDivisaFazenda } from '../components/CamadaDivisaFazenda';
 import { CamadaTalhoesSalvos } from '../components/CamadaTalhoesSalvos';
-import { confirmarExclusaoArea } from '../components/confirmarExclusaoArea';
 import { BotaoMapa, CoresTexto } from '../components/elementos';
 import { MapaBase } from '../components/MapaBase';
 import { ModalCalculadoraCercas } from '../components/ModalCalculadoraCercas';
@@ -100,7 +99,7 @@ export default function MapeamentoScreen() {
       ) : null}
 
       {carregado && talhoes.length > 0 ? (
-        <ListaAreas talhoes={talhoes} podeDesenhar={admin && fazenda !== null} admin={admin} />
+        <ListaAreas talhoes={talhoes} podeDesenhar={admin && fazenda !== null} />
       ) : null}
 
       <Text style={estilos.secao}>Calculadoras</Text>
@@ -165,16 +164,8 @@ function CartaoEtapa({
   );
 }
 
-/** Áreas já criadas: tocar abre o mapa no painel dela; a lixeira (só admin) exclui. */
-function ListaAreas({
-  talhoes,
-  podeDesenhar,
-  admin,
-}: {
-  talhoes: Talhao[];
-  podeDesenhar: boolean;
-  admin: boolean;
-}) {
+/** Áreas já criadas: tocar abre o mapa no painel dela (lá estão as ações e o "⋮"). */
+function ListaAreas({ talhoes, podeDesenhar }: { talhoes: Talhao[]; podeDesenhar: boolean }) {
   return (
     <View style={estilos.cartao}>
       <View>
@@ -205,16 +196,7 @@ function ListaAreas({
               </Text>
             </View>
             <Text style={estilos.talhaoArea}>{formatarHectares(talhao.areaHectares)}</Text>
-            {admin ? (
-              <Pressable
-                onPress={() => confirmarExclusaoArea(talhao)}
-                hitSlop={10}
-                accessibilityRole="button"
-                accessibilityLabel={`Excluir ${talhao.nome}`}
-                style={({ pressed }) => [estilos.talhaoExcluir, pressed && estilos.pressionado]}>
-                <AppIcon name="trash" size={18} color={CoresTexto.suave} />
-              </Pressable>
-            ) : null}
+            <AppIcon name="chevronRight" size={18} color={CoresTexto.suave} />
           </Pressable>
         ))}
       </View>
@@ -333,7 +315,6 @@ const estilos = StyleSheet.create({
   talhaoNome: { fontSize: 16, fontWeight: '600', color: CoresTexto.escuro },
   talhaoTipo: { fontSize: 13.5, color: CoresTexto.suave },
   talhaoArea: { fontSize: 15, fontWeight: '700', color: CoresTexto.escuro },
-  talhaoExcluir: { padding: 4 },
 
   secao: {
     fontSize: 17,

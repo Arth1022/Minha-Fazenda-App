@@ -48,10 +48,17 @@ export type AppIconName =
   | 'history'
   | 'info'
   | 'mapPinOff'
-  | 'scanQr';
+  | 'scanQr'
+  | 'moreVertical';
 
 /** Ícones só de traços (Lucide), desenhados pela lista de caminhos. */
 const PATH_ICONS: Partial<Record<AppIconName, string[]>> = {
+  // Lucide "ellipsis-vertical": três círculos de raio 1 escritos como caminho
+  moreVertical: [
+    'M11 5a1 1 0 1 0 2 0a1 1 0 1 0 -2 0z',
+    'M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0z',
+    'M11 19a1 1 0 1 0 2 0a1 1 0 1 0 -2 0z',
+  ],
   power: ['M12 2v10', 'M18.4 6.6a9 9 0 1 1-12.77.04'],
   fuel: [
     'M3 22h12',

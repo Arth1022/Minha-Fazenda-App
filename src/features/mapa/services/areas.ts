@@ -1,5 +1,7 @@
-import { COR_POR_TIPO_AREA, ROTULO_TIPO_AREA } from '@/constants/areas';
+import type { ItemConfirmacao } from '@/components/ui/ConfirmacaoSheet';
+import { COR_POR_TIPO_AREA, ROTULO_CURTO_TIPO_AREA, ROTULO_TIPO_AREA } from '@/constants/areas';
 import type { Talhao, TipoTalhao } from '@/database';
+import { normalizarTexto } from '@/utils/formatters';
 import { calcularPerimetroM, type Coordenada } from '@/utils/geoMath';
 import {
   diasDesdePlantio,
@@ -10,12 +12,22 @@ import {
 } from './calculos';
 
 /**
- * Regras das áreas do mapa (fase 1): o tipo decide as ações e a cor; o estado
- * aparece por selo e contorno. Funções puras — a tela só desenha o resultado.
+ * Regras das áreas do mapa (fase 1): o tipo decide a cor e o que o painel
+ * mostra; o estado aparece no rótulo, no selo do painel e no contorno.
+ * Funções puras — a tela só desenha o resultado.
  */
 
 /** Estado mostrado no mapa: pasto (vem do rebanho) e lavoura (vem da safra). */
 export type EstadoArea = 'ocupado' | 'descanso' | 'vazia' | 'plantada' | 'colhida';
+
+/** Selo ao lado do nome, no painel da área */
+export const ROTULO_ESTADO_AREA: Record<EstadoArea, string> = {
+  ocupado: 'Ocupado',
+  descanso: 'Descanso',
+  vazia: 'Vazia',
+  plantada: 'Plantada',
+  colhida: 'Colhida',
+};
 
 /** Área parada no momento: contorno tracejado e preenchimento mais claro. */
 const ESTADOS_TRACEJADOS: ReadonlySet<EstadoArea> = new Set<EstadoArea>([
@@ -30,27 +42,42 @@ export function contornoTracejado(estado: EstadoArea | null): boolean {
 
 export interface SituacaoArea {
   estado: EstadoArea | null;
-  /** Texto curto do selo no mapa e no painel (ex.: "Milho · 32 d") */
-  selo: string | null;
+  /** Segunda linha do rótulo no mapa (ex.: "Milho", "Vazia", "APP"); null mostra só o nome */
+  legenda: string | null;
 }
 
 type DadosSafra = Pick<Talhao, 'tipo' | 'cultura' | 'faseLavoura' | 'dataPlantio'>;
 
 /**
- * Situação da área para o selo e o contorno. Lavoura: pela safra registrada
- * (vazia, plantada, colhida). Pasto ocupado/em descanso chega com o rebanho no
- * mapa; até lá, pasto, reserva e outro não têm selo.
+ * Situação da área para o rótulo, o selo e o contorno. Lavoura: pela safra
+ * registrada (vazia, plantada, colhida). Pasto ocupado/em descanso chega com o
+ * rebanho no mapa; reserva mostra "APP"; outro, só o nome.
  */
-export function situacaoDaArea(area: DadosSafra, agora = new Date()): SituacaoArea {
-  if (area.tipo !== 'lavoura') return { estado: null, selo: null };
-  if (area.faseLavoura === 'pousio') return { estado: 'colhida', selo: 'Colhida' };
-  if (area.faseLavoura === 'preparo') return { estado: 'vazia', selo: 'Em preparo' };
-  if (!area.cultura) return { estado: 'vazia', selo: 'Vazia' };
+export function situacaoDaArea(area: DadosSafra): SituacaoArea {
+  if (area.tipo === 'reserva') return { estado: null, legenda: 'APP' };
+  if (area.tipo !== 'lavoura') return { estado: null, legenda: null };
+  if (area.faseLavoura === 'pousio') return { estado: 'colhida', legenda: 'Colhida' };
+  if (area.faseLavoura === 'preparo') return { estado: 'vazia', legenda: 'Em preparo' };
+  if (!area.cultura) return { estado: 'vazia', legenda: 'Vazia' };
+  return { estado: 'plantada', legenda: ROTULO_CULTURA_LAVOURA[area.cultura] ?? area.cultura };
+}
 
-  const cultura = ROTULO_CULTURA_LAVOURA[area.cultura] ?? area.cultura;
-  if (area.faseLavoura === 'colheita') return { estado: 'plantada', selo: `${cultura} · colher` };
-  const dias = diasDesdePlantio(area.dataPlantio, agora);
-  return { estado: 'plantada', selo: dias !== null ? `${cultura} · ${dias} d` : cultura };
+export interface SafraResumo {
+  cultura: string;
+  /** "Plantada", "Pronta p/ colher"... */
+  fase: string | null;
+  /** Dias desde o plantio (só plantada ou pronta para colher) */
+  dias: number | null;
+}
+
+/** Card da safra no painel da lavoura; null se não há safra registrada. */
+export function resumoDaSafra(area: DadosSafra, agora = new Date()): SafraResumo | null {
+  if (area.tipo !== 'lavoura' || !area.cultura) return null;
+  return {
+    cultura: ROTULO_CULTURA_LAVOURA[area.cultura] ?? area.cultura,
+    fase: area.faseLavoura ? ROTULO_FASE_LAVOURA[area.faseLavoura] : null,
+    dias: diasDesdePlantio(area.dataPlantio, agora),
+  };
 }
 
 /** "Milho · Vegetativo"; null se a lavoura não tem safra registrada. */
@@ -64,17 +91,14 @@ export function descreverSafra(area: DadosSafra): string | null {
     .join(' · ');
 }
 
-/** Ações do painel inferior. As de outros módulos (rebanho, cerca, plantio) chegam nas próximas fases. */
-export type AcaoArea = 'safra' | 'pontoAtencao' | 'editar' | 'redesenhar' | 'excluir';
+/** Itens do menu "⋮" do painel. */
+export type OpcaoArea = 'editar' | 'redesenhar' | 'pontoAtencao' | 'excluir';
 
-/** O que aparece no painel da área, na ordem: primeiro o do tipo, depois o comum. */
-export function acoesDaArea(tipo: TipoTalhao, podeEditarGeometria: boolean): AcaoArea[] {
-  const acoes: AcaoArea[] = [];
-  if (tipo === 'lavoura') acoes.push('safra');
-  acoes.push('pontoAtencao', 'editar');
-  // Mexer no polígono é só do admin (RN-012)
-  if (podeEditarGeometria) acoes.push('redesenhar', 'excluir');
-  return acoes;
+/** Mexer no polígono (redesenhar, excluir) é só do admin (RN-012). */
+export function opcoesDaArea(podeEditarGeometria: boolean): OpcaoArea[] {
+  return podeEditarGeometria
+    ? ['editar', 'redesenhar', 'pontoAtencao', 'excluir']
+    : ['editar', 'pontoAtencao'];
 }
 
 /**
@@ -89,47 +113,89 @@ export function avisosTrocaDeTipo(area: DadosSafra, novoTipo: TipoTalhao): strin
   return avisos;
 }
 
+/**
+ * "Redesenhar Pasto 1?" (RF-008): o que muda e o que continua. Lotação, cerca e
+ * ciclo entram aqui quando esses módulos chegarem ao mapa.
+ */
+export function consequenciasRedesenho(): ItemConfirmacao[] {
+  return [{ icone: 'check', texto: 'Nome, tipo e histórico continuam', tom: 'ok' }];
+}
+
+/** "Excluir Pasto 1?": os pontos de atenção saem junto; o registro fica guardado. */
+export function consequenciasExclusao(pontosAbertos: number): ItemConfirmacao[] {
+  const itens: ItemConfirmacao[] = [];
+  if (pontosAbertos === 1) {
+    itens.push({ icone: 'mapPin', texto: 'O ponto de atenção marcado nela sai do mapa' });
+  } else if (pontosAbertos > 1) {
+    itens.push({ icone: 'mapPin', texto: `Os ${pontosAbertos} pontos de atenção marcados nela saem do mapa` });
+  }
+  itens.push({ icone: 'check', texto: 'O histórico fica guardado', tom: 'ok' });
+  return itens;
+}
+
 /** Perímetro gravado ou, em área antiga ainda sem ele, calculado do contorno. */
 export function perimetroDaAreaM(area: Pick<Talhao, 'perimetroM' | 'geometriaJson'>): number {
   if (area.perimetroM !== null) return area.perimetroM;
   return calcularPerimetroM((area.geometriaJson.coordinates[0] ?? []) as Coordenada[]);
 }
 
-/** "15,2 ha" e "1,8 km" (ou "420 m"). */
-export function medidasDaArea(area: Pick<Talhao, 'areaHectares' | 'perimetroM' | 'geometriaJson'>) {
-  return {
-    area: formatarHectares(area.areaHectares),
-    perimetro: formatarDistancia(perimetroDaAreaM(area) / 1000),
-  };
+type AreaMedida = Pick<Talhao, 'tipo' | 'areaHectares' | 'perimetroM' | 'geometriaJson'>;
+
+/** "Pasto · 28,4 ha · 2,14 km" (abaixo do nome, no painel). */
+export function resumoDaArea(area: AreaMedida): string {
+  return [
+    ROTULO_CURTO_TIPO_AREA[area.tipo],
+    formatarHectares(area.areaHectares),
+    formatarDistancia(perimetroDaAreaM(area) / 1000),
+  ].join(' · ');
 }
 
-/** Linha de detalhe da lista: "Lavoura/Talhão · Milho · 32 d". */
-export function detalheDaArea(area: DadosSafra, agora = new Date()): string {
-  return [ROTULO_TIPO_AREA[area.tipo], situacaoDaArea(area, agora).selo].filter(Boolean).join(' · ');
+/** Linha de detalhe da lista: "Lavoura · Milho". */
+export function detalheDaArea(area: DadosSafra): string {
+  return [ROTULO_CURTO_TIPO_AREA[area.tipo], situacaoDaArea(area).legenda]
+    .filter(Boolean)
+    .join(' · ');
 }
 
-const OPACIDADE = { normal: 0.4, normalAtiva: 0.6, parada: 0.22, paradaAtiva: 0.42 } as const;
+/** 0 = mais provável; null = não combina com o termo. */
+function relevancia(area: Pick<Talhao, 'nome' | 'tipo'>, termo: string): number | null {
+  const nome = normalizarTexto(area.nome);
+  if (nome === termo) return 0;
+  if (nome.startsWith(termo)) return 1;
+  if (nome.includes(termo)) return 2;
+  if (normalizarTexto(ROTULO_TIPO_AREA[area.tipo]).includes(termo)) return 3;
+  return null;
+}
 
 /**
- * GeoJSON da camada de áreas: o polígono (cor do tipo, contorno contínuo ou
- * tracejado), o nome no centro e, quando houver, o selo logo abaixo. O nome e o
- * selo são pontos separados para não depender de quebra de linha no rótulo.
+ * Áreas que combinam com o termo pelo nome ou pelo tipo (sem diferenciar acento
+ * e maiúscula), as mais prováveis primeiro. Sem termo, não sugere nada.
  */
-export function colecaoDasAreas(
-  areas: Talhao[],
-  agora = new Date()
-): GeoJSON.FeatureCollection {
-  const features: GeoJSON.Feature[] = [];
-  for (const area of areas) {
-    const { estado, selo } = situacaoDaArea(area, agora);
-    const parada = contornoTracejado(estado);
-    const centro: GeoJSON.Point = { type: 'Point', coordinates: [area.centroLng, area.centroLat] };
-    features.push(
-      {
+export function buscarAreas<T extends Pick<Talhao, 'nome' | 'tipo'>>(areas: T[], termo: string): T[] {
+  const alvo = normalizarTexto(termo);
+  if (!alvo) return [];
+  return areas
+    .map((area, ordem) => ({ area, ordem, nota: relevancia(area, alvo) }))
+    .filter((item): item is { area: T; ordem: number; nota: number } => item.nota !== null)
+    .sort((a, b) => a.nota - b.nota || a.ordem - b.ordem)
+    .map(({ area }) => area);
+}
+
+const OPACIDADE = { normal: 0.35, normalAtiva: 0.55, parada: 0.14, paradaAtiva: 0.3 } as const;
+
+/**
+ * GeoJSON dos polígonos das áreas: cor do tipo, contorno contínuo (em uso) ou
+ * tracejado (parada) e a opacidade de cada um. Os rótulos ficam fora (MarkerView).
+ */
+export function colecaoDasAreas(areas: Talhao[]): GeoJSON.FeatureCollection {
+  return {
+    type: 'FeatureCollection',
+    features: areas.map((area): GeoJSON.Feature => {
+      const parada = contornoTracejado(situacaoDaArea(area).estado);
+      return {
         type: 'Feature',
         id: `poly-${area.id}`,
         properties: {
-          camada: 'poligono',
           talhaoId: area.id,
           cor: COR_POR_TIPO_AREA[area.tipo],
           contorno: parada ? 'tracejado' : 'continuo',
@@ -137,22 +203,7 @@ export function colecaoDasAreas(
           opacidadeAtiva: parada ? OPACIDADE.paradaAtiva : OPACIDADE.normalAtiva,
         },
         geometry: area.geometriaJson,
-      },
-      {
-        type: 'Feature',
-        id: `label-${area.id}`,
-        properties: { camada: 'label', talhaoId: area.id, nome: area.nome },
-        geometry: centro,
-      }
-    );
-    if (selo) {
-      features.push({
-        type: 'Feature',
-        id: `selo-${area.id}`,
-        properties: { camada: 'selo', talhaoId: area.id, selo },
-        geometry: centro,
-      });
-    }
-  }
-  return { type: 'FeatureCollection', features };
+      };
+    }),
+  };
 }

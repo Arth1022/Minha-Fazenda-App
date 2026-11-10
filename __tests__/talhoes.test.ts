@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
 
+import { COR_POR_TIPO_AREA } from '@/constants/areas';
 import {
   atualizarTalhao,
   criarTalhao,
@@ -172,7 +173,7 @@ async function runTalhoesTest() {
   check(
     pasto1.nome === 'Pasto 1' &&
       pasto1.tipo === 'pasto' &&
-      pasto1.cor === '#22C55E' &&
+      pasto1.cor === COR_POR_TIPO_AREA.pasto &&
       pasto1.syncStatus === 'created',
     'campos básicos, cor do tipo (pasto) e syncStatus = created gravados com sucesso',
   );
@@ -241,7 +242,9 @@ async function runTalhoesTest() {
   await atualizarTalhao(editavel.id, { nome: '  Pasto Novo ', tipo: 'lavoura' });
   const [aposEdicao] = await db.select().from(talhoes).where(eq(talhoes.id, editavel.id));
   check(
-    aposEdicao.nome === 'Pasto Novo' && aposEdicao.tipo === 'lavoura' && aposEdicao.cor === '#EAB308',
+    aposEdicao.nome === 'Pasto Novo' &&
+      aposEdicao.tipo === 'lavoura' &&
+      aposEdicao.cor === COR_POR_TIPO_AREA.lavoura,
     'atualizarTalhao grava nome (sem espaços), tipo e a cor do novo tipo',
   );
   check(

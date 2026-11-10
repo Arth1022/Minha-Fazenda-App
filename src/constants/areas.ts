@@ -6,6 +6,7 @@ import type { TipoTalhao } from '@/database/schema';
  */
 export const ORDEM_TIPOS_AREA: TipoTalhao[] = ['pasto', 'lavoura', 'reserva', 'outro'];
 
+/** Nome completo do tipo, para escolher (ex.: folha "Salvar área"). */
 export const ROTULO_TIPO_AREA: Record<TipoTalhao, string> = {
   pasto: 'Pasto',
   lavoura: 'Lavoura/Talhão',
@@ -13,10 +14,21 @@ export const ROTULO_TIPO_AREA: Record<TipoTalhao, string> = {
   outro: 'Outro',
 };
 
-/** A cor de preenchimento vem do tipo; o estado aparece por selo e contorno. */
+/** Nome curto do tipo, nos resumos ("Pasto · 28,4 ha · 2,14 km"). */
+export const ROTULO_CURTO_TIPO_AREA: Record<TipoTalhao, string> = {
+  pasto: 'Pasto',
+  lavoura: 'Lavoura',
+  reserva: 'Reserva',
+  outro: 'Outro',
+};
+
+/**
+ * A cor de preenchimento e do contorno vem do tipo (protótipo "Minha Fazenda");
+ * o estado aparece por selo e contorno tracejado.
+ */
 export const COR_POR_TIPO_AREA: Record<TipoTalhao, string> = {
-  pasto: '#22C55E',
-  lavoura: '#EAB308',
-  reserva: '#166534',
-  outro: '#0EA5E9',
+  pasto: '#E9C46A',
+  lavoura: '#E76F51',
+  reserva: '#2A9D8F',
+  outro: '#8E9AAF',
 };

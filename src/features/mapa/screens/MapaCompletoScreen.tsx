@@ -13,15 +13,21 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
 
-import { AppIcon } from '@/components/ui';
-import { AgroColors, MaxContentWidth, Radius, Shadows, Spacing } from '@/constants/theme';
-import { useLiveQuery } from '@/database';
+import { AppIcon, ConfirmacaoSheet, type ItemConfirmacao } from '@/components/ui';
+import { AgroColors, MaxContentWidth, Shadows, Spacing } from '@/constants/theme';
+import { useLiveQuery, type Talhao } from '@/database';
 import {
+  contarPontosAbertos,
   criarMarcador,
   listarMarcadoresAtivos,
   resolverMarcador,
 } from '@/services/marcadorService';
-import { atualizarTalhao, criarTalhao, listarTalhoesAtivos } from '@/services/talhaoService';
+import {
+  atualizarTalhao,
+  criarTalhao,
+  deletarTalhao,
+  listarTalhoesAtivos,
+} from '@/services/talhaoService';
 import { podeEditarGeometria } from '@/services/usuario';
 import { calcularPerimetroKm, calcularPerimetroM, type Coordenada } from '@/utils/geoMath';
 import { BarraBuscaMapa, BotaoQuadrado } from '../components/BarraBuscaMapa';
@@ -34,9 +40,9 @@ import {
 } from '../components/CamadaMarcadoresMapa';
 import { CamadasSheet } from '../components/CamadasSheet';
 import { CamadaTalhoesSalvos } from '../components/CamadaTalhoesSalvos';
-import { confirmarExclusaoArea } from '../components/confirmarExclusaoArea';
-import { BotaoMapa, CoresTexto, LinkMapa } from '../components/elementos';
+import { BotaoMapa, CoresTexto } from '../components/elementos';
 import { MapaBase, type MapaBaseHandle, type VistaMapa } from '../components/MapaBase';
+import { OpcoesAreaSheet } from '../components/OpcoesAreaSheet';
 import { PainelArea } from '../components/PainelArea';
 import { SafraLavouraSheet, type DadosSafra } from '../components/SafraLavouraSheet';
 import { SalvarAreaSheet, type DadosSalvarArea } from '../components/SalvarAreaSheet';
@@ -50,7 +56,12 @@ import {
   useFazendaMapa,
 } from '../data/fazendaMapa';
 import { useDesenhoTalhao, type ResultadoDesenhoTalhao } from '../hooks/useDesenhoTalhao';
-import { perimetroDaAreaM, type AcaoArea } from '../services/areas';
+import {
+  consequenciasExclusao,
+  consequenciasRedesenho,
+  perimetroDaAreaM,
+  type OpcaoArea,
+} from '../services/areas';
 import { formatarDistancia, formatarHectares } from '../services/calculos';
 import { vistaDaFazenda } from '../services/vista';
 
@@ -68,10 +79,17 @@ type AlvoDesenho =
   | { tipo: 'area' }
   | { tipo: 'contorno'; talhaoId: string; nome: string };
 
+/** "Redesenhar Pasto 1?" / "Excluir Pasto 1?" */
+interface Confirmacao {
+  acao: 'redesenhar' | 'excluir';
+  area: Pick<Talhao, 'id' | 'nome'>;
+  itens: ItemConfirmacao[];
+}
+
 /**
  * Mapa em tela cheia. Fluxo: achar a terra (busca, GPS, camadas) → marcar a
  * divisa da fazenda → separar a fazenda em áreas. Tocar numa área abre o painel
- * inferior com o resumo e as ações do tipo dela, com o mapa visível atrás.
+ * inferior com o resumo e o que dá para fazer nela, com o mapa visível atrás.
  * Desenhar, redesenhar e excluir é só do admin.
  */
 export default function MapaCompletoScreen() {
@@ -107,6 +125,11 @@ export default function MapaCompletoScreen() {
   const [rascunho, setRascunho] = useState<ResultadoDesenhoTalhao | null>(null);
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [safraId, setSafraId] = useState<string | null>(null);
+  // Folhas que somem deslizando: o conteúdo fica até a próxima abertura
+  const [opcoesId, setOpcoesId] = useState<string | null>(null);
+  const [opcoesVisivel, setOpcoesVisivel] = useState(false);
+  const [confirmacao, setConfirmacao] = useState<Confirmacao | null>(null);
+  const [confirmando, setConfirmando] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erroSalvar, setErroSalvar] = useState<string | undefined>();
 
@@ -194,15 +217,7 @@ export default function MapaCompletoScreen() {
   );
   const editando = talhoes.find((t) => t.id === editandoId) ?? null;
   const areaSafra = talhoes.find((t) => t.id === safraId) ?? null;
-
-  /** Pontos de atenção abertos por área, para o selo do painel */
-  const pontosPorArea = useMemo(() => {
-    const contagem = new Map<string, number>();
-    for (const m of marcadores) {
-      if (m.talhaoId) contagem.set(m.talhaoId, (contagem.get(m.talhaoId) ?? 0) + 1);
-    }
-    return contagem;
-  }, [marcadores]);
+  const areaOpcoes = talhoes.find((t) => t.id === opcoesId) ?? null;
 
   // Painel fechado: a próxima abertura (mesmo da mesma área) enquadra de novo
   useEffect(() => {
@@ -302,6 +317,13 @@ export default function MapaCompletoScreen() {
     salvarCamadas(novas);
   };
 
+  /** Área escolhida na busca: liga a camada de áreas, se preciso, e abre o painel dela */
+  const escolherAreaDaBusca = (area: Talhao) => {
+    if (!camadas.areas) mudarCamadas({ ...camadas, areas: true });
+    setMarcadorId(null);
+    setSelecionadoId(area.id);
+  };
+
   const topo = insets.top + MARGEM;
   const base = insets.bottom + MARGEM;
 
@@ -322,27 +344,47 @@ export default function MapaCompletoScreen() {
     });
   };
 
-  const executarAcao = (acao: AcaoArea) => {
-    if (!selecionado) return;
+  const abrirConfirmacao = (nova: Confirmacao) => {
+    setConfirmacao(nova);
+    setConfirmando(true);
+  };
+
+  const escolherOpcao = async (opcao: OpcaoArea) => {
+    const area = areaOpcoes;
+    setOpcoesVisivel(false);
+    if (!area) return;
     setErroSalvar(undefined);
-    switch (acao) {
-      case 'safra':
-        setSafraId(selecionado.id);
-        break;
+    switch (opcao) {
       case 'editar':
-        setEditandoId(selecionado.id);
+        setEditandoId(area.id);
         break;
       case 'pontoAtencao':
-        setTalhaoMarcadorId(selecionado.id);
+        setTalhaoMarcadorId(area.id);
         setModoMarcador(true);
         break;
       case 'redesenhar':
-        comecarDesenho({ tipo: 'contorno', talhaoId: selecionado.id, nome: selecionado.nome });
+        abrirConfirmacao({ acao: 'redesenhar', area, itens: consequenciasRedesenho() });
         break;
-      case 'excluir':
-        confirmarExclusaoArea(selecionado, () => setSelecionadoId(null));
+      case 'excluir': {
+        const pontosAbertos = await contarPontosAbertos(area.id).catch(() => 0);
+        abrirConfirmacao({ acao: 'excluir', area, itens: consequenciasExclusao(pontosAbertos) });
         break;
+      }
     }
+  };
+
+  const confirmar = () => {
+    if (!confirmacao) return;
+    const { acao, area } = confirmacao;
+    setConfirmando(false);
+    if (acao === 'redesenhar') {
+      comecarDesenho({ tipo: 'contorno', talhaoId: area.id, nome: area.nome });
+      return;
+    }
+    setSelecionadoId(null);
+    deletarTalhao(area.id).catch((err: unknown) =>
+      Alert.alert('Não foi possível excluir', err instanceof Error ? err.message : String(err)),
+    );
   };
 
   const voltarAoDesenho = () => {
@@ -422,6 +464,8 @@ export default function MapaCompletoScreen() {
 
   const desenhandoDivisa = alvo.tipo === 'divisa';
   const rascunhoDoQue = rascunho && alvo.tipo !== 'contorno' ? alvo.tipo : null;
+  const mostrarNovaArea =
+    admin && fazenda !== null && !modoDesenho && !modoMarcador && !selecionado && !marcadorSelecionado;
 
   return (
     <View style={estilos.raiz}>
@@ -443,6 +487,8 @@ export default function MapaCompletoScreen() {
             <CamadaTalhoesSalvos
               talhoes={talhoes}
               selecionadoId={selecionado?.id ?? null}
+              // Rótulo em cima do mapa atrapalharia o toque nos cantos e no ponto de atenção
+              mostrarNomes={!modoDesenho && !modoMarcador}
               onPressTalhao={selecionarTalhao}
             />
           ) : null}
@@ -487,7 +533,7 @@ export default function MapaCompletoScreen() {
                 : desenhandoDivisa
                   ? 'Divisa da fazenda'
                   : alvo.tipo === 'contorno'
-                    ? `Redesenhar: ${alvo.nome}`
+                    ? `Redesenhar ${alvo.nome}`
                     : 'Nova área'}
             </Text>
             <Text
@@ -499,7 +545,7 @@ export default function MapaCompletoScreen() {
                   (pontos.length === 0
                     ? 'Toque no mapa no primeiro canto'
                     : podeConcluir
-                      ? 'Toque em Concluir quando fechar a área'
+                      ? 'Feche o contorno e toque em Concluir'
                       : 'Continue tocando nos cantos'))}
             </Text>
           </View>
@@ -508,7 +554,11 @@ export default function MapaCompletoScreen() {
         <BarraBuscaMapa
           topo={topo}
           onVoltar={() => router.back()}
-          onEscolher={(r) => mapaRef.current?.voarPara(r.coordenada, ZOOM_BUSCA)}
+          modo={
+            fazenda
+              ? { tipo: 'areas', areas: talhoes, onEscolher: escolherAreaDaBusca }
+              : { tipo: 'locais', onEscolher: (r) => mapaRef.current?.voarPara(r.coordenada, ZOOM_BUSCA) }
+          }
           controles={
             <View style={estilos.controles}>
               <BotaoQuadrado
@@ -531,33 +581,37 @@ export default function MapaCompletoScreen() {
           // Remonta ao trocar de área: o onLayout dispara de novo e a câmera reenquadra
           key={selecionado.id}
           area={selecionado}
-          pontos={pontosPorArea.get(selecionado.id) ?? 0}
-          podeEditarGeometria={admin}
-          onAcao={executarAcao}
+          onOpcoes={() => {
+            setOpcoesId(selecionado.id);
+            setOpcoesVisivel(true);
+          }}
           onFechar={() => setSelecionadoId(null)}
+          onSafra={() => setSafraId(selecionado.id)}
           onAltura={enquadrarSelecionada}
         />
-      ) : (
+      ) : mostrarNovaArea ? (
+        <View style={[estilos.rodapeNovaArea, { bottom: base + Spacing.two }]} pointerEvents="box-none">
+          <Pressable
+            onPress={() => comecarDesenho({ tipo: 'area' })}
+            accessibilityRole="button"
+            accessibilityLabel="Desenhar nova área"
+            style={({ pressed }) => [estilos.novaArea, pressed && estilos.pressionado]}>
+            <AppIcon name="plus" size={22} color={AgroColors.textInverse} />
+            <Text style={estilos.novaAreaTexto}>Nova área</Text>
+          </Pressable>
+        </View>
+      ) : modoMarcador || modoDesenho || marcadorSelecionado || !fazenda ? (
         <View style={[estilos.rodape, { bottom: base }]} pointerEvents="box-none">
           <View style={estilos.cartaoRodape}>
             {modoMarcador ? (
               <>
-                <Text style={estilos.explicacao}>
+                <Text style={estilos.cartaoTexto}>
                   Toque no ponto exato do campo para registrar uma ocorrência georreferenciada.
                 </Text>
                 <BotaoMapa rotulo="Cancelar" variante="contorno" onPress={sairDoModoMarcador} />
               </>
             ) : modoDesenho ? (
               <>
-                <Text style={estilos.explicacao}>
-                  {desenhandoDivisa
-                    ? 'Toque em cada canto da divisa da fazenda, um depois do outro. O app liga os pontos e fecha o contorno sozinho.'
-                    : alvo.tipo === 'contorno'
-                      ? 'Toque em cada canto do novo contorno. Nome, tipo e histórico continuam; a área e o perímetro são recalculados.'
-                      : fazenda
-                        ? 'Toque em cada canto da área, dentro da divisa amarela. O app liga os pontos e fecha a área sozinho.'
-                        : 'Toque em cada canto da área, um depois do outro. O app liga os pontos e fecha a área sozinho.'}
-                </Text>
                 <View style={estilos.medidas}>
                   <View style={estilos.medida}>
                     <Text style={estilos.medidaRotulo}>Área</Text>
@@ -583,6 +637,7 @@ export default function MapaCompletoScreen() {
                   />
                   <BotaoMapa
                     rotulo="Concluir"
+                    icone="check"
                     desabilitado={!podeConcluir}
                     onPress={concluir}
                     style={estilos.acao}
@@ -625,7 +680,7 @@ export default function MapaCompletoScreen() {
                   style={estilos.botaoPrincipal}
                 />
               </>
-            ) : !fazenda ? (
+            ) : (
               <>
                 <Text style={estilos.cartaoTitulo}>Encontre a sua terra</Text>
                 <Text style={estilos.cartaoTexto}>
@@ -642,43 +697,10 @@ export default function MapaCompletoScreen() {
                   />
                 ) : null}
               </>
-            ) : (
-              <>
-                <Text style={estilos.cartaoTitulo}>
-                  {talhoes.length === 0 ? 'Agora separe as áreas' : fazenda.nome}
-                </Text>
-                <Text style={estilos.cartaoTexto}>
-                  {talhoes.length === 0
-                    ? 'Desenhe cada pasto, lavoura ou reserva dentro da divisa amarela.'
-                    : 'Toque numa área para ver o resumo e o que dá para fazer nela.'}
-                </Text>
-                {admin ? (
-                  <BotaoMapa
-                    rotulo={talhoes.length === 0 ? 'Desenhar área' : 'Desenhar outra área'}
-                    icone="pentagon"
-                    onPress={() => comecarDesenho({ tipo: 'area' })}
-                    style={estilos.botaoPrincipal}
-                  />
-                ) : null}
-                <View style={estilos.linksRodape}>
-                  <LinkMapa
-                    rotulo="+ Ponto de atenção"
-                    icone="mapPin"
-                    onPress={() => setModoMarcador(true)}
-                  />
-                  {admin ? (
-                    <LinkMapa
-                      rotulo="Redesenhar divisa"
-                      icone="pentagon"
-                      onPress={() => comecarDesenho({ tipo: 'divisa' })}
-                    />
-                  ) : null}
-                </View>
-              </>
             )}
           </View>
         </View>
-      )}
+      ) : null}
 
       <SalvarFazendaSheet
         visible={rascunhoDoQue === 'divisa'}
@@ -719,6 +741,28 @@ export default function MapaCompletoScreen() {
         onClose={() => setSafraId(null)}
       />
 
+      <OpcoesAreaSheet
+        visible={opcoesVisivel && areaOpcoes !== null}
+        area={areaOpcoes}
+        podeEditarGeometria={admin}
+        onClose={() => setOpcoesVisivel(false)}
+        onSelect={escolherOpcao}
+      />
+
+      <ConfirmacaoSheet
+        visible={confirmando}
+        titulo={
+          confirmacao
+            ? `${confirmacao.acao === 'redesenhar' ? 'Redesenhar' : 'Excluir'} ${confirmacao.area.nome}?`
+            : ''
+        }
+        itens={confirmacao?.itens ?? []}
+        confirmar={confirmacao?.acao === 'excluir' ? 'Excluir' : 'Redesenhar'}
+        perigo={confirmacao?.acao === 'excluir'}
+        onConfirmar={confirmar}
+        onClose={() => setConfirmando(false)}
+      />
+
       <SalvarMarcadorSheet
         visible={coordenadaMarcador !== null}
         salvando={salvando}
@@ -735,6 +779,14 @@ export default function MapaCompletoScreen() {
         camadas={camadas}
         onChange={mudarCamadas}
         onClose={() => setCamadasVisivel(false)}
+        onRedesenharDivisa={
+          admin && fazenda
+            ? () => {
+                setCamadasVisivel(false);
+                comecarDesenho({ tipo: 'divisa' });
+              }
+            : undefined
+        }
       />
     </View>
   );
@@ -784,6 +836,19 @@ const estilos = StyleSheet.create({
   cartaoTopoSub: { fontSize: 14.5, lineHeight: 19, color: CoresTexto.suave },
   textoErro: { color: AgroColors.danger, fontWeight: '600' },
 
+  rodapeNovaArea: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  novaArea: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    height: 56,
+    paddingHorizontal: Spacing.four,
+    borderRadius: 28,
+    backgroundColor: AgroColors.forest,
+    ...Shadows.fab,
+  },
+  novaAreaTexto: { fontSize: 17, lineHeight: 22, fontWeight: '700', color: AgroColors.textInverse },
+
   rodape: {
     position: 'absolute',
     left: MARGEM,
@@ -811,21 +876,11 @@ const estilos = StyleSheet.create({
   cabecalhoMarcador: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   pontoCor: { width: 14, height: 14, borderRadius: 7 },
   fecharMarcador: { marginLeft: 'auto', padding: 4 },
-  linksRodape: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
 
-  explicacao: {
-    fontSize: 14,
-    lineHeight: 19,
-    color: CoresTexto.suave,
-    backgroundColor: AgroColors.surfaceMuted,
-    borderRadius: Radius.lg,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-  },
-  medidas: { flexDirection: 'row', paddingVertical: Spacing.two },
+  medidas: { flexDirection: 'row', paddingVertical: Spacing.xs },
   medida: { flex: 1, gap: 4 },
   medidaRotulo: { fontSize: 14, fontWeight: '600', color: CoresTexto.suave },
-  medidaValor: { fontSize: 22, lineHeight: 28, fontWeight: '800', color: CoresTexto.escuro },
+  medidaValor: { fontSize: 24, lineHeight: 30, fontWeight: '800', color: CoresTexto.escuro },
   acoes: { flexDirection: 'row', gap: Spacing.md, marginTop: Spacing.two },
   acao: { flex: 1 },
 });

@@ -1,12 +1,16 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AppIcon } from '@/components/ui';
+import { COR_POR_TIPO_AREA } from '@/constants/areas';
 import { AgroColors, Radius, Shadows, Spacing } from '@/constants/theme';
+import type { Talhao } from '@/database';
+import { buscarAreas, detalheDaArea } from '../services/areas';
 import { buscarLocais, type ResultadoBusca } from '../services/busca';
 import { CoresTexto } from './elementos';
 
 const MARGEM = 12;
+const MAX_AREAS = 6;
 
 /** Botão branco quadrado do canto do mapa (camadas, centralizar no GPS). */
 export function BotaoQuadrado({
@@ -29,25 +33,60 @@ export function BotaoQuadrado({
   );
 }
 
-/** Voltar + busca "Cidade, endereço ou coordenada", com a lista de resultados. */
+/**
+ * O que a busca procura: lugares (antes da divisa, para achar a terra; usa a
+ * internet) ou as áreas da fazenda (offline, enquanto digita).
+ */
+export type ModoBuscaMapa =
+  | { tipo: 'locais'; onEscolher: (resultado: ResultadoBusca) => void }
+  | { tipo: 'areas'; areas: Talhao[]; onEscolher: (area: Talhao) => void };
+
+/** Voltar + campo de busca, com a lista de resultados embaixo. */
 export function BarraBuscaMapa({
   topo,
   onVoltar,
-  onEscolher,
+  modo,
   controles,
 }: {
   topo: number;
   onVoltar: () => void;
-  onEscolher: (resultado: ResultadoBusca) => void;
+  modo: ModoBuscaMapa;
   controles: React.ReactNode;
 }) {
   const [texto, setTexto] = useState('');
   const [buscando, setBuscando] = useState(false);
-  const [resultados, setResultados] = useState<ResultadoBusca[] | null>(null);
+  const [locais, setLocais] = useState<ResultadoBusca[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const buscaAtual = useRef(0);
 
-  const buscar = async () => {
+  const areas = modo.tipo === 'areas' ? modo.areas : null;
+  const areasEncontradas = useMemo(
+    () => (areas ? buscarAreas(areas, texto).slice(0, MAX_AREAS) : []),
+    [areas, texto],
+  );
+
+  const limpar = () => {
+    Keyboard.dismiss();
+    setTexto('');
+    setLocais(null);
+    setErro(null);
+  };
+
+  const escolherLocal = (resultado: ResultadoBusca) => {
+    if (modo.tipo !== 'locais') return;
+    Keyboard.dismiss();
+    setLocais(null);
+    setErro(null);
+    modo.onEscolher(resultado);
+  };
+
+  const escolherArea = (area: Talhao) => {
+    if (modo.tipo !== 'areas') return;
+    limpar();
+    modo.onEscolher(area);
+  };
+
+  const buscarLocal = async () => {
     const termo = texto.trim();
     if (!termo) return;
     const id = ++buscaAtual.current;
@@ -57,9 +96,9 @@ export function BarraBuscaMapa({
       const encontrados = await buscarLocais(termo);
       if (id !== buscaAtual.current) return;
       if (encontrados.length === 1) {
-        escolher(encontrados[0]);
+        escolherLocal(encontrados[0]);
       } else {
-        setResultados(encontrados);
+        setLocais(encontrados);
         if (encontrados.length === 0) setErro('Nenhum lugar encontrado. Tente outro nome.');
       }
     } catch {
@@ -71,14 +110,19 @@ export function BarraBuscaMapa({
     }
   };
 
-  const escolher = (resultado: ResultadoBusca) => {
-    Keyboard.dismiss();
-    setResultados(null);
-    setErro(null);
-    onEscolher(resultado);
+  const aoEnviar = () => {
+    if (modo.tipo === 'locais') buscarLocal();
+    else if (areasEncontradas[0]) escolherArea(areasEncontradas[0]);
   };
 
-  const listaAberta = (resultados !== null && resultados.length > 0) || erro !== null;
+  const digitando = texto.trim().length > 0;
+  const erroAreas = modo.tipo === 'areas' && digitando && areasEncontradas.length === 0
+    ? 'Nenhuma área com esse nome.'
+    : null;
+  const mensagem = modo.tipo === 'locais' ? erro : erroAreas;
+  const listaAberta =
+    mensagem !== null ||
+    (modo.tipo === 'locais' ? (locais?.length ?? 0) > 0 : areasEncontradas.length > 0);
 
   return (
     <View style={[estilos.topo, { top: topo }]} pointerEvents="box-none">
@@ -101,47 +145,74 @@ export function BarraBuscaMapa({
             onChangeText={(novo) => {
               setTexto(novo);
               if (!novo) {
-                setResultados(null);
+                setLocais(null);
                 setErro(null);
               }
             }}
-            onSubmitEditing={buscar}
-            placeholder="Cidade, endereço ou coordenada"
+            onSubmitEditing={aoEnviar}
+            placeholder={modo.tipo === 'locais' ? 'Cidade, endereço ou coordenada' : 'Buscar área'}
             placeholderTextColor={CoresTexto.suave}
             returnKeyType="search"
             autoCorrect={false}
-            accessibilityLabel="Buscar cidade, endereço ou coordenada"
+            accessibilityLabel={modo.tipo === 'locais' ? 'Buscar cidade, endereço ou coordenada' : 'Buscar área'}
             style={estilos.buscaTexto}
           />
+          {digitando ? (
+            <Pressable onPress={limpar} hitSlop={10} accessibilityRole="button" accessibilityLabel="Limpar busca">
+              <AppIcon name="x" size={20} color={CoresTexto.suave} />
+            </Pressable>
+          ) : null}
         </View>
       </View>
 
       {listaAberta ? (
         <View style={estilos.resultados}>
-          {erro ? <Text style={estilos.resultadoErro}>{erro}</Text> : null}
-          {resultados?.map((r, indice) => (
-            <Pressable
-              key={r.id}
-              onPress={() => escolher(r)}
-              accessibilityRole="button"
-              style={({ pressed }) => [
-                estilos.resultado,
-                indice > 0 && estilos.resultadoDivisor,
-                pressed && estilos.pressionado,
-              ]}>
-              <AppIcon name="mapPin" size={20} color={AgroColors.forest} />
-              <View style={estilos.resultadoTextos}>
-                <Text style={estilos.resultadoNome} numberOfLines={1}>
-                  {r.nome}
-                </Text>
-                {r.detalhe ? (
-                  <Text style={estilos.resultadoDetalhe} numberOfLines={1}>
-                    {r.detalhe}
-                  </Text>
-                ) : null}
-              </View>
-            </Pressable>
-          ))}
+          {mensagem ? <Text style={estilos.resultadoErro}>{mensagem}</Text> : null}
+          {modo.tipo === 'locais'
+            ? locais?.map((r, indice) => (
+                <Pressable
+                  key={r.id}
+                  onPress={() => escolherLocal(r)}
+                  accessibilityRole="button"
+                  style={({ pressed }) => [
+                    estilos.resultado,
+                    indice > 0 && estilos.resultadoDivisor,
+                    pressed && estilos.pressionado,
+                  ]}>
+                  <AppIcon name="mapPin" size={20} color={AgroColors.forest} />
+                  <View style={estilos.resultadoTextos}>
+                    <Text style={estilos.resultadoNome} numberOfLines={1}>
+                      {r.nome}
+                    </Text>
+                    {r.detalhe ? (
+                      <Text style={estilos.resultadoDetalhe} numberOfLines={1}>
+                        {r.detalhe}
+                      </Text>
+                    ) : null}
+                  </View>
+                </Pressable>
+              ))
+            : areasEncontradas.map((area, indice) => (
+                <Pressable
+                  key={area.id}
+                  onPress={() => escolherArea(area)}
+                  accessibilityRole="button"
+                  style={({ pressed }) => [
+                    estilos.resultado,
+                    indice > 0 && estilos.resultadoDivisor,
+                    pressed && estilos.pressionado,
+                  ]}>
+                  <View style={[estilos.corArea, { backgroundColor: COR_POR_TIPO_AREA[area.tipo] }]} />
+                  <View style={estilos.resultadoTextos}>
+                    <Text style={estilos.resultadoNome} numberOfLines={1}>
+                      {area.nome}
+                    </Text>
+                    <Text style={estilos.resultadoDetalhe} numberOfLines={1}>
+                      {detalheDaArea(area)}
+                    </Text>
+                  </View>
+                </Pressable>
+              ))}
         </View>
       ) : (
         controles
@@ -207,4 +278,5 @@ const estilos = StyleSheet.create({
     color: CoresTexto.suave,
     padding: Spacing.three,
   },
+  corArea: { width: 14, height: 14, borderRadius: 3 },
 });

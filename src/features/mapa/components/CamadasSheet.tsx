@@ -5,7 +5,7 @@ import { SwitchField } from '@/components/forms';
 import { BottomSheet } from '@/components/ui';
 import type { CamadasMapa } from '../data/camadasMapa';
 import type { EstiloMapa } from './MapaBase';
-import { GradeOpcoes, RotuloCampo } from './elementos';
+import { GradeOpcoes, LinkMapa, RotuloCampo } from './elementos';
 
 const OPCOES_ESTILO: { valor: EstiloMapa; rotulo: string }[] = [
   { valor: 'satelite', rotulo: 'Satélite' },
@@ -17,10 +17,12 @@ export interface CamadasSheetProps {
   camadas: CamadasMapa;
   onChange: (camadas: CamadasMapa) => void;
   onClose: () => void;
+  /** Só admin com a divisa já marcada: desenhar o contorno da fazenda de novo */
+  onRedesenharDivisa?: () => void;
 }
 
 /** Fundo do mapa e o que aparece por cima dele; a escolha fica salva no celular. */
-export function CamadasSheet({ visible, camadas, onChange, onClose }: CamadasSheetProps) {
+export function CamadasSheet({ visible, camadas, onChange, onClose, onRedesenharDivisa }: CamadasSheetProps) {
   return (
     <BottomSheet visible={visible} title="Camadas" subtitle="O que aparece no mapa" onClose={onClose}>
       <View style={estilos.conteudo}>
@@ -48,6 +50,13 @@ export function CamadasSheet({ visible, camadas, onChange, onClose }: CamadasShe
             onChange={(pontos) => onChange({ ...camadas, pontos })}
           />
         </View>
+
+        {onRedesenharDivisa ? (
+          <View style={estilos.bloco}>
+            <RotuloCampo titulo="Divisa da fazenda" />
+            <LinkMapa rotulo="Redesenhar a divisa" icone="pentagon" onPress={onRedesenharDivisa} />
+          </View>
+        ) : null}
       </View>
     </BottomSheet>
   );
