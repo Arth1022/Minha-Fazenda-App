@@ -14,7 +14,11 @@ import { MapaBase } from '../components/MapaBase';
 import { ModalCalculadoraCercas } from '../components/ModalCalculadoraCercas';
 import { ModalCalculadoraSementes } from '../components/ModalCalculadoraSementes';
 import { useFazendaMapa } from '../data/fazendaMapa';
-import { formatarHectares } from '../services/calculos';
+import {
+  formatarHectares,
+  ROTULO_CULTURA_LAVOURA,
+  ROTULO_FASE_LAVOURA,
+} from '../services/calculos';
 import { resumoFazenda, vistaDaFazenda } from '../services/vista';
 
 const ROTA_MAPA = '/mapa-fazenda';
@@ -108,8 +112,8 @@ export default function MapeamentoScreen() {
       <View style={estilos.calculadoras}>
         <CartaoCalculadora
           icone="sprout"
-          titulo="Sementes"
-          subtitulo="Quanto comprar"
+          titulo="Insumos"
+          subtitulo="Sementes e adubo"
           onPress={() => setCalculadora('sementes')}
         />
         <CartaoCalculadora
@@ -198,7 +202,11 @@ function ListaTalhoes({ talhoes, podeDesenhar }: { talhoes: Talhao[]; podeDesenh
               <Text style={estilos.talhaoNome} numberOfLines={1}>
                 {talhao.nome}
               </Text>
-              <Text style={estilos.talhaoTipo}>{ROTULO_TIPO[talhao.tipo]}</Text>
+              <Text style={estilos.talhaoTipo}>
+                {talhao.tipo === 'lavoura' && talhao.cultura
+                  ? `${ROTULO_CULTURA_LAVOURA[talhao.cultura] ?? talhao.cultura}${talhao.faseLavoura ? ` · ${ROTULO_FASE_LAVOURA[talhao.faseLavoura] ?? talhao.faseLavoura}` : ''}`
+                  : ROTULO_TIPO[talhao.tipo]}
+              </Text>
             </View>
             <Text style={estilos.talhaoArea}>{formatarHectares(talhao.areaHectares)}</Text>
             <Pressable

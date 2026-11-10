@@ -120,6 +120,13 @@
       "when": 1794279781943,
       "tag": "0016_divisa_fazenda_config",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1794283971985,
+      "tag": "0017_agricultura_mapa",
+      "breakpoints": true
     }
   ]
 }
