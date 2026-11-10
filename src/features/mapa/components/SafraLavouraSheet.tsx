@@ -4,15 +4,12 @@ import { StyleSheet, View } from 'react-native';
 import { BottomSheet } from '@/components/ui';
 import { AgroColors } from '@/constants/theme';
 import type { FaseLavoura, Talhao } from '@/database';
-import { OPCOES_CULTURA_LAVOURA } from '../services/calculos';
+import { OPCOES_CULTURA_LAVOURA, ROTULO_FASE_LAVOURA } from '../services/calculos';
 import { BotaoMapa, GradeOpcoes, LinkMapa, RotuloCampo } from './elementos';
 
-const OPCOES_FASE: { valor: FaseLavoura; rotulo: string }[] = [
-  { valor: 'preparo', rotulo: 'Em preparo' },
-  { valor: 'vegetativo', rotulo: 'Plantada' },
-  { valor: 'colheita', rotulo: 'Pronta p/ colher' },
-  { valor: 'pousio', rotulo: 'Colhida' },
-];
+const OPCOES_FASE: { valor: FaseLavoura; rotulo: string }[] = (
+  ['preparo', 'vegetativo', 'colheita', 'pousio'] as const
+).map((valor) => ({ valor, rotulo: ROTULO_FASE_LAVOURA[valor] }));
 
 export interface DadosSafra {
   cultura: string | null;

@@ -1,3 +1,5 @@
+import type { FaseLavoura } from '@/database/schema';
+
 /**
  * Contas das calculadoras do Mapa (sementes e cerca). Funções puras: a tela só
  * passa os números digitados e mostra o resultado.
@@ -168,11 +170,12 @@ export const ROTULO_CULTURA_LAVOURA: Record<string, string> = {
   outro: 'Outra cultura',
 };
 
-export const ROTULO_FASE_LAVOURA: Record<string, string> = {
-  preparo: 'Em Preparo',
-  vegetativo: 'Vegetativo',
-  colheita: 'Pronto p/ Colheita',
-  pousio: 'Pousio / Colhido',
+/** Como está a lavoura, nas palavras da folha "Safra" (o mesmo texto no painel e nos avisos). */
+export const ROTULO_FASE_LAVOURA: Record<FaseLavoura, string> = {
+  preparo: 'Em preparo',
+  vegetativo: 'Plantada',
+  colheita: 'Pronta p/ colher',
+  pousio: 'Colhida',
 };
 
 export function diasDesdePlantio(dataPlantio: Date | null | undefined, agora = new Date()): number | null {

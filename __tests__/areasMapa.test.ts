@@ -118,9 +118,11 @@ function regrasPuras() {
   // Card da safra no painel da lavoura
   const safra = resumoDaSafra(plantada, AGORA);
   check(
-    safra?.cultura === 'Milho' && safra.fase === 'Vegetativo' && safra.dias === 32,
-    'card da safra: cultura, fase e dias desde o plantio'
+    safra?.cultura === 'Milho' && safra.fase === null && safra.dias === 32,
+    'card da safra: cultura e dias desde o plantio ("Plantada" já está no selo)'
   );
+  check(resumoDaSafra(colher, AGORA)?.fase === 'Pronta p/ colher', 'card da safra mostra a fase quando ela diz mais que o selo');
+  check(resumoDaSafra(preparo, AGORA)?.fase === 'Em preparo', 'lavoura em preparo: selo "Vazia", card "Em preparo"');
   check(resumoDaSafra(vazia, AGORA) === null && resumoDaSafra(pasto, AGORA) === null, 'sem safra, sem card');
 
   // Menu "⋮" por papel
@@ -131,9 +133,9 @@ function regrasPuras() {
   check(opcoesDaArea(false).join() === 'editar,pontoAtencao', 'colaborador não vê redesenhar nem excluir (RN-012)');
 
   // Trocar o tipo avisa o que deixa de valer
-  check(descreverSafra(plantada) === 'Milho · Vegetativo', 'descreve a safra registrada');
+  check(descreverSafra(plantada) === 'Milho · Plantada', 'descreve a safra registrada com os textos da folha "Safra"');
   const avisos = avisosTrocaDeTipo(plantada, 'pasto');
-  check(avisos.length === 1 && avisos[0].includes('Milho · Vegetativo'), 'sair de lavoura com safra avisa que ela será apagada');
+  check(avisos.length === 1 && avisos[0].includes('Milho · Plantada'), 'sair de lavoura com safra avisa que ela será apagada');
   check(avisosTrocaDeTipo(plantada, 'lavoura').length === 0, 'manter o tipo não avisa nada');
   check(avisosTrocaDeTipo(vazia, 'reserva').length === 0, 'lavoura sem safra troca de tipo sem aviso');
   check(avisosTrocaDeTipo(pasto, 'lavoura').length === 0, 'pasto vira lavoura sem aviso');

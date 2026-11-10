@@ -64,7 +64,7 @@ export function situacaoDaArea(area: DadosSafra): SituacaoArea {
 
 export interface SafraResumo {
   cultura: string;
-  /** "Plantada", "Pronta p/ colher"... */
+  /** Fase só quando diz mais que o selo (ex.: "Pronta p/ colher"; "Plantada" já está no selo) */
   fase: string | null;
   /** Dias desde o plantio (só plantada ou pronta para colher) */
   dias: number | null;
@@ -73,14 +73,16 @@ export interface SafraResumo {
 /** Card da safra no painel da lavoura; null se não há safra registrada. */
 export function resumoDaSafra(area: DadosSafra, agora = new Date()): SafraResumo | null {
   if (area.tipo !== 'lavoura' || !area.cultura) return null;
+  const { estado } = situacaoDaArea(area);
+  const fase = area.faseLavoura ? ROTULO_FASE_LAVOURA[area.faseLavoura] : null;
   return {
     cultura: ROTULO_CULTURA_LAVOURA[area.cultura] ?? area.cultura,
-    fase: area.faseLavoura ? ROTULO_FASE_LAVOURA[area.faseLavoura] : null,
+    fase: fase && estado && fase === ROTULO_ESTADO_AREA[estado] ? null : fase,
     dias: diasDesdePlantio(area.dataPlantio, agora),
   };
 }
 
-/** "Milho · Vegetativo"; null se a lavoura não tem safra registrada. */
+/** "Milho · Plantada"; null se a lavoura não tem safra registrada. */
 export function descreverSafra(area: DadosSafra): string | null {
   if (area.tipo !== 'lavoura' || (!area.cultura && !area.faseLavoura)) return null;
   return [
