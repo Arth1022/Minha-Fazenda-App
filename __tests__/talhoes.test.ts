@@ -24,7 +24,9 @@ import {
   lerNumero,
   paraCampo,
 } from '@/features/mapa/services/calculos';
-import { db, initTestDatabase, talhoes } from './support/database';
+import Storage from 'expo-sqlite/kv-store';
+import { obterFazendaMapa, salvarFazendaMapa } from '@/features/mapa/data/fazendaMapa';
+import { db, fazendaConfig, initTestDatabase, sqlite, talhoes } from './support/database';
 
 const UUID_V4 =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -310,6 +312,56 @@ async function runTalhoesTest() {
   check(
     formatarDistancia(0.42) === '420 m' && formatarDistancia(2.4) === '2,4 km',
     'formatarDistancia mostra metros abaixo de 1 km',
+  );
+
+  // Divisa da fazenda em fazenda_config (Drizzle + fallback do kv-store legado)
+  check(obterFazendaMapa() === null, 'obterFazendaMapa retorna null quando não há divisa salva');
+
+  const metaLegado = extrairMetadadosEspaciais(quadrado1Ha);
+  Storage.setItemSync(
+    'mapa.fazenda',
+    JSON.stringify({
+      nome: 'Fazenda Legada',
+      divisa: metaLegado.geometriaJson.coordinates[0],
+      areaHectares: metaLegado.areaHectares,
+      minLat: metaLegado.minLat,
+      maxLat: metaLegado.maxLat,
+      minLng: metaLegado.minLng,
+      maxLng: metaLegado.maxLng,
+    }),
+  );
+
+  const migrada = obterFazendaMapa();
+  const [configMigrada] = await db.select().from(fazendaConfig);
+  check(
+    migrada?.nome === 'Fazenda Legada' &&
+      configMigrada?.nome === 'Fazenda Legada' &&
+      Array.isArray(configMigrada?.divisaJson) &&
+      configMigrada.divisaJson.length === 5 &&
+      Storage.getItemSync('mapa.fazenda') === null,
+    'obterFazendaMapa migra divisa legada do kv-store para fazenda_config e limpa a chave antiga',
+  );
+
+  let queriesExecutadas = 0;
+  const prepareOriginal = sqlite.prepare.bind(sqlite);
+  sqlite.prepare = ((sql: string, params?: any) => {
+    queriesExecutadas += 1;
+    return prepareOriginal(sql, params);
+  }) as typeof sqlite.prepare;
+
+  const fazendaAtualizada = salvarFazendaMapa('  Fazenda Esperança  ', retanguloMaior);
+  sqlite.prepare = prepareOriginal;
+
+  const configsAposUpdate = await db.select().from(fazendaConfig);
+  check(
+    queriesExecutadas === 1 &&
+      configsAposUpdate.length === 1 &&
+      configsAposUpdate[0].id === configMigrada.id &&
+      configsAposUpdate[0].nome === 'Fazenda Esperança' &&
+      Math.abs((configsAposUpdate[0].areaHectares ?? 0) - 2.0) <= 0.04 &&
+      obterFazendaMapa()?.nome === 'Fazenda Esperança' &&
+      fazendaAtualizada.nome === 'Fazenda Esperança',
+    `salvarFazendaMapa atualiza nome, divisa e BBOX em fazenda_config numa única query (${queriesExecutadas} query)`,
   );
 
   console.log('\n🎉 TODOS OS TESTES DE TALHÕES PASSARAM!');

@@ -4,6 +4,7 @@
     "paths": {
       "@/database": ["./__tests__/support/database.ts"],
       "expo-notifications": ["./__tests__/support/expo-notifications.ts"],
+      "expo-sqlite/kv-store": ["./__tests__/support/kv-store.ts"],
       "@/*": ["./src/*"],
       "@/assets/*": ["./assets/*"]
     }

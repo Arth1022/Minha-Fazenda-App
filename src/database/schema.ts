@@ -80,6 +80,13 @@ export type ResultadoExame = (typeof RESULTADOS_EXAME)[number];
 export const fazendaConfig = sqliteTable('fazenda_config', {
   id: id(),
   tipoProducao: text('tipo_producao', { enum: TIPOS_PRODUCAO }).notNull(),
+  nome: text('nome'),
+  divisaJson: text('divisa_json', { mode: 'json' }).$type<[number, number][]>(),
+  areaHectares: real('area_hectares'),
+  minLat: real('min_lat'),
+  maxLat: real('max_lat'),
+  minLng: real('min_lng'),
+  maxLng: real('max_lng'),
   ...timestamps,
 });
 
