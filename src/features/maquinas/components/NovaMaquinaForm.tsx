@@ -32,6 +32,11 @@ export interface NovaMaquinaFormProps {
   visible: boolean;
   onClose: () => void;
   onCreated: (maquina: Maquina) => void;
+  /**
+   * Máquina a editar: o formulário começa preenchido e salva por cima. Monte o
+   * modal só quando abrir, para começar com os dados atuais do cadastro.
+   */
+  maquina?: Maquina | null;
 }
 
 /**
@@ -39,8 +44,12 @@ export interface NovaMaquinaFormProps {
  * "Mais detalhes". Implemento (plantadeira, grade, carreta) não tem motor: no
  * lugar de combustível e horímetro, pede a largura de trabalho (dá a área).
  */
-export function NovaMaquinaForm({ visible, onClose, onCreated }: NovaMaquinaFormProps) {
-  const { control, clearErrors, submit, saving, implemento, possuiHorimetro } = useNovaMaquinaForm(onCreated);
+export function NovaMaquinaForm({ visible, onClose, onCreated, maquina = null }: NovaMaquinaFormProps) {
+  const { control, clearErrors, submit, saving, implemento, possuiHorimetro } = useNovaMaquinaForm(
+    onCreated,
+    maquina
+  );
+  const editando = maquina !== null;
 
   useEffect(() => {
     if (visible) clearErrors();
@@ -49,11 +58,11 @@ export function NovaMaquinaForm({ visible, onClose, onCreated }: NovaMaquinaForm
   return (
     <FormModal
       visible={visible}
-      title="Nova Máquina"
-      subtitle="Cadastre um equipamento ou veículo da fazenda"
+      title={editando ? 'Editar máquina' : 'Nova Máquina'}
+      subtitle={editando ? maquina.nome : 'Cadastre um equipamento ou veículo da fazenda'}
       onClose={onClose}
       onSubmit={submit}
-      submitLabel="Salvar Máquina"
+      submitLabel={editando ? 'Salvar' : 'Salvar Máquina'}
       loading={saving}>
       <ControlledInput
         control={control}
@@ -170,7 +179,8 @@ export function NovaMaquinaForm({ visible, onClose, onCreated }: NovaMaquinaForm
               <ControlledInput
                 control={control}
                 name="horimetro"
-                label="Horímetro atual"
+                label={editando ? 'Horímetro no cadastro' : 'Horímetro atual'}
+                helperText={editando ? 'As horas de uso no app somam a partir deste valor.' : undefined}
                 placeholder="1250"
                 keyboardType="numeric"
                 suffix="h"

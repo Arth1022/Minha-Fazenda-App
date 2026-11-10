@@ -60,15 +60,31 @@ export async function cadastrarMaquina(nova: DadosNovaMaquina): Promise<Maquina>
     }
     const codigo = informado ?? gerarCodigo(nova.tipo ?? 'outro', usados);
     const categoria = categoriaDoTipo(nova.tipo ?? 'outro');
-    // Implemento não tem motor: sem combustível, horímetro, tanque nem potência
-    const semMotor =
-      categoria === 'implemento'
-        ? { combustivel: null, possuiHorimetro: false, horimetroInicial: null, tanqueLitros: null, potenciaCv: null }
-        : { larguraTrabalhoM: null };
     return tx
       .insert(maquinas)
-      .values({ ...nova, ...semMotor, categoria, codigo, nome })
+      .values({ ...nova, ...camposDaCategoria(categoria), categoria, codigo, nome })
       .returning()
       .get();
   });
+}
+
+/** Implemento não tem motor: sem combustível, horímetro, tanque nem potência. */
+function camposDaCategoria(categoria: ReturnType<typeof categoriaDoTipo>) {
+  return categoria === 'implemento'
+    ? { combustivel: null, possuiHorimetro: false, horimetroInicial: null, tanqueLitros: null, potenciaCv: null }
+    : { larguraTrabalhoM: null };
+}
+
+/** Edição do cadastro (lápis da ficha). O ID interno não muda: está no QR impresso. */
+export async function atualizarMaquina(id: string, dados: Omit<DadosNovaMaquina, 'codigo'>): Promise<Maquina> {
+  const nome = dados.nome.trim();
+  if (!nome) throw new Error('Informe o nome da máquina');
+  const categoria = categoriaDoTipo(dados.tipo ?? 'outro');
+  const [atualizada] = await db
+    .update(maquinas)
+    .set({ ...dados, ...camposDaCategoria(categoria), categoria, nome })
+    .where(eq(maquinas.id, id))
+    .returning();
+  if (!atualizada) throw new Error('Máquina não encontrada');
+  return atualizada;
 }

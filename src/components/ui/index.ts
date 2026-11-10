@@ -36,3 +36,15 @@ export {
   StatActionCard,
   type StatActionCardProps,
 } from './StatActionCard';
+export {
+  Chip,
+  FichaCard,
+  IconeRedondo,
+  type TomFicha,
+} from './FichaElementos';
+export {
+  FichaTopo,
+  type AbaFichaTopo,
+  type AcaoFichaTopo,
+  type FichaTopoProps,
+} from './FichaTopo';

@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { COMBUSTIVEIS, TIPOS_MAQUINA } from '@/database';
 import type { Maquina } from '@/dtos';
 import { decimalOpcional, isInteiro, parseDecimal } from '@/utils';
-import { cadastrarMaquina, type DadosNovaMaquina } from '../data/maquinas';
+import { atualizarMaquina, cadastrarMaquina, type DadosNovaMaquina } from '../data/maquinas';
 import { categoriaDoTipo } from '../services/padroes';
 
 const ANO_MINIMO = 1900;
@@ -79,18 +79,46 @@ function paraNovaMaquina(values: NovaMaquinaFormValues): DadosNovaMaquina {
   };
 }
 
-/** Estado, validação e envio do cadastro de máquina. */
-export function useNovaMaquinaForm(onCreated: (maquina: Maquina) => void) {
+const textoOuVazio = (valor: string | null) => valor ?? '';
+const numeroOuVazio = (valor: number | null) => (valor === null ? '' : String(valor).replace('.', ','));
+
+/** Valores do formulário a partir da máquina cadastrada (edição). */
+function valoresDaMaquina(maquina: Maquina): NovaMaquinaFormValues {
+  return {
+    nome: maquina.nome,
+    tipo: maquina.tipo,
+    marca: textoOuVazio(maquina.marca),
+    modelo: textoOuVazio(maquina.modelo),
+    anoFabricacao: numeroOuVazio(maquina.anoFabricacao),
+    numeroSerie: textoOuVazio(maquina.numeroSerie),
+    placa: textoOuVazio(maquina.placa),
+    potenciaCv: numeroOuVazio(maquina.potenciaCv),
+    combustivel: maquina.combustivel ?? DEFAULT_VALUES.combustivel,
+    horimetro: numeroOuVazio(maquina.horimetroInicial),
+    possuiHorimetro: maquina.categoria === 'implemento' ? DEFAULT_VALUES.possuiHorimetro : maquina.possuiHorimetro,
+    tanqueLitros: numeroOuVazio(maquina.tanqueLitros),
+    larguraTrabalhoM: numeroOuVazio(maquina.larguraTrabalhoM),
+    dataAquisicao: maquina.dataAquisicao,
+  };
+}
+
+/**
+ * Estado, validação e envio do cadastro de máquina. Com `maquina`, edita o
+ * cadastro dela (o formulário começa preenchido).
+ */
+export function useNovaMaquinaForm(onSaved: (maquina: Maquina) => void, maquina?: Maquina | null) {
   const form = useForm<NovaMaquinaFormValues>({
     resolver: zodResolver(novaMaquinaSchema),
-    defaultValues: DEFAULT_VALUES,
+    defaultValues: maquina ? valoresDaMaquina(maquina) : DEFAULT_VALUES,
   });
 
   const submit = form.handleSubmit(async (values) => {
     try {
-      const criada = await cadastrarMaquina(paraNovaMaquina(values));
-      form.reset(DEFAULT_VALUES);
-      onCreated(criada);
+      const salva = maquina
+        ? await atualizarMaquina(maquina.id, paraNovaMaquina(values))
+        : await cadastrarMaquina(paraNovaMaquina(values));
+      if (!maquina) form.reset(DEFAULT_VALUES);
+      onSaved(salva);
     } catch (erro) {
       Alert.alert('Não foi possível salvar', erro instanceof Error ? erro.message : 'Tente novamente.');
     }

@@ -2,10 +2,17 @@ import { eq } from 'drizzle-orm';
 
 import { anotacoesDaMaquina, criarAnotacao } from '@/features/maquinas/data/anotacoes';
 import {
+  atualizarMaquina,
   buscarMaquinaPorReferencia,
   cadastrarMaquina,
   listarMaquinas,
 } from '@/features/maquinas/data/maquinas';
+import {
+  formatarDiaHistorico,
+  formatarMomento,
+  montarHistorico,
+  ultimoUsoEncerrado,
+} from '@/features/maquinas/services/historico';
 import {
   encerrarUso,
   gravarPontos,
@@ -202,6 +209,22 @@ async function runMaquinasTest() {
   );
   check(semId.categoria === 'motorizada' && semId.possuiHorimetro, 'trator é motorizado e tem horímetro');
 
+  // Edição do cadastro (lápis da ficha): o ID interno do QR não muda
+  const editado = await atualizarMaquina(semId.id, { nome: ' Trator azul ', tipo: 'trator', marca: 'New Holland', modelo: 'TL75' });
+  check(
+    editado.nome === 'Trator azul' && editado.modelo === 'TL75' && editado.codigo === semId.codigo,
+    'editar a máquina grava os dados e mantém o ID interno'
+  );
+  const virouImplemento = await atualizarMaquina(semId.id, { nome: 'Trator azul', tipo: 'implemento', combustivel: 'diesel' });
+  check(
+    virouImplemento.categoria === 'implemento' && virouImplemento.combustivel === null && !virouImplemento.possuiHorimetro,
+    'editar para implemento tira combustível e horímetro'
+  );
+  await atualizarMaquina(semId.id, { nome: 'Trator azul', tipo: 'trator', possuiHorimetro: true });
+  check((await rejeita(() => atualizarMaquina(semId.id, { nome: '  ', tipo: 'trator' }))) !== null, 'editar sem nome é recusado');
+
+  historico();
+
   await auditoria(trator.id, semId.id);
 
   await criarAnotacao(trator.id, '  Troca de óleo  ');
@@ -216,6 +239,32 @@ async function runMaquinasTest() {
   );
 
   console.log('\n🎉 Máquinas: tudo certo!');
+}
+
+/** Aba Histórico: junta tudo por dia, do mais recente, e formata as datas. */
+function historico() {
+  const uso = (id: string, inicio: Date, fim: Date | null) =>
+    ({ id, inicio, fim }) as Parameters<typeof ultimoUsoEncerrado>[0][number];
+  const usos = [uso('u3', em(7, 10), null), uso('u2', em(6, 18), em(6, 19)), uso('u1', em(5, 8), em(5, 9))];
+  const dias = montarHistorico({
+    usos,
+    abastecimentos: [{ id: 'a1', abastecidoEm: em(6, 20) }] as never,
+    leituras: [
+      { id: 'l1', lidoEm: em(5, 7), origem: 'avulsa' },
+      { id: 'l2', lidoEm: em(6, 20), origem: 'abastecimento' },
+    ] as never,
+    problemas: [{ id: 'p1', registradoEm: em(7, 9) }] as never,
+  });
+  check(
+    dias.map((d) => d.itens.map((i) => i.id).join('+')).join(' | ') === 'u3+p1 | a1+u2 | u1+l1',
+    'histórico agrupa por dia, do mais recente, e esconde a leitura feita no abastecimento'
+  );
+  check(montarHistorico({ usos, abastecimentos: [], leituras: [], problemas: [] }, 2).flatMap((d) => d.itens).length === 2, 'histórico respeita o limite');
+  check(ultimoUsoEncerrado(usos)?.id === 'u2', 'último uso ignora o que ainda está aberto');
+
+  const sexta = new Date(2026, 10, 6, 18, 39);
+  check(formatarMomento(sexta) === 'sex, 06/11 às 18:39', 'último uso formatado como "sex, 06/11 às 18:39"');
+  check(formatarDiaHistorico(sexta) === 'Sexta, 06/11/2026', 'dia do histórico formatado como "Sexta, 06/11/2026"');
 }
 
 /** Auditoria de máquinas no banco: ligar com implemento, assumir, descarte, rastro, registros. */

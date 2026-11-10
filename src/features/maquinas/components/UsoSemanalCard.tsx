@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { Card, SectionHeader } from '@/components/ui';
+import { FichaCard } from '@/components/ui';
 import { AgroColors, Radius, Spacing, Typography } from '@/constants/theme';
 import type { UsoDoDia } from '@/dtos';
 import { formatNumero } from '@/utils/formatters';
@@ -9,9 +9,17 @@ import { formatarDuracao } from '../services/uso';
 
 /** Rótulo pelo índice de Date.getDay() (0 = domingo) */
 const DIA_DA_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-const ALTURA_GRAFICO = 96;
-/** Barra mínima visível para o dia que teve algum uso */
-const ALTURA_MINIMA = 4;
+/** Altura da barra do dia de maior uso */
+const ALTURA_MAXIMA = 56;
+/** Altura da pílula cinza do dia sem uso (e mínima do dia com uso) */
+const ALTURA_MINIMA = 6;
+const UMA_HORA_MS = 60 * 60 * 1000;
+
+/** Texto acima da barra: "<1 min", "45 min" ou, de 1 hora para cima, "2,5h" (cabe na coluna). */
+function rotuloDoDia(ms: number): string {
+  if (ms === 0) return '';
+  return ms < UMA_HORA_MS ? formatarDuracao(ms) : formatarDuracao(ms, { curto: true });
+}
 
 export interface UsoSemanalCardProps {
   dias: UsoDoDia[];
@@ -23,100 +31,110 @@ export interface UsoSemanalCardProps {
 }
 
 /**
- * Histórico de uso semanal: uma barra por dia dos últimos 7 dias (hoje à direita)
- * e o total da semana. Feito com Views, sem biblioteca de gráfico.
+ * Uso na semana: uma pílula por dia dos últimos 7 dias (hoje à direita), verde
+ * e mais alta conforme o tempo de uso, e o total no canto. Feito com Views.
  */
 export function UsoSemanalCard({ dias, totalMs, km = null, ha = null }: UsoSemanalCardProps) {
   const maior = Math.max(...dias.map((d) => d.duracaoMs), 1);
   const ultimo = dias.length - 1;
+  const total = [
+    formatarDuracao(totalMs),
+    km !== null ? `${formatNumero(km, 1)} km` : null,
+    ha !== null ? `${formatNumero(ha, 1)} ha` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
-    <View style={styles.secao}>
-      <SectionHeader
-        title="Uso na semana"
-        rightElement={
-          <Text style={styles.total}>
-            {[
-              formatarDuracao(totalMs),
-              km !== null ? `${formatNumero(km, 1)} km` : null,
-              ha !== null ? `${formatNumero(ha, 1)} ha` : null,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-          </Text>
-        }
-      />
-      <Card padding="three">
-        <View
-          style={styles.grafico}
-          accessible
-          accessibilityLabel={`Uso nos últimos 7 dias: ${formatarDuracao(totalMs)}`}>
-          {dias.map((d, i) => {
-            const altura =
-              d.duracaoMs === 0 ? 0 : Math.max(ALTURA_MINIMA, (d.duracaoMs / maior) * ALTURA_GRAFICO);
-            return (
-              <View key={d.dia.getTime()} style={styles.coluna}>
-                <Text style={styles.valor}>{formatarDuracao(d.duracaoMs, { curto: true })}</Text>
-                <View style={styles.trilho}>
-                  <View
-                    style={[styles.barra, i === ultimo && styles.barraHoje, { height: altura }]}
-                  />
-                </View>
-                <Text style={[styles.dia, i === ultimo && styles.diaHoje]}>
-                  {i === ultimo ? 'Hoje' : DIA_DA_SEMANA[d.dia.getDay()]}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
-      </Card>
-    </View>
+    <FichaCard>
+      <View style={styles.cabecalho}>
+        <Text style={styles.titulo}>Uso na semana</Text>
+        <Text style={styles.totalRotulo}>
+          Total <Text style={styles.totalValor}>{total}</Text>
+        </Text>
+      </View>
+
+      <View
+        style={styles.grafico}
+        accessible
+        accessibilityLabel={`Uso nos últimos 7 dias: ${formatarDuracao(totalMs)}`}>
+        {dias.map((d, i) => {
+          const usado = d.duracaoMs > 0;
+          const altura = usado
+            ? Math.max(ALTURA_MINIMA, (d.duracaoMs / maior) * ALTURA_MAXIMA)
+            : ALTURA_MINIMA;
+          const hoje = i === ultimo;
+          return (
+            <View key={d.dia.getTime()} style={styles.coluna}>
+              <Text style={styles.valor} numberOfLines={1}>
+                {rotuloDoDia(d.duracaoMs)}
+              </Text>
+              <View style={[styles.barra, usado && styles.barraUsada, { height: altura }]} />
+              <Text style={[styles.dia, hoje && styles.diaHoje]}>
+                {hoje ? 'Hoje' : DIA_DA_SEMANA[d.dia.getDay()]}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    </FichaCard>
   );
 }
 
 const styles = StyleSheet.create({
-  secao: {
+  cabecalho: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     gap: Spacing.md,
   },
-  total: {
-    ...Typography.captionBold,
-    color: AgroColors.primary,
+  titulo: {
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '700',
+    color: AgroColors.textPrimary,
+  },
+  totalRotulo: {
+    ...Typography.bodyMedium,
+    flexShrink: 1,
+    textAlign: 'right',
+  },
+  totalValor: {
+    fontWeight: '800',
+    color: AgroColors.textPrimary,
   },
   grafico: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: Spacing.xs,
+    paddingTop: Spacing.lg,
   },
   coluna: {
     flex: 1,
     alignItems: 'center',
-    gap: Spacing.one,
+    justifyContent: 'flex-end',
+    gap: Spacing.xs,
   },
   valor: {
     ...Typography.micro,
+    color: AgroColors.textSecondary,
+    fontWeight: '700',
     minHeight: 14,
   },
-  trilho: {
-    width: '100%',
-    height: ALTURA_GRAFICO,
-    justifyContent: 'flex-end',
-    backgroundColor: AgroColors.subtleBg,
-    borderRadius: Radius.xs,
-    overflow: 'hidden',
-  },
   barra: {
-    width: '100%',
-    backgroundColor: AgroColors.mintBorder,
-    borderRadius: Radius.xs,
+    width: '58%',
+    borderRadius: Radius.full,
+    backgroundColor: AgroColors.border,
   },
-  barraHoje: {
-    backgroundColor: AgroColors.primaryLight,
+  barraUsada: {
+    backgroundColor: AgroColors.forest,
   },
   dia: {
-    ...Typography.micro,
+    ...Typography.bodyMedium,
+    marginTop: Spacing.xs,
   },
   diaHoje: {
-    color: AgroColors.primary,
-    fontWeight: '700',
+    fontWeight: '800',
+    color: AgroColors.textPrimary,
   },
 });

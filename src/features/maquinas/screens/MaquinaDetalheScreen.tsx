@@ -1,27 +1,33 @@
 import React, { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 
-import { Button, Card, EmptyState, Header, ScreenContainer, SectionHeader } from '@/components/ui';
-import { Spacing } from '@/constants/theme';
-import { AnotacoesSecao } from '../components/AnotacoesSecao';
-import { DadosMaquinaCard } from '../components/DadosMaquinaCard';
-import { FichaMaquinaResumo } from '../components/FichaMaquinaResumo';
-import { HistoricoUsoSecao } from '../components/HistoricoUsoSecao';
+import { AppIcon, Button, EmptyState, FichaTopo, Header, ScreenContainer } from '@/components/ui';
+import { AgroColors } from '@/constants/theme';
+import { CONDICAO_LABEL, TIPO_MAQUINA_LABEL } from '../constants';
+import { DadosMaquinaTab } from '../components/ficha/DadosMaquinaTab';
+import { HistoricoMaquinaTab } from '../components/ficha/HistoricoMaquinaTab';
+import { ResumoMaquinaTab } from '../components/ficha/ResumoMaquinaTab';
+import { MaquinaAvatar } from '../components/MaquinaAvatar';
 import { NovaAnotacaoForm } from '../components/NovaAnotacaoForm';
-import { ProblemasSecao } from '../components/ProblemasSecao';
+import { NovaMaquinaForm } from '../components/NovaMaquinaForm';
 import { QrCodeMaquinaModal } from '../components/QrCodeMaquinaModal';
-import { RegistrosRecentesSecao } from '../components/RegistrosRecentesSecao';
-import { UsoSemanalCard } from '../components/UsoSemanalCard';
 import { useAnotacoesMaquina, useFichaMaquina } from '../hooks/useFichaMaquina';
 import { useFluxosMaquina, type FluxoMaquina } from '../hooks/useFluxosMaquina';
 import { useSituacaoMaquina } from '../hooks/useSituacaoMaquina';
 import { ehImplemento } from '../services/padroes';
 
+type AbaMaquina = 'resumo' | 'historico' | 'dados';
+
+const ABAS = [
+  { key: 'resumo' as const, label: 'Resumo' },
+  { key: 'historico' as const, label: 'Histórico' },
+  { key: 'dados' as const, label: 'Dados' },
+];
+
 /**
- * Ficha Máquina: resumo (quem está usando e a situação), uso na semana (horas,
- * KM e hectares), registros (abastecer, horímetro, problema, uso esquecido),
- * problemas em aberto, últimos usos, abastecimentos e anotações.
+ * Ficha da máquina: topo verde com a identificação e as abas Resumo (situação,
+ * uso na semana e registros), Histórico (tudo o que aconteceu, por dia) e
+ * Dados (cadastro e anotações). O rodapé liga, desliga ou assume a máquina.
  */
 export default function MaquinaDetalheScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -29,12 +35,14 @@ export default function MaquinaDetalheScreen() {
   const anotacoes = useAnotacoesMaquina(id);
   const situacao = useSituacaoMaquina(ficha?.maquina ?? null);
   const fluxos = useFluxosMaquina();
+  const [aba, setAba] = useState<AbaMaquina>('resumo');
   const [anotacaoVisivel, setAnotacaoVisivel] = useState(false);
   const [qrVisivel, setQrVisivel] = useState(false);
+  const [editando, setEditando] = useState(false);
 
   if (!ficha) {
     return (
-      <ScreenContainer withTabInset={false} header={<Header title="Ficha Máquina" showBack />}>
+      <ScreenContainer withTabInset={false} header={<Header title="Ficha da máquina" showBack />}>
         <EmptyState message="Carregando máquina..." />
       </ScreenContainer>
     );
@@ -43,30 +51,37 @@ export default function MaquinaDetalheScreen() {
   const { maquina } = ficha;
   const implemento = ehImplemento(maquina);
   const { usoAberto, deOutraPessoa, condicao } = situacao;
+  const emUso = usoAberto !== null || situacao.engatadoEm !== null;
   const meuUso = usoAberto !== null && !deOutraPessoa;
   const abrir = (fluxo: FluxoMaquina) => fluxos.abrir(fluxo, maquina, { usoAberto, condicao, deOutraPessoa });
 
-  let acaoPrincipal: React.ReactNode = null;
+  const subtitulo = [TIPO_MAQUINA_LABEL[maquina.tipo], maquina.marca, maquina.modelo].filter(Boolean).join(' · ');
+  const etiqueta = emUso ? 'Em uso' : condicao === 'ok' ? (implemento ? 'Parado' : 'Parada') : CONDICAO_LABEL[condicao];
+
+  // Implemento não liga sozinho (vem engatado no trator); inativa não liga
+  let rodape: React.ReactNode = null;
   if (!implemento && meuUso) {
-    acaoPrincipal = (
+    rodape = (
       <Button
         label="Desligar"
         variant="danger"
         size="lg"
+        fullWidth
         loading={fluxos.ocupado}
+        leftIcon={<AppIcon name="power" size={22} color={AgroColors.textInverse} />}
         onPress={() => fluxos.desligar(maquina)}
-        style={styles.acaoPrincipal}
       />
     );
   } else if (!implemento && maquina.status !== 'inativa') {
-    acaoPrincipal = (
+    rodape = (
       <Button
         label={deOutraPessoa ? 'Assumir' : 'Ligar'}
         variant="primary"
         size="lg"
+        fullWidth
         loading={fluxos.ocupado}
+        leftIcon={<AppIcon name="power" size={22} color={AgroColors.textInverse} />}
         onPress={() => abrir('ligar')}
-        style={styles.acaoPrincipal}
       />
     );
   }
@@ -74,57 +89,37 @@ export default function MaquinaDetalheScreen() {
   return (
     <ScreenContainer
       withTabInset={false}
-      header={<Header title="Ficha Máquina" showBack />}
-      footer={
-        <View style={styles.rodape}>
-          {acaoPrincipal}
-          <Button
-            label="QR Code"
-            variant="outline"
-            size="lg"
-            onPress={() => setQrVisivel(true)}
-            style={styles.acaoSecundaria}
-          />
-        </View>
-      }>
-      <FichaMaquinaResumo
-        maquina={maquina}
-        usoAtual={ficha.usoAtual}
-        condicao={condicao}
-        engatadoEm={situacao.engatadoEm?.nome ?? null}
-      />
-      <UsoSemanalCard dias={ficha.usoSemanal} totalMs={ficha.totalSemanaMs} km={ficha.kmSemana} ha={ficha.haSemana} />
+      header={
+        <FichaTopo
+          titulo="Ficha da máquina"
+          avatar={<MaquinaAvatar tipo={maquina.tipo} marca={maquina.marca} size={60} variant="translucido" />}
+          nome={maquina.nome}
+          etiqueta={etiqueta}
+          subtitulo={subtitulo}
+          acoes={[
+            { icone: 'scanQr', label: 'Ver QR Code da máquina', onPress: () => setQrVisivel(true) },
+            { icone: 'edit', label: 'Editar máquina', onPress: () => setEditando(true) },
+          ]}
+          abas={ABAS}
+          aba={aba}
+          onAbaChange={setAba}
+        />
+      }
+      footer={rodape}>
+      {aba === 'resumo' ? <ResumoMaquinaTab ficha={ficha} situacao={situacao} onRegistrar={abrir} /> : null}
 
-      <View style={styles.secao}>
-        <SectionHeader title="Registrar" />
-        <Card padding="three">
-          <View style={styles.grade}>
-            {!implemento ? (
-              <Button label="Abastecer" variant="outline" onPress={() => abrir('abastecer')} style={styles.metade} />
-            ) : null}
-            {maquina.possuiHorimetro ? (
-              <Button label="Horímetro" variant="outline" onPress={() => abrir('horimetro')} style={styles.metade} />
-            ) : null}
-            <Button label="Problema" variant="outline" onPress={() => abrir('problema')} style={styles.metade} />
-            {!implemento ? (
-              <Button label="Uso esquecido" variant="outline" onPress={() => abrir('usoManual')} style={styles.metade} />
-            ) : null}
-          </View>
-        </Card>
-      </View>
+      {aba === 'historico' ? (
+        <HistoricoMaquinaTab maquinaId={maquina.id} usos={ficha.usosRecentes} implemento={implemento} />
+      ) : null}
 
-      <ProblemasSecao problemas={situacao.problemas} />
-      <DadosMaquinaCard ficha={ficha} />
-      <HistoricoUsoSecao
-        usos={ficha.usosRecentes}
-        vazio={
-          implemento
-            ? 'Nenhum uso ainda. Escolha este implemento ao ligar o trator que vai puxá-lo.'
-            : undefined
-        }
-      />
-      {!implemento ? <RegistrosRecentesSecao maquinaId={maquina.id} /> : null}
-      <AnotacoesSecao anotacoes={anotacoes} onAdicionar={() => setAnotacaoVisivel(true)} />
+      {aba === 'dados' ? (
+        <DadosMaquinaTab
+          ficha={ficha}
+          anotacoes={anotacoes}
+          onEditar={() => setEditando(true)}
+          onAdicionarAnotacao={() => setAnotacaoVisivel(true)}
+        />
+      ) : null}
 
       <NovaAnotacaoForm
         visible={anotacaoVisivel}
@@ -134,33 +129,18 @@ export default function MaquinaDetalheScreen() {
         onClose={() => setAnotacaoVisivel(false)}
       />
 
+      {/* Montado só aberto: cada abertura começa com os dados atuais do cadastro */}
+      {editando ? (
+        <NovaMaquinaForm
+          visible
+          maquina={maquina}
+          onClose={() => setEditando(false)}
+          onCreated={() => setEditando(false)}
+        />
+      ) : null}
+
       <QrCodeMaquinaModal visible={qrVisivel} maquina={maquina} onClose={() => setQrVisivel(false)} />
       {fluxos.modais}
     </ScreenContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  rodape: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  acaoPrincipal: {
-    flex: 2,
-  },
-  acaoSecundaria: {
-    flex: 1,
-  },
-  secao: {
-    gap: Spacing.md,
-  },
-  grade: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-  },
-  metade: {
-    flexBasis: '47%',
-    flexGrow: 1,
-  },
-});

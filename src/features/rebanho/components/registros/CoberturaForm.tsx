@@ -44,7 +44,6 @@ export function CoberturaForm({ animalId, touros, onClose }: CoberturaFormProps)
 
   return (
     <FormModal
-      variant="sheet"
       visible
       title="Cobertura"
       subtitle="A previsão de parto é calculada automaticamente"

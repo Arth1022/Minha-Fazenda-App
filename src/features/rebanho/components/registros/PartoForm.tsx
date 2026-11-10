@@ -44,7 +44,6 @@ export function PartoForm({ maeId, onClose }: PartoFormProps) {
 
   return (
     <FormModal
-      variant="sheet"
       visible
       title="Parto"
       subtitle="A cria entra no rebanho já ligada à mãe"

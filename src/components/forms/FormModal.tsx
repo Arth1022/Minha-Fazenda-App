@@ -32,16 +32,13 @@ export interface FormModalProps {
    * sozinho (ex.: FlatList), para o que vem antes dele ficar fixo.
    */
   scrollable?: boolean;
-  /**
-   * `center` (padrão): cartão no meio da tela.
-   * `sheet`: sobe do rodapé e pode crescer até quase cobrir a tela.
-   */
-  variant?: 'center' | 'sheet';
   children: React.ReactNode;
 }
 
 /**
- * Modal padronizado para formulários de criação e edição rápida.
+ * Modal padronizado do app (formulários, buscas, QR Code): folha que sobe do
+ * rodapé, como os registros do rebanho, e pode crescer até quase cobrir a tela.
+ * Fecha no X, no fundo escuro ou no voltar do Android.
  */
 export function FormModal({
   visible,
@@ -54,25 +51,20 @@ export function FormModal({
   loading = false,
   onShow,
   scrollable = true,
-  variant = 'center',
   children,
 }: FormModalProps) {
   const insets = useSafeAreaInsets();
-  const isSheet = variant === 'sheet';
 
   return (
     <Modal
       visible={visible}
       transparent
-      animationType={isSheet ? 'slide' : 'fade'}
+      animationType="slide"
       onRequestClose={onClose}
       onShow={onShow}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={[
-          styles.overlay,
-          isSheet && [styles.overlaySheet, { paddingTop: insets.top + Spacing.five }],
-        ]}>
+        style={[styles.overlay, { paddingTop: insets.top + Spacing.five }]}>
         <Pressable
           style={styles.backdrop}
           onPress={onClose}
@@ -80,12 +72,8 @@ export function FormModal({
           accessibilityLabel="Fechar"
         />
 
-        <View
-          style={[
-            styles.sheet,
-            isSheet && [styles.sheetBottom, { paddingBottom: insets.bottom + Spacing.lg }],
-          ]}>
-          {isSheet ? <View style={styles.handle} /> : null}
+        <View style={[styles.sheet, { paddingBottom: insets.bottom + Spacing.lg }]}>
+          <View style={styles.handle} />
 
           <View style={styles.header}>
             <View style={{ flex: 1 }}>
@@ -106,7 +94,7 @@ export function FormModal({
 
           {scrollable ? (
             <ScrollView
-              style={isSheet ? styles.bodyScrollSheet : styles.bodyScroll}
+              style={styles.bodyScroll}
               contentContainerStyle={styles.bodyContent}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}>
@@ -141,17 +129,10 @@ export function FormModal({
 }
 
 const styles = StyleSheet.create({
+  // Folha colada no rodapé; o paddingTop (status bar + folga) limita a altura
   overlay: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Spacing.three,
-  },
-  // Folha colada no rodapé; o paddingTop (status bar + folga) limita a altura
-  overlaySheet: {
     justifyContent: 'flex-end',
-    alignItems: 'stretch',
-    padding: 0,
   },
   backdrop: {
     ...StyleSheet.absoluteFill,
@@ -159,22 +140,14 @@ const styles = StyleSheet.create({
   },
   sheet: {
     width: '100%',
-    maxWidth: 420,
-    maxHeight: '88%',
-    backgroundColor: AgroColors.cardBg,
-    borderRadius: Radius.xl,
-    padding: Spacing.lg,
-    gap: Spacing.three,
-    ...Shadows.md,
-  },
-  sheetBottom: {
-    maxWidth: '100%',
-    maxHeight: '100%',
     flexShrink: 1,
-    borderRadius: 0,
+    backgroundColor: AgroColors.cardBg,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
+    paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.sm,
+    gap: Spacing.three,
+    ...Shadows.md,
   },
   handle: {
     alignSelf: 'center',
@@ -208,11 +181,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  bodyScroll: {
-    maxHeight: 380,
-  },
   // Sem teto fixo: ocupa o espaço que a folha tiver e rola o resto
-  bodyScrollSheet: {
+  bodyScroll: {
     flexGrow: 0,
     flexShrink: 1,
   },

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { AppIcon, Button } from '@/components/ui';
+import { AppIcon, Button, FichaCard, IconeRedondo } from '@/components/ui';
 import { AgroColors, IconSize, Radius, Spacing, Typography } from '@/constants/theme';
 import type { DiaDaTrilha, Tratamento, TratamentoAtivo } from '@/dtos';
 import { formatDiaMes, inicioDoDia } from '@/utils/date';
@@ -12,7 +12,6 @@ import {
   textoDoPeriodo,
   textoDoProgresso,
 } from '../../services/ficha';
-import { FichaCard, IconeRedondo } from './elementos';
 
 /** Acima disso a barra vira contínua (segmentos ficariam finos demais para tocar). */
 const MAX_SEGMENTOS = 31;

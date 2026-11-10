@@ -55,7 +55,6 @@ export function NovoTratamentoForm({
 
   return (
     <FormModal
-      variant="sheet"
       visible={visible}
       title="Novo Tratamento"
       subtitle={`Remédio ou vacina para ${identificacao}`}

@@ -31,7 +31,6 @@ export function PesagemForm({ animalId, onClose }: PesagemFormProps) {
 
   return (
     <FormModal
-      variant="sheet"
       visible
       title="Pesagem"
       onClose={onClose}
