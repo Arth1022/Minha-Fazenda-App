@@ -26,6 +26,8 @@ export interface ConteudoPastoProps {
   tecladoAberto: boolean;
   /** Destino escolhido ao mover, para o mapa destacar */
   onDestaque: (areaId: string | null) => void;
+  /** Linha "Cerca" do resumo */
+  linhaCerca?: React.ReactNode;
 }
 
 const avisarErro = (mensagem: string) => Alert.alert('Não deu certo', mensagem);
@@ -44,6 +46,7 @@ export function ConteudoPasto({
   destaque = null,
   tecladoAberto,
   onDestaque,
+  linhaCerca = null,
 }: ConteudoPastoProps) {
   const [vista, setVista] = useState<Vista>('resumo');
   const { dados: animais } = useConsultaAoVivo<AnimalNoPasto[]>(
@@ -108,6 +111,7 @@ export function ConteudoPasto({
             onColocar={() => setVista('colocar')}
             onMover={() => setVista('mover')}
             onHistorico={() => setVista('historico')}
+            linhaCerca={linhaCerca}
           />
         </>
       );

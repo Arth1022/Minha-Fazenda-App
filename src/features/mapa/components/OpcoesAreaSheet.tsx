@@ -7,6 +7,18 @@ import type { Talhao } from '@/database';
 import { opcoesDaArea, resumoDaArea, type OpcaoArea } from '../services/areas';
 
 const VISUAL: Record<OpcaoArea, { titulo: string; descricao: string; icone: AppIconName; tom: TomFicha }> = {
+  cercar: {
+    titulo: 'Cercar esta área',
+    descricao: 'Arame, mourões e esticadores pelo perímetro',
+    icone: 'fence',
+    tom: 'verde',
+  },
+  insumos: {
+    titulo: 'Calcular insumos',
+    descricao: 'Sementes, adubo e calcário pelo tamanho da área',
+    icone: 'sprout',
+    tom: 'verde',
+  },
   editar: { titulo: 'Renomear ou mudar o tipo', descricao: 'Nome e tipo da área', icone: 'edit', tom: 'verde' },
   redesenhar: {
     titulo: 'Redesenhar',
@@ -31,7 +43,7 @@ export interface OpcoesAreaSheetProps {
   onSelect: (opcao: OpcaoArea) => void;
 }
 
-/** Menu "⋮" do painel da área: o que não é do dia a dia (renomear, redesenhar, excluir). */
+/** Menu "⋮" do painel da área: as calculadoras e o que não é do dia a dia (renomear, redesenhar, excluir). */
 export function OpcoesAreaSheet({ visible, area, podeEditarGeometria, onClose, onSelect }: OpcoesAreaSheetProps) {
   return (
     <BottomSheet
@@ -39,7 +51,7 @@ export function OpcoesAreaSheet({ visible, area, podeEditarGeometria, onClose, o
       title={area?.nome ?? ''}
       subtitle={area ? resumoDaArea(area) : undefined}
       onClose={onClose}>
-      {opcoesDaArea(podeEditarGeometria).map((opcao) => {
+      {(area ? opcoesDaArea(podeEditarGeometria, area.tipo) : []).map((opcao) => {
         const { titulo, descricao, icone, tom } = VISUAL[opcao];
         const perigo = opcao === 'excluir';
         return (

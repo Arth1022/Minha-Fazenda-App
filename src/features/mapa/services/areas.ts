@@ -107,13 +107,29 @@ export function descreverSafra(area: DadosSafra): string | null {
 }
 
 /** Itens do menu "⋮" do painel. */
-export type OpcaoArea = 'editar' | 'redesenhar' | 'pontoAtencao' | 'excluir';
+export type OpcaoArea = 'cercar' | 'insumos' | 'editar' | 'redesenhar' | 'pontoAtencao' | 'excluir';
 
-/** Mexer no polígono (redesenhar, excluir) é só do admin (RN-012). */
-export function opcoesDaArea(podeEditarGeometria: boolean): OpcaoArea[] {
-  return podeEditarGeometria
-    ? ['editar', 'redesenhar', 'pontoAtencao', 'excluir']
-    : ['editar', 'pontoAtencao'];
+/** Cerca (RF-028): pasto, lavoura e reserva; "outro" (sede, curral...) não tem. */
+export const podeCercar = (tipo: TipoTalhao): boolean => tipo !== 'outro';
+
+/** Sementes, adubo e calcário: só onde se planta ou se aduba (pasto e lavoura). */
+export const usaInsumos = (tipo: TipoTalhao): boolean => tipo === 'pasto' || tipo === 'lavoura';
+
+/**
+ * As calculadoras da área vêm primeiro (RF-033 e RF-044: saíram da aba Mapa e
+ * passaram a ser da área). Mexer no polígono (redesenhar, excluir) é só do
+ * admin (RN-012).
+ */
+export function opcoesDaArea(podeEditarGeometria: boolean, tipo: TipoTalhao): OpcaoArea[] {
+  const calculadoras: OpcaoArea[] = [];
+  if (podeCercar(tipo)) calculadoras.push('cercar');
+  if (usaInsumos(tipo)) calculadoras.push('insumos');
+  return [
+    ...calculadoras,
+    ...(podeEditarGeometria
+      ? (['editar', 'redesenhar', 'pontoAtencao', 'excluir'] as const)
+      : (['editar', 'pontoAtencao'] as const)),
+  ];
 }
 
 /**
@@ -129,10 +145,10 @@ export function avisosTrocaDeTipo(area: DadosSafra, novoTipo: TipoTalhao): strin
 }
 
 /**
- * "Redesenhar Pasto 1?" (RF-008): o que muda e o que continua. Cerca e ciclo
- * entram aqui quando esses módulos chegarem ao mapa.
+ * "Redesenhar Pasto 1?" (RF-008): o que muda e o que continua. O ciclo de
+ * plantio entra aqui quando chegar ao mapa.
  */
-export function consequenciasRedesenho(cabecas = 0): ItemConfirmacao[] {
+export function consequenciasRedesenho(cabecas = 0, temCerca = false): ItemConfirmacao[] {
   const itens: ItemConfirmacao[] = [];
   if (cabecas > 0) {
     itens.push({
@@ -140,6 +156,7 @@ export function consequenciasRedesenho(cabecas = 0): ItemConfirmacao[] {
       texto: cabecas === 1 ? 'A lotação do animal muda' : `A lotação dos ${cabecas} animais muda`,
     });
   }
+  if (temCerca) itens.push({ icone: 'fence', texto: 'A cerca salva fica desatualizada' });
   itens.push({ icone: 'check', texto: 'Nome, tipo e histórico continuam', tom: 'ok' });
   return itens;
 }

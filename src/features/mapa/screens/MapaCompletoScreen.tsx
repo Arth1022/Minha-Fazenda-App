@@ -16,6 +16,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { AppIcon, ConfirmacaoSheet, type ItemConfirmacao } from '@/components/ui';
 import { AgroColors, MaxContentWidth, Shadows, Spacing } from '@/constants/theme';
 import { useConsultaAoVivo, useLiveQuery, type Talhao } from '@/database';
+import { existeCercaSalva } from '@/services/cercaService';
 import {
   contarPontosAbertos,
   criarMarcador,
@@ -42,6 +43,7 @@ import {
 import { CamadasSheet } from '../components/CamadasSheet';
 import { CamadaTalhoesSalvos } from '../components/CamadaTalhoesSalvos';
 import { BotaoMapa, CoresTexto } from '../components/elementos';
+import { InsumosAreaSheet } from '../components/InsumosAreaSheet';
 import { MapaBase, type MapaBaseHandle, type VistaMapa } from '../components/MapaBase';
 import { OpcoesAreaSheet } from '../components/OpcoesAreaSheet';
 import { PainelArea } from '../components/PainelArea';
@@ -141,6 +143,10 @@ export default function MapaCompletoScreen() {
   // Folhas que somem deslizando: o conteúdo fica até a próxima abertura
   const [opcoesId, setOpcoesId] = useState<string | null>(null);
   const [opcoesVisivel, setOpcoesVisivel] = useState(false);
+  const [insumosId, setInsumosId] = useState<string | null>(null);
+  const [insumosVisivel, setInsumosVisivel] = useState(false);
+  // Área cujo painel mostra o "Cercar" (tela 21) no lugar do resumo
+  const [cercandoId, setCercandoId] = useState<string | null>(null);
   const [confirmacao, setConfirmacao] = useState<Confirmacao | null>(null);
   const [confirmando, setConfirmando] = useState(false);
   // Destino escolhido ao mover animais (tracejado branco) e o animal achado na busca, cada um
@@ -236,6 +242,16 @@ export default function MapaCompletoScreen() {
   const editando = talhoes.find((t) => t.id === editandoId) ?? null;
   const areaSafra = talhoes.find((t) => t.id === safraId) ?? null;
   const areaOpcoes = talhoes.find((t) => t.id === opcoesId) ?? null;
+  const areaInsumos = talhoes.find((t) => t.id === insumosId) ?? null;
+
+  // O "Cercar" vale para o painel aberto: fechar ou trocar de área volta ao resumo
+  const painelId = selecionado?.id ?? null;
+  const [painelAnteriorId, setPainelAnteriorId] = useState(painelId);
+  if (painelId !== painelAnteriorId) {
+    setPainelAnteriorId(painelId);
+    setCercandoId(null);
+  }
+  const cercando = painelId !== null && cercandoId === painelId;
 
   // Painel fechado: a próxima abertura (mesmo da mesma área) enquadra de novo
   useEffect(() => {
@@ -245,17 +261,18 @@ export default function MapaCompletoScreen() {
   const destinoDestacado =
     selecionado && destaqueDestino?.areaId === selecionado.id ? destaqueDestino.destinoId : null;
 
-  // Voltar do Android sai do desenho, do ponto de atenção ou fecha o painel antes de sair da tela
+  // Voltar do Android sai do desenho, do ponto de atenção, do "Cercar" ou fecha o painel antes de sair da tela
   useEffect(() => {
     if (!modoDesenho && !modoMarcador && !selecionado) return;
     const inscricao = BackHandler.addEventListener('hardwareBackPress', () => {
       if (modoMarcador) sairDoModoMarcador();
       else if (modoDesenho) sairDoDesenho();
+      else if (cercando) setCercandoId(null);
       else setSelecionadoId(null);
       return true;
     });
     return () => inscricao.remove();
-  }, [modoDesenho, modoMarcador, selecionado, sairDoDesenho, sairDoModoMarcador]);
+  }, [modoDesenho, modoMarcador, selecionado, cercando, sairDoDesenho, sairDoModoMarcador]);
 
   // Contorno novo de uma área existente: grava direto, mantendo nome, tipo e histórico
   useEffect(() => {
@@ -389,6 +406,14 @@ export default function MapaCompletoScreen() {
     if (!area) return;
     setErroSalvar(undefined);
     switch (opcao) {
+      case 'cercar':
+        setSelecionadoId(area.id);
+        setCercandoId(area.id);
+        break;
+      case 'insumos':
+        setInsumosId(area.id);
+        setInsumosVisivel(true);
+        break;
       case 'editar':
         setEditandoId(area.id);
         break;
@@ -396,13 +421,16 @@ export default function MapaCompletoScreen() {
         setTalhaoMarcadorId(area.id);
         setModoMarcador(true);
         break;
-      case 'redesenhar':
+      case 'redesenhar': {
+        // Cerca salva fica desatualizada com o contorno novo (RF-032)
+        const temCerca = await existeCercaSalva(area.id).catch(() => false);
         abrirConfirmacao({
           acao: 'redesenhar',
           area,
-          itens: consequenciasRedesenho(ocupacoes.get(area.id)?.cabecas ?? 0),
+          itens: consequenciasRedesenho(ocupacoes.get(area.id)?.cabecas ?? 0, temCerca),
         });
         break;
+      }
       case 'excluir': {
         const pontosAbertos = await contarPontosAbertos(area.id).catch(() => 0);
         abrirConfirmacao({
@@ -650,6 +678,8 @@ export default function MapaCompletoScreen() {
           }}
           onSafra={() => setSafraId(selecionado.id)}
           onAltura={enquadrarSelecionada}
+          cercando={cercando}
+          onCercando={(ativo) => setCercandoId(ativo ? selecionado.id : null)}
         />
       ) : mostrarNovaArea ? (
         <View style={[estilos.rodapeNovaArea, { bottom: base + Spacing.two }]} pointerEvents="box-none">
@@ -802,6 +832,12 @@ export default function MapaCompletoScreen() {
         salvando={salvando}
         onSalvar={salvarSafra}
         onClose={() => setSafraId(null)}
+      />
+
+      <InsumosAreaSheet
+        visible={insumosVisivel && areaInsumos !== null}
+        area={areaInsumos}
+        onClose={() => setInsumosVisivel(false)}
       />
 
       <OpcoesAreaSheet

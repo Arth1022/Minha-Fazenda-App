@@ -2,6 +2,7 @@ import { and, asc, count, eq, gte, isNull, lte, ne, sql } from 'drizzle-orm';
 
 import { COR_POR_TIPO_AREA } from '@/constants/areas';
 import {
+  calculosCerca,
   db,
   marcadoresMapa,
   movimentacoes,
@@ -165,13 +166,19 @@ export async function atualizarTalhao(id: string, dados: DadosAtualizarTalhao): 
     });
   }
 
-  await db
-    .update(talhoes)
-    .set({
-      ...mudancas,
-      syncStatus: sql`CASE WHEN ${talhoes.syncStatus} = 'created' THEN 'created' ELSE 'updated' END`,
-    })
-    .where(eq(talhoes.id, id));
+  db.transaction((tx) => {
+    tx.update(talhoes)
+      .set({
+        ...mudancas,
+        syncStatus: sql`CASE WHEN ${talhoes.syncStatus} = 'created' THEN 'created' ELSE 'updated' END`,
+      })
+      .where(eq(talhoes.id, id))
+      .run();
+    // Contorno novo: a cerca salva foi calculada com o perímetro antigo (RF-032, RN-010)
+    if (dados.coordenadas !== undefined) {
+      tx.update(calculosCerca).set({ desatualizado: true }).where(eq(calculosCerca.areaId, id)).run();
+    }
+  });
 }
 
 /** Exclusão lógica (soft delete) para manter o registro na fila de sincronização com o PostGIS. */

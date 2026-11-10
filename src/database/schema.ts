@@ -944,6 +944,46 @@ export const movimentacoes = sqliteTable(
   ]
 );
 
+export const TIPOS_DE_CERCA = ['arame4', 'arame5', 'eletrica1', 'eletrica2'] as const;
+export type TipoDeCerca = (typeof TIPOS_DE_CERCA)[number];
+
+/**
+ * Cerca calculada para uma área (M3): uma por área, salva pela ação "Cercar
+ * esta área". Guarda o perímetro e os cantos usados na conta; redesenhar a
+ * área marca a conta como desatualizada (RN-010) até ser salva de novo.
+ */
+export const calculosCerca = sqliteTable(
+  'calculos_cerca',
+  {
+    id: id(),
+    areaId: text('area_id')
+      .notNull()
+      .references(() => talhoes.id, { onDelete: 'cascade' }),
+    tipoCerca: text('tipo_cerca', { enum: TIPOS_DE_CERCA }).notNull(),
+    fios: integer('fios').notNull(),
+    /** Distância entre mourões (m) */
+    espacamentoM: real('espacamento_m').notNull(),
+    /** Perímetro da área quando a conta foi feita (m) */
+    perimetroM: real('perimetro_m').notNull(),
+    /** Cantos do contorno (esticadores = fios × cantos) */
+    cantos: integer('cantos').notNull(),
+    metrosArame: real('metros_arame').notNull(),
+    rolos: integer('rolos').notNull(),
+    mouroes: integer('mouroes').notNull(),
+    esticadores: integer('esticadores').notNull(),
+    /** Preços informados (R$ por unidade); sem preço, sem custo */
+    precoRolo: real('preco_rolo'),
+    precoMourao: real('preco_mourao'),
+    precoEsticador: real('preco_esticador'),
+    custo: real('custo'),
+    /** A área foi redesenhada depois da conta (RF-032) */
+    desatualizado: integer('desatualizado', { mode: 'boolean' }).notNull().default(false),
+    criadoPor: criadoPor(),
+    ...timestamps,
+  },
+  (table) => [uniqueIndex('calculos_cerca_area_idx').on(table.areaId)]
+);
+
 export const talhoesRelations = relations(talhoes, ({ many }) => ({
   marcadores: many(marcadoresMapa),
   movimentacoes: many(movimentacoes),
@@ -965,3 +1005,5 @@ export type MarcadorMapa = typeof marcadoresMapa.$inferSelect;
 export type NovoMarcadorMapa = typeof marcadoresMapa.$inferInsert;
 export type Movimentacao = typeof movimentacoes.$inferSelect;
 export type NovaMovimentacao = typeof movimentacoes.$inferInsert;
+export type CalculoCerca = typeof calculosCerca.$inferSelect;
+export type NovoCalculoCerca = typeof calculosCerca.$inferInsert;

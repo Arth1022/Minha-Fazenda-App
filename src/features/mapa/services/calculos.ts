@@ -183,3 +183,10 @@ export function diasDesdePlantio(dataPlantio: Date | null | undefined, agora = n
   const diffMs = agora.getTime() - dataPlantio.getTime();
   return diffMs >= 0 ? Math.floor(diffMs / (1000 * 60 * 60 * 24)) : 0;
 }
+
+/** Dinheiro no padrão brasileiro: 12345.6 → "R$ 12.345,60". */
+export function formatarReais(valor: number): string {
+  const [inteiro, centavos] = Math.abs(valor).toFixed(2).split('.');
+  const comMilhar = inteiro.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `${valor < 0 ? '-' : ''}R$ ${comMilhar},${centavos}`;
+}

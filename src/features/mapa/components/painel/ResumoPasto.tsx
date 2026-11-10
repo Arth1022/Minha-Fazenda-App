@@ -34,6 +34,8 @@ export interface ResumoPastoProps {
   onColocar: () => void;
   onMover: () => void;
   onHistorico: () => void;
+  /** Linha "Cerca" do painel (tela 14), depois do histórico */
+  linhaCerca?: React.ReactNode;
 }
 
 /** Painel do pasto (protótipo, tela 14): números, animais por lote e o que dá para fazer. */
@@ -47,6 +49,7 @@ export function ResumoPasto({
   onColocar,
   onMover,
   onHistorico,
+  linhaCerca = null,
 }: ResumoPastoProps) {
   const situacao = situacaoDoPasto(area.areaHectares, ocupacao);
   const grupos = gruposPorLote(animais);
@@ -107,7 +110,10 @@ export function ResumoPasto({
         {ocupado ? <BotaoMapa rotulo="Mover para…" onPress={onMover} style={estilos.botao} /> : null}
       </View>
 
-      <LinhaNavegacao icone="history" rotulo="Histórico de ocupação" onPress={onHistorico} />
+      <View>
+        <LinhaNavegacao icone="history" rotulo="Histórico de ocupação" onPress={onHistorico} />
+        {linhaCerca}
+      </View>
     </>
   );
 }
