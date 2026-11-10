@@ -127,6 +127,13 @@
       "when": 1794283971985,
       "tag": "0017_agricultura_mapa",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1794324066861,
+      "tag": "0018_areas_no_mapa",
+      "breakpoints": true
     }
   ]
 }

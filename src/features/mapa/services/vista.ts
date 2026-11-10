@@ -4,7 +4,7 @@ import type { FazendaMapa } from '../data/fazendaMapa';
 import { formatarHectares } from './calculos';
 
 /**
- * Onde o mapa abre: enquadrando a divisa da fazenda; sem ela, os talhões (pela
+ * Onde o mapa abre: enquadrando a divisa da fazenda; sem ela, as áreas (pela
  * BBOX já gravada em cada um, sem ler o GeoJSON); senão, o Brasil inteiro.
  */
 export function vistaDaFazenda(fazenda: FazendaMapa | null, talhoes: Talhao[]): VistaMapa {
@@ -30,12 +30,12 @@ export function vistaDaFazenda(fazenda: FazendaMapa | null, talhoes: Talhao[]): 
   return { tipo: 'area', ne: [maxLng, maxLat], sw: [minLng, minLat] };
 }
 
-/** Legenda abaixo do título: "Fazenda X · 120 ha · 3 talhões". */
+/** Legenda abaixo do título: "Fazenda X · 120 ha · 3 áreas". */
 export function resumoFazenda(fazenda: FazendaMapa | null, talhoes: Talhao[]): string {
   const qtd =
     talhoes.length === 0
-      ? 'nenhum talhão'
-      : `${talhoes.length} ${talhoes.length === 1 ? 'talhão' : 'talhões'}`;
+      ? 'nenhuma área'
+      : `${talhoes.length} ${talhoes.length === 1 ? 'área' : 'áreas'}`;
   if (!fazenda) return `divisa não marcada · ${qtd}`;
   return `${fazenda.nome} · ${formatarHectares(fazenda.areaHectares)} · ${qtd}`;
 }

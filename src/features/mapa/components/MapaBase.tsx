@@ -19,8 +19,18 @@ export const VISTA_BRASIL: VistaMapa = { tipo: 'ponto', coordenada: [-51.9, -14.
 
 export type EstiloMapa = 'satelite' | 'mapa';
 
+/** Folga (pt) de cada borda ao enquadrar, para a área não ficar sob os cartões. */
+export interface FolgaMapa {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+}
+
 export interface MapaBaseHandle {
   voarPara: (coordenada: Coordenada, zoom?: number) => void;
+  /** Move a câmera para mostrar a caixa inteira (ex.: a área escolhida acima do painel) */
+  enquadrar: (ne: Coordenada, sw: Coordenada, folga?: FolgaMapa) => void;
   /** Pede o GPS e centraliza; devolve false sem permissão ou sem sinal */
   centralizarNoGps: () => Promise<boolean>;
   /** Centro e zoom atuais da câmera */
@@ -36,13 +46,13 @@ export interface MapaBaseProps {
   /** Ao abrir, centraliza no GPS sem perguntar de novo se já houver permissão */
   centralizarNoGpsAoAbrir?: boolean;
   /** Folga (pt) das bordas ao enquadrar uma área, para não ficar sob os cartões */
-  folga?: { top: number; bottom: number; left: number; right: number };
+  folga?: FolgaMapa;
   onMapPress?: (coordenada: Coordenada) => void;
   style?: StyleProp<ViewStyle>;
   children?: React.ReactNode;
 }
 
-const FOLGA_PADRAO = { top: 24, bottom: 24, left: 24, right: 24 };
+const FOLGA_PADRAO: FolgaMapa = { top: 24, bottom: 24, left: 24, right: 24 };
 
 /**
  * Mapa Mapbox da fazenda (satélite por padrão). Só desenha o mapa e as camadas
@@ -83,6 +93,21 @@ export function MapaBase({
     });
   }, []);
 
+  // `padding` na raiz do setCamera: a doc do Camera marca o padding dentro de `bounds` como legado
+  const enquadrar = useCallback((ne: Coordenada, sw: Coordenada, margens: FolgaMapa = FOLGA_PADRAO) => {
+    centroRef.current = { coordenada: [(ne[0] + sw[0]) / 2, (ne[1] + sw[1]) / 2], zoom: centroRef.current.zoom };
+    cameraRef.current?.setCamera({
+      bounds: { ne, sw },
+      padding: {
+        paddingTop: margens.top,
+        paddingBottom: margens.bottom,
+        paddingLeft: margens.left,
+        paddingRight: margens.right,
+      },
+      animationDuration: 700,
+    });
+  }, []);
+
   const centralizarNoGps = useCallback(async () => {
     try {
       const { granted } = await Location.requestForegroundPermissionsAsync();
@@ -101,8 +126,8 @@ export function MapaBase({
 
   useImperativeHandle(
     ref,
-    () => ({ voarPara, centralizarNoGps, obterCentro: () => centroRef.current }),
-    [voarPara, centralizarNoGps],
+    () => ({ voarPara, enquadrar, centralizarNoGps, obterCentro: () => centroRef.current }),
+    [voarPara, enquadrar, centralizarNoGps],
   );
 
   useEffect(() => {

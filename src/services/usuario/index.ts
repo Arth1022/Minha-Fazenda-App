@@ -1,1 +1,2 @@
-export { usuarioAtual, type Usuario } from './usuarioAtual';
+export { podeEditarGeometria } from './permissoes';
+export { usuarioAtual, type PapelUsuario, type Usuario } from './usuarioAtual';

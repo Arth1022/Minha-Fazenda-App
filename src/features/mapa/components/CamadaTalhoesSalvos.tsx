@@ -3,49 +3,40 @@ import Mapbox from '@rnmapbox/maps';
 
 import type { Talhao } from '@/database';
 import type { Coordenada } from '@/utils/geoMath';
+import { colecaoDasAreas } from '../services/areas';
 
 export interface CamadaTalhoesSalvosProps {
   talhoes: Talhao[];
   selecionadoId?: string | null;
-  /** Mostra o nome de cada talhão no centro dele */
+  /** Mostra o nome (e o selo) de cada área no centro dela */
   mostrarNomes?: boolean;
   onPressTalhao?: (talhaoId: string, coordenada?: Coordenada) => void;
 }
 
-/** Polígonos dos talhões já salvos, na cor de cada um, com o nome no centro. */
+const HALO = 'rgba(17, 24, 39, 0.85)';
+
+/**
+ * Áreas salvas: preenchidas com a cor do tipo, contorno contínuo (em uso) ou
+ * tracejado (vazia, colhida, em descanso), nome no centro e selo abaixo dele.
+ * O tracejado é uma camada própria com filtro: `lineDasharray` por dado não
+ * funciona nos SDKs nativos do Mapbox.
+ */
 export const CamadaTalhoesSalvos = memo(function CamadaTalhoesSalvos({
   talhoes,
   selecionadoId = null,
   mostrarNomes = true,
   onPressTalhao,
 }: CamadaTalhoesSalvosProps) {
-  const shapeCollection = useMemo(
-    (): GeoJSON.FeatureCollection => ({
-      type: 'FeatureCollection',
-      features: talhoes.flatMap((t): GeoJSON.Feature[] => [
-        {
-          type: 'Feature',
-          id: `poly-${t.id}`,
-          properties: { camada: 'poligono', talhaoId: t.id, cor: t.cor },
-          geometry: t.geometriaJson,
-        },
-        {
-          type: 'Feature',
-          id: `label-${t.id}`,
-          properties: { camada: 'label', talhaoId: t.id, nome: t.nome },
-          geometry: { type: 'Point', coordinates: [t.centroLng, t.centroLat] },
-        },
-      ]),
-    }),
-    [talhoes],
-  );
+  const colecao = useMemo(() => colecaoDasAreas(talhoes), [talhoes]);
 
+  // Expressões escritas dentro de cada `style`: fora dele o TypeScript perde o tipo de expressão do Mapbox
   const idAtivo = selecionadoId ?? '';
+  const visibilidadeTexto = mostrarNomes ? 'visible' : 'none';
 
   return (
     <Mapbox.ShapeSource
       id="talhoes-salvos-source"
-      shape={shapeCollection}
+      shape={colecao}
       onPress={
         onPressTalhao
           ? (e) => {
@@ -63,12 +54,17 @@ export const CamadaTalhoesSalvos = memo(function CamadaTalhoesSalvos({
         filter={['==', ['get', 'camada'], 'poligono']}
         style={{
           fillColor: ['get', 'cor'],
-          fillOpacity: ['case', ['==', ['get', 'talhaoId'], idAtivo], 0.6, 0.4],
+          fillOpacity: [
+            'case',
+            ['==', ['get', 'talhaoId'], idAtivo],
+            ['get', 'opacidadeAtiva'],
+            ['get', 'opacidade'],
+          ],
         }}
       />
       <Mapbox.LineLayer
         id="talhoes-salvos-border-layer"
-        filter={['==', ['get', 'camada'], 'poligono']}
+        filter={['==', ['get', 'contorno'], 'continuo']}
         style={{
           lineColor: '#FFFFFF',
           lineWidth: ['case', ['==', ['get', 'talhaoId'], idAtivo], 3.5, 2],
@@ -76,15 +72,39 @@ export const CamadaTalhoesSalvos = memo(function CamadaTalhoesSalvos({
           lineJoin: 'round',
         }}
       />
+      <Mapbox.LineLayer
+        id="talhoes-salvos-border-tracejado-layer"
+        filter={['==', ['get', 'contorno'], 'tracejado']}
+        style={{
+          lineColor: '#FFFFFF',
+          lineWidth: ['case', ['==', ['get', 'talhaoId'], idAtivo], 3.5, 2],
+          lineDasharray: [2, 1.5],
+          lineJoin: 'round',
+        }}
+      />
       <Mapbox.SymbolLayer
         id="talhoes-salvos-label-layer"
         filter={['==', ['get', 'camada'], 'label']}
         style={{
-          visibility: mostrarNomes ? 'visible' : 'none',
+          visibility: visibilidadeTexto,
           textField: ['get', 'nome'],
           textSize: 13,
           textColor: '#FFFFFF',
-          textHaloColor: 'rgba(17, 24, 39, 0.85)',
+          textHaloColor: HALO,
+          textHaloWidth: 1.5,
+          textAllowOverlap: true,
+        }}
+      />
+      <Mapbox.SymbolLayer
+        id="talhoes-salvos-selo-layer"
+        filter={['==', ['get', 'camada'], 'selo']}
+        style={{
+          visibility: visibilidadeTexto,
+          textField: ['get', 'selo'],
+          textSize: 11.5,
+          textOffset: [0, 1.35],
+          textColor: '#FFFFFF',
+          textHaloColor: HALO,
           textHaloWidth: 1.5,
           textAllowOverlap: true,
         }}

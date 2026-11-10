@@ -1,5 +1,6 @@
-import { and, asc, eq, gte, lte, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, isNull, lte, ne, sql } from 'drizzle-orm';
 
+import { COR_POR_TIPO_AREA } from '@/constants/areas';
 import {
   db,
   marcadoresMapa,
@@ -8,12 +9,11 @@ import {
   type Talhao,
   type TipoTalhao,
 } from '@/database';
-import { type Coordenada, extrairMetadadosEspaciais } from '@/utils/geoMath';
+import { calcularPerimetroM, type Coordenada, extrairMetadadosEspaciais } from '@/utils/geoMath';
 
 export interface DadosCriarTalhao {
   nome: string;
   tipo?: TipoTalhao;
-  cor: string;
   coordenadas: Coordenada[];
   cultura?: string | null;
   faseLavoura?: FaseLavoura | null;
@@ -28,11 +28,14 @@ export interface LimitesViewport {
   maxLng: number;
 }
 
-/** Cria um talhão validando a topologia e preenchendo automaticamente área, centróide e BBOX. */
+/**
+ * Cria uma área validando a topologia e preenchendo sozinho área, perímetro,
+ * centróide e BBOX. A cor é a do tipo.
+ */
 export async function criarTalhao(dados: DadosCriarTalhao): Promise<Talhao> {
   const nomeLimpo = dados.nome.trim();
   if (!nomeLimpo) {
-    throw new Error('O nome do talhão é obrigatório.');
+    throw new Error('Dê um nome à área.');
   }
 
   const metadados = extrairMetadadosEspaciais(dados.coordenadas);
@@ -44,8 +47,9 @@ export async function criarTalhao(dados: DadosCriarTalhao): Promise<Talhao> {
     .values({
       nome: nomeLimpo,
       tipo,
-      cor: dados.cor,
+      cor: COR_POR_TIPO_AREA[tipo],
       areaHectares: metadados.areaHectares,
+      perimetroM: metadados.perimetroM,
       geometriaJson: metadados.geometriaJson,
       centroLat: metadados.centroLat,
       centroLng: metadados.centroLng,
@@ -91,12 +95,12 @@ export function listarTalhoesNoViewport(limites: LimitesViewport) {
 
 export interface DadosAtualizarTalhao {
   nome?: string;
+  /** Trocar o tipo troca a cor; sair de lavoura apaga a safra */
   tipo?: TipoTalhao;
-  cor?: string;
   cultura?: string | null;
   faseLavoura?: FaseLavoura | null;
   dataPlantio?: Date | null;
-  /** Novo contorno: recalcula área, centróide e BBOX */
+  /** Novo contorno (redesenhar): recalcula área, perímetro, centróide e BBOX */
   coordenadas?: Coordenada[];
 }
 
@@ -109,18 +113,18 @@ export async function atualizarTalhao(id: string, dados: DadosAtualizarTalhao): 
 
   if (dados.nome !== undefined) {
     const nomeLimpo = dados.nome.trim();
-    if (!nomeLimpo) throw new Error('O nome do talhão é obrigatório.');
+    if (!nomeLimpo) throw new Error('Dê um nome à área.');
     mudancas.nome = nomeLimpo;
   }
   if (dados.tipo !== undefined) {
     mudancas.tipo = dados.tipo;
+    mudancas.cor = COR_POR_TIPO_AREA[dados.tipo];
     if (dados.tipo !== 'lavoura') {
       mudancas.cultura = null;
       mudancas.faseLavoura = null;
       mudancas.dataPlantio = null;
     }
   }
-  if (dados.cor !== undefined) mudancas.cor = dados.cor;
   if (dados.tipo === undefined || dados.tipo === 'lavoura') {
     if (dados.cultura !== undefined) mudancas.cultura = dados.cultura?.trim() || null;
     if (dados.faseLavoura !== undefined) mudancas.faseLavoura = dados.faseLavoura;
@@ -130,6 +134,7 @@ export async function atualizarTalhao(id: string, dados: DadosAtualizarTalhao): 
     const meta = extrairMetadadosEspaciais(dados.coordenadas);
     Object.assign(mudancas, {
       areaHectares: meta.areaHectares,
+      perimetroM: meta.perimetroM,
       geometriaJson: meta.geometriaJson,
       centroLat: meta.centroLat,
       centroLng: meta.centroLng,
@@ -156,4 +161,23 @@ export async function deletarTalhao(id: string): Promise<void> {
     .set({ syncStatus: 'deleted' })
     .where(eq(talhoes.id, id));
   await db.delete(marcadoresMapa).where(eq(marcadoresMapa.talhaoId, id));
+}
+
+/**
+ * Áreas gravadas antes de o perímetro ir para o banco: calcula uma vez e grava.
+ * Roda na abertura do app; depois da primeira vez a consulta não acha nada.
+ */
+export async function preencherPerimetrosPendentes(): Promise<number> {
+  const pendentes = await db
+    .select({ id: talhoes.id, geometriaJson: talhoes.geometriaJson })
+    .from(talhoes)
+    .where(isNull(talhoes.perimetroM));
+  for (const area of pendentes) {
+    const anel = (area.geometriaJson.coordinates[0] ?? []) as Coordenada[];
+    await db
+      .update(talhoes)
+      .set({ perimetroM: calcularPerimetroM(anel) })
+      .where(eq(talhoes.id, area.id));
+  }
+  return pendentes.length;
 }
