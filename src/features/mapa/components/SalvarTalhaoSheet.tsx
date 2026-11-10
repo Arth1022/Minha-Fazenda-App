@@ -3,8 +3,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BottomSheet } from '@/components/ui';
 import { AgroColors, Radius, Spacing } from '@/constants/theme';
-import type { TipoTalhao } from '@/database';
-import { formatarDistancia, formatarHectares } from '../services/calculos';
+import type { FaseLavoura, TipoTalhao } from '@/database';
+import { formatarDistancia, formatarHectares, OPCOES_CULTURA_LAVOURA } from '../services/calculos';
 import { BotaoMapa, CampoMapa, CoresTexto, GradeOpcoes, LinkMapa, RotuloCampo } from './elementos';
 
 const OPCOES_TIPO: { valor: TipoTalhao; rotulo: string }[] = [
@@ -12,6 +12,13 @@ const OPCOES_TIPO: { valor: TipoTalhao; rotulo: string }[] = [
   { valor: 'lavoura', rotulo: 'Lavoura' },
   { valor: 'reserva', rotulo: 'Reserva' },
   { valor: 'outro', rotulo: 'Outro' },
+];
+
+const OPCOES_FASE: { valor: FaseLavoura; rotulo: string }[] = [
+  { valor: 'preparo', rotulo: 'Em Preparo' },
+  { valor: 'vegetativo', rotulo: 'Vegetativo' },
+  { valor: 'colheita', rotulo: 'Colheita' },
+  { valor: 'pousio', rotulo: 'Pousio' },
 ];
 
 export const COR_POR_TIPO: Record<TipoTalhao, string> = {
@@ -27,9 +34,19 @@ export interface DadosSalvarTalhao {
   nome: string;
   tipo: TipoTalhao;
   cor: string;
+  cultura?: string | null;
+  faseLavoura?: FaseLavoura | null;
+  dataPlantio?: Date | null;
 }
 
-const NOVO: DadosSalvarTalhao = { nome: '', tipo: 'pasto', cor: COR_POR_TIPO.pasto };
+const NOVO: DadosSalvarTalhao = {
+  nome: '',
+  tipo: 'pasto',
+  cor: COR_POR_TIPO.pasto,
+  cultura: 'milho',
+  faseLavoura: 'vegetativo',
+  dataPlantio: null,
+};
 
 export interface SalvarTalhaoSheetProps {
   visible: boolean;
@@ -65,6 +82,8 @@ export function SalvarTalhaoSheet({
   const [nome, setNome] = useState(base.nome);
   const [tipo, setTipo] = useState<TipoTalhao>(base.tipo);
   const [cor, setCor] = useState(base.cor);
+  const [cultura, setCultura] = useState<string>(base.cultura ?? 'milho');
+  const [faseLavoura, setFaseLavoura] = useState<FaseLavoura>(base.faseLavoura ?? 'vegetativo');
   const [erroNome, setErroNome] = useState<string | undefined>();
 
   // Cada abertura começa com os dados do talhão (ou em branco), sem efeito
@@ -75,6 +94,8 @@ export function SalvarTalhaoSheet({
       setNome(base.nome);
       setTipo(base.tipo);
       setCor(base.cor);
+      setCultura(base.cultura ?? 'milho');
+      setFaseLavoura(base.faseLavoura ?? 'vegetativo');
       setErroNome(undefined);
     }
   }
@@ -84,7 +105,19 @@ export function SalvarTalhaoSheet({
       setErroNome('Dê um nome ao talhão (ex.: Pasto da frente).');
       return;
     }
-    onSalvar({ nome: nome.trim(), tipo, cor });
+    const ehLavoura = tipo === 'lavoura';
+    const plantio =
+      ehLavoura && (faseLavoura === 'vegetativo' || faseLavoura === 'colheita')
+        ? (base.dataPlantio ?? new Date())
+        : null;
+    onSalvar({
+      nome: nome.trim(),
+      tipo,
+      cor,
+      cultura: ehLavoura ? cultura : null,
+      faseLavoura: ehLavoura ? faseLavoura : null,
+      dataPlantio: plantio,
+    });
   };
 
   const mensagemErro = erroNome ?? erro;
@@ -94,7 +127,7 @@ export function SalvarTalhaoSheet({
       visible={visible}
       title={editando ? 'Editar talhão' : 'Salvar talhão'}
       subtitle={editando ? 'Mude o nome, o tipo, a cor ou o contorno' : 'Dê um nome e salve'}
-      alturaMaxima={0.7}
+      alturaMaxima={0.82}
       onClose={() => {
         if (!salvando) onClose();
       }}>
@@ -136,6 +169,28 @@ export function SalvarTalhaoSheet({
             }}
           />
         </View>
+
+        {tipo === 'lavoura' ? (
+          <>
+            <View style={estilos.bloco}>
+              <RotuloCampo titulo="Cultura da safra" />
+              <GradeOpcoes
+                opcoes={OPCOES_CULTURA_LAVOURA}
+                selecionado={cultura}
+                onChange={setCultura}
+              />
+            </View>
+
+            <View style={estilos.bloco}>
+              <RotuloCampo titulo="Fase da lavoura" />
+              <GradeOpcoes
+                opcoes={OPCOES_FASE}
+                selecionado={faseLavoura}
+                onChange={setFaseLavoura}
+              />
+            </View>
+          </>
+        ) : null}
 
         <View style={estilos.bloco}>
           <RotuloCampo titulo="Cor no mapa" />

@@ -80,6 +80,13 @@ export type ResultadoExame = (typeof RESULTADOS_EXAME)[number];
 export const fazendaConfig = sqliteTable('fazenda_config', {
   id: id(),
   tipoProducao: text('tipo_producao', { enum: TIPOS_PRODUCAO }).notNull(),
+  nome: text('nome'),
+  divisaJson: text('divisa_json', { mode: 'json' }).$type<[number, number][]>(),
+  areaHectares: real('area_hectares'),
+  minLat: real('min_lat'),
+  maxLat: real('max_lat'),
+  minLng: real('min_lng'),
+  maxLng: real('max_lng'),
   ...timestamps,
 });
 
@@ -818,6 +825,12 @@ export type AnotacaoAnimal = typeof anotacoesAnimal.$inferSelect;
 export const TIPOS_TALHAO = ['pasto', 'lavoura', 'reserva', 'outro'] as const;
 export type TipoTalhao = (typeof TIPOS_TALHAO)[number];
 
+export const FASES_LAVOURA = ['preparo', 'vegetativo', 'colheita', 'pousio'] as const;
+export type FaseLavoura = (typeof FASES_LAVOURA)[number];
+
+export const TIPOS_MARCADOR_MAPA = ['praga', 'daninha', 'erosao', 'outro'] as const;
+export type TipoMarcadorMapa = (typeof TIPOS_MARCADOR_MAPA)[number];
+
 export const STATUS_SYNC = ['created', 'updated', 'synced', 'deleted'] as const;
 export type StatusSync = (typeof STATUS_SYNC)[number];
 
@@ -841,6 +854,9 @@ export const talhoes = sqliteTable(
     maxLat: real('max_lat').notNull(),
     minLng: real('min_lng').notNull(),
     maxLng: real('max_lng').notNull(),
+    cultura: text('cultura'),
+    faseLavoura: text('fase_lavoura', { enum: FASES_LAVOURA }),
+    dataPlantio: integer('data_plantio', { mode: 'timestamp_ms' }),
     syncStatus: text('sync_status', { enum: STATUS_SYNC }).notNull().default('created'),
     criadoPor: criadoPor(),
     ...timestamps,
@@ -851,5 +867,34 @@ export const talhoes = sqliteTable(
   ]
 );
 
+export const marcadoresMapa = sqliteTable(
+  'marcadores_mapa',
+  {
+    id: id(),
+    talhaoId: text('talhao_id').references(() => talhoes.id, { onDelete: 'cascade' }),
+    tipo: text('tipo', { enum: TIPOS_MARCADOR_MAPA }).notNull(),
+    titulo: text('titulo').notNull(),
+    descricao: text('descricao'),
+    lat: real('lat').notNull(),
+    lng: real('lng').notNull(),
+    resolvido: integer('resolvido', { mode: 'boolean' }).notNull().default(false),
+    ...timestamps,
+  },
+  (table) => [
+    index('marcadores_mapa_lat_lng_idx').on(table.lat, table.lng),
+    index('marcadores_mapa_talhao_idx').on(table.talhaoId),
+  ]
+);
+
+export const talhoesRelations = relations(talhoes, ({ many }) => ({
+  marcadores: many(marcadoresMapa),
+}));
+
+export const marcadoresMapaRelations = relations(marcadoresMapa, ({ one }) => ({
+  talhao: one(talhoes, { fields: [marcadoresMapa.talhaoId], references: [talhoes.id] }),
+}));
+
 export type Talhao = typeof talhoes.$inferSelect;
 export type NovoTalhao = typeof talhoes.$inferInsert;
+export type MarcadorMapa = typeof marcadoresMapa.$inferSelect;
+export type NovoMarcadorMapa = typeof marcadoresMapa.$inferInsert;

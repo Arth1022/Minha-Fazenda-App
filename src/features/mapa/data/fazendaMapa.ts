@@ -1,15 +1,16 @@
 import Storage from 'expo-sqlite/kv-store';
 import { useSyncExternalStore } from 'react';
 
+import { db, fazendaConfig } from '@/database';
 import { extrairMetadadosEspaciais, pontoDentroDoPoligono, type Coordenada } from '@/utils/geoMath';
 
 /**
  * A fazenda no mapa: nome e divisa (contorno da propriedade inteira). É o
  * primeiro passo do mapa; os talhões são desenhados depois, dentro dela.
  *
- * Um único registro pequeno, guardado no armazenamento chave-valor do
- * expo-sqlite (sem tabela nem migração) e mantido em memória depois da primeira
- * leitura. A BBOX fica gravada junto para enquadrar o mapa sem recalcular.
+ * Persistida na linha única de `fazenda_config` (Drizzle + SQLite) e mantida em
+ * memória depois da primeira leitura. Se houver dado legado no `kv-store`, ele é
+ * migrado de forma transparente na primeira leitura.
  */
 export interface FazendaMapa {
   nome: string;
@@ -22,15 +23,17 @@ export interface FazendaMapa {
   maxLng: number;
 }
 
-const CHAVE = 'mapa.fazenda';
+const CHAVE_LEGADA = 'mapa.fazenda';
 
 let cache: FazendaMapa | null | undefined;
+let bancoCache: unknown;
 const ouvintes = new Set<() => void>();
 
 function valida(valor: unknown): valor is FazendaMapa {
   const v = valor as FazendaMapa | null;
   return (
     typeof v?.nome === 'string' &&
+    v.nome.trim().length > 0 &&
     Array.isArray(v.divisa) &&
     v.divisa.length >= 4 &&
     typeof v.areaHectares === 'number' &&
@@ -38,16 +41,94 @@ function valida(valor: unknown): valor is FazendaMapa {
   );
 }
 
-export function obterFazendaMapa(): FazendaMapa | null {
-  if (cache !== undefined) return cache;
-  try {
-    const bruto = Storage.getItemSync(CHAVE);
-    const lido: unknown = bruto ? JSON.parse(bruto) : null;
-    cache = valida(lido) ? lido : null;
-  } catch {
-    cache = null;
+/**
+ * Faz UPDATE direto na linha única de `fazenda_config`. Se a tabela ainda estiver
+ * vazia (primeiro acesso antes do onboarding), insere a linha única.
+ */
+function persistirNoBanco(fazenda: FazendaMapa): void {
+  const campos = {
+    nome: fazenda.nome,
+    divisaJson: fazenda.divisa,
+    areaHectares: fazenda.areaHectares,
+    minLat: fazenda.minLat,
+    maxLat: fazenda.maxLat,
+    minLng: fazenda.minLng,
+    maxLng: fazenda.maxLng,
+  };
+
+  const atualizado = db
+    .update(fazendaConfig)
+    .set({ ...campos, updatedAt: new Date() })
+    .returning({ id: fazendaConfig.id })
+    .get();
+
+  if (!atualizado) {
+    db.insert(fazendaConfig)
+      .values({ tipoProducao: 'misto', ...campos })
+      .run();
   }
-  return cache;
+}
+
+function lerLegadoKvStore(): FazendaMapa | null {
+  try {
+    const bruto = Storage.getItemSync(CHAVE_LEGADA);
+    const lido: unknown = bruto ? JSON.parse(bruto) : null;
+    return valida(lido) ? lido : null;
+  } catch {
+    return null;
+  }
+}
+
+export function obterFazendaMapa(): FazendaMapa | null {
+  if (bancoCache !== db) {
+    cache = undefined;
+    bancoCache = db;
+  }
+  if (cache !== undefined) {
+    if (cache !== null) return cache;
+    try {
+      if (!Storage.getItemSync(CHAVE_LEGADA)) return null;
+    } catch {
+      return null;
+    }
+  }
+
+  try {
+    const linha = db.select().from(fazendaConfig).limit(1).get();
+    const doBanco = linha
+      ? {
+          nome: linha.nome,
+          divisa: linha.divisaJson,
+          areaHectares: linha.areaHectares,
+          minLat: linha.minLat,
+          maxLat: linha.maxLat,
+          minLng: linha.minLng,
+          maxLng: linha.maxLng,
+        }
+      : null;
+
+    if (valida(doBanco)) {
+      cache = doBanco;
+      return cache;
+    }
+
+    const legado = lerLegadoKvStore();
+    if (legado) {
+      persistirNoBanco(legado);
+      try {
+        Storage.removeItemSync(CHAVE_LEGADA);
+      } catch {
+        // Ignora falha ao remover chave antiga
+      }
+      cache = legado;
+      return cache;
+    }
+  } catch {
+    // Banco ainda não inicializado
+  }
+
+  cache = null;
+  return null;
 }
 
 /** Grava (ou redesenha) a divisa da fazenda. Lança erro se as linhas se cruzarem. */
@@ -66,7 +147,8 @@ export function salvarFazendaMapa(nome: string, pontos: Coordenada[]): FazendaMa
     maxLng: meta.maxLng,
   };
 
-  Storage.setItemSync(CHAVE, JSON.stringify(fazenda));
+  persistirNoBanco(fazenda);
+  bancoCache = db;
   cache = fazenda;
   ouvintes.forEach((avisar) => avisar());
   return fazenda;

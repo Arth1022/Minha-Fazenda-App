@@ -110,3 +110,73 @@ export function calcularCerca(km: number, fios: number, espacamentoM: number): R
     mouroes: metrosCerca > 0 ? Math.ceil(metrosCerca / espacamentoM) + 1 : 0,
   };
 }
+
+export type InsumoAdubacao = 'npk' | 'ureia' | 'calcario' | 'outro';
+
+export interface ConfigInsumoAdubacao {
+  rotulo: string;
+  doseKgHa: number | null;
+  embalagemKg: number;
+}
+
+export const INSUMOS_ADUBACAO: Record<InsumoAdubacao, ConfigInsumoAdubacao> = {
+  npk: { rotulo: 'Adubo NPK', doseKgHa: 300, embalagemKg: 50 },
+  ureia: { rotulo: 'Ureia (cobertura)', doseKgHa: 150, embalagemKg: 50 },
+  calcario: { rotulo: 'Calcário', doseKgHa: 2000, embalagemKg: 50 },
+  outro: { rotulo: 'Outro insumo', doseKgHa: null, embalagemKg: 50 },
+};
+
+export const ORDEM_INSUMOS_ADUBACAO: InsumoAdubacao[] = ['npk', 'ureia', 'calcario', 'outro'];
+
+export interface ResultadoAdubacao {
+  totalKg: number;
+  sacos: number;
+  toneladas: number;
+  embalagemKg: number;
+}
+
+/** Adubação e calagem: área × dose (kg/ha) → kg totais, sacos e toneladas. */
+export function calcularAdubacao(
+  areaHa: number,
+  doseKgHa: number,
+  embalagemKg = 50,
+): ResultadoAdubacao {
+  const totalKg = areaHa > 0 && doseKgHa > 0 ? Math.round(areaHa * doseKgHa * 10) / 10 : 0;
+  return {
+    totalKg,
+    sacos: totalKg > 0 && embalagemKg > 0 ? Math.ceil(totalKg / embalagemKg) : 0,
+    toneladas: Math.round((totalKg / 1000) * 100) / 100,
+    embalagemKg,
+  };
+}
+
+export const OPCOES_CULTURA_LAVOURA: { valor: string; rotulo: string }[] = [
+  { valor: 'milho', rotulo: 'Milho' },
+  { valor: 'soja', rotulo: 'Soja' },
+  { valor: 'sorgo', rotulo: 'Sorgo' },
+  { valor: 'silagem', rotulo: 'Silagem' },
+  { valor: 'feijao', rotulo: 'Feijão' },
+  { valor: 'outro', rotulo: 'Outra' },
+];
+
+export const ROTULO_CULTURA_LAVOURA: Record<string, string> = {
+  milho: 'Milho',
+  soja: 'Soja',
+  sorgo: 'Sorgo',
+  silagem: 'Silagem',
+  feijao: 'Feijão',
+  outro: 'Outra cultura',
+};
+
+export const ROTULO_FASE_LAVOURA: Record<string, string> = {
+  preparo: 'Em Preparo',
+  vegetativo: 'Vegetativo',
+  colheita: 'Pronto p/ Colheita',
+  pousio: 'Pousio / Colhido',
+};
+
+export function diasDesdePlantio(dataPlantio: Date | null | undefined, agora = new Date()): number | null {
+  if (!dataPlantio) return null;
+  const diffMs = agora.getTime() - dataPlantio.getTime();
+  return diffMs >= 0 ? Math.floor(diffMs / (1000 * 60 * 60 * 24)) : 0;
+}

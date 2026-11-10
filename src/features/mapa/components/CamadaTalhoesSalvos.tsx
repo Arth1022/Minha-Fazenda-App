@@ -2,13 +2,14 @@ import React, { memo, useMemo } from 'react';
 import Mapbox from '@rnmapbox/maps';
 
 import type { Talhao } from '@/database';
+import type { Coordenada } from '@/utils/geoMath';
 
 export interface CamadaTalhoesSalvosProps {
   talhoes: Talhao[];
   selecionadoId?: string | null;
   /** Mostra o nome de cada talhão no centro dele */
   mostrarNomes?: boolean;
-  onPressTalhao?: (talhaoId: string) => void;
+  onPressTalhao?: (talhaoId: string, coordenada?: Coordenada) => void;
 }
 
 /** Polígonos dos talhões já salvos, na cor de cada um, com o nome no centro. */
@@ -49,7 +50,11 @@ export const CamadaTalhoesSalvos = memo(function CamadaTalhoesSalvos({
         onPressTalhao
           ? (e) => {
               const idClicado = e.features?.[0]?.properties?.talhaoId;
-              if (typeof idClicado === 'string') onPressTalhao(idClicado);
+              const coord: Coordenada | undefined =
+                typeof e.coordinates?.longitude === 'number' && typeof e.coordinates?.latitude === 'number'
+                  ? [e.coordinates.longitude, e.coordinates.latitude]
+                  : undefined;
+              if (typeof idClicado === 'string') onPressTalhao(idClicado, coord);
             }
           : undefined
       }>
