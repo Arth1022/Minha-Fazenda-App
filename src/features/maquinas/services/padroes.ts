@@ -26,7 +26,14 @@ export const TEMPOS = {
   semSinalMs: 2 * MINUTO,
   /** Uso mais curto que isto (e quase sem andar) foi ligado sem querer: é descartado */
   descarteMs: 1 * MINUTO,
+  /** Fora da divisa da fazenda por este tempo: encerra no último ponto dentro (RF-049) */
+  foraDaFazendaMs: 10 * MINUTO,
+  /** Fim automático pode ser desfeito por este tempo; depois os pontos do uso são apagados (RF-050) */
+  desfazerMs: 12 * HORA,
 };
+
+/** Fins que o app decide sozinho (podem ser desfeitos, RF-050). */
+export const MOTIVOS_AUTOMATICOS: ReadonlySet<string> = new Set(['parada', 'pausa', 'velocidade', 'fora']);
 
 /** Limpeza do GPS antes de somar KM. */
 export const GPS = {

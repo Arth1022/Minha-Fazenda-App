@@ -16,3 +16,6 @@ export type AcaoAviso = (typeof ACOES_AVISO)[keyof typeof ACOES_AVISO];
 
 /** Tela do uso em andamento (aberta pela notificação) */
 export const ROTA_EM_USO = '/maquina/em-uso';
+
+/** Resumo do uso no mapa (tela 25): trajeto, por área e o "Desfazer" do fim automático */
+export const rotaDoResumoNoMapa = (usoId: string) => `/mapa-fazenda?uso=${encodeURIComponent(usoId)}`;

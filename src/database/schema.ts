@@ -465,8 +465,8 @@ export const ATIVIDADES_USO = [
 ] as const;
 export type AtividadeUso = (typeof ATIVIDADES_USO)[number];
 
-/** Como o uso terminou: pela pessoa ou por uma regra automática do app. */
-export const MOTIVOS_FIM_USO = ['manual', 'parada', 'pausa', 'velocidade', 'assumida'] as const;
+/** Como o uso terminou: pela pessoa ou por uma regra automática do app ("fora": saiu da divisa da fazenda). */
+export const MOTIVOS_FIM_USO = ['manual', 'parada', 'pausa', 'velocidade', 'assumida', 'fora'] as const;
 export type MotivoFimUso = (typeof MOTIVOS_FIM_USO)[number];
 
 /** "app": ligado e desligado na hora; "manual": uso esquecido, informado depois. */
@@ -572,11 +572,18 @@ export const usosMaquina = sqliteTable(
     paradaAvisadaEm: integer('parada_avisada_em', { mode: 'timestamp_ms' }),
     /** Respondeu "Continua": não pergunta de novo até esta hora */
     continuaAte: integer('continua_ate', { mode: 'timestamp_ms' }),
+    /**
+     * Uso reaberto pelo "Desfazer" (RF-050): as regras automáticas só olham os
+     * pontos daqui em diante, para não encerrar de novo pelo mesmo motivo.
+     */
+    regrasDesde: integer('regras_desde', { mode: 'timestamp_ms' }),
     criadoPor: criadoPor(),
     ...timestamps,
   },
   (table) => [
     index('usos_maquina_maquina_inicio_idx').on(table.maquinaId, table.inicio),
+    // Camada Trajetos: os usos do período, de todas as máquinas (RF-060/RF-061)
+    index('usos_maquina_inicio_idx').on(table.inicio),
     uniqueIndex('usos_maquina_aberto_idx')
       .on(table.maquinaId)
       .where(sql`${table.fim} is null`),
@@ -1086,6 +1093,33 @@ export const etapasCiclo = sqliteTable(
   (table) => [uniqueIndex('etapas_ciclo_ciclo_ordem_idx').on(table.cicloId, table.ordem)]
 );
 
+/**
+ * Tempo e KM de cada uso de máquina por área (M5, RF-057): a interseção do
+ * rastro com as áreas, gravada ao encerrar o uso. O painel da área ("Horas de
+ * máquina", usos que passaram nela, RF-066) lê daqui pelo índice, sem abrir o
+ * JSON de todos os usos. O início do uso é copiado para filtrar "hoje" sem JOIN.
+ */
+export const usosArea = sqliteTable(
+  'usos_area',
+  {
+    id: id(),
+    usoId: text('uso_id')
+      .notNull()
+      .references(() => usosMaquina.id, { onDelete: 'cascade' }),
+    areaId: text('area_id')
+      .notNull()
+      .references(() => talhoes.id, { onDelete: 'cascade' }),
+    inicio: integer('inicio', { mode: 'timestamp_ms' }).notNull(),
+    segundos: integer('segundos').notNull(),
+    km: real('km').notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex('usos_area_uso_area_idx').on(table.usoId, table.areaId),
+    index('usos_area_area_inicio_idx').on(table.areaId, table.inicio),
+  ]
+);
+
 export const talhoesRelations = relations(talhoes, ({ many }) => ({
   marcadores: many(marcadoresMapa),
   movimentacoes: many(movimentacoes),
@@ -1125,3 +1159,5 @@ export type CicloPlantio = typeof ciclosPlantio.$inferSelect;
 export type NovoCicloPlantio = typeof ciclosPlantio.$inferInsert;
 export type EtapaCiclo = typeof etapasCiclo.$inferSelect;
 export type NovaEtapaCiclo = typeof etapasCiclo.$inferInsert;
+export type UsoArea = typeof usosArea.$inferSelect;
+export type NovoUsoArea = typeof usosArea.$inferInsert;

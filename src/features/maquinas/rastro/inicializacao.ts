@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 
 import { db, maquinas } from '@/database';
 import { usuarioAtual } from '@/services/usuario';
-import { usoAbertoDoOperador } from '../data/usos';
+import { limparPontosAntigos, preencherUsosPorArea, usoAbertoDoOperador } from '../data/usos';
 import { registrarCategoriaParada } from './avisos';
 import { ACOES_AVISO, TAREFA_RESPOSTA_AVISO, type AcaoAviso } from './constantes';
 import { iniciarRastro, rastroLigado } from './localizacao';
@@ -22,6 +22,9 @@ export async function inicializarMaquinas(): Promise<void> {
   await registrarCategoriaParada().catch(() => undefined);
   await Notifications.registerTaskAsync(TAREFA_RESPOSTA_AVISO).catch(() => undefined);
   await conferirUsoAberto().catch(() => undefined);
+  // Usos de antes da tabela por área (uma vez) e pontos que já passaram do "Desfazer"
+  await preencherUsosPorArea().catch(() => undefined);
+  await limparPontosAntigos().catch(() => undefined);
 
   const [uso] = await usoAbertoDoOperador(usuarioAtual().id);
   if (uso?.rastreado && !(await rastroLigado())) {

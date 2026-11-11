@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNull, ne, sql } from 'drizzle-orm';
 
 import {
   ciclosPlantio,
@@ -71,6 +71,24 @@ export function ciclosAnterioresDaArea(areaId: string) {
 }
 
 export const TABELAS_CICLO = ['ciclos_plantio', 'etapas_ciclo'] as const;
+
+/**
+ * Etapas pendentes dos ciclos ativos nas áreas por onde uma máquina passou: a
+ * sugestão "Passou no Talhão 3: marcar Pulverização como feita?" (RF-059).
+ */
+export function etapasPendentesNasAreas(areaIds: readonly string[]) {
+  return db
+    .select({ areaId: ciclosPlantio.areaId, etapa: etapasCiclo })
+    .from(ciclosPlantio)
+    .innerJoin(etapasCiclo, eq(etapasCiclo.cicloId, ciclosPlantio.id))
+    .where(
+      and(
+        inArray(ciclosPlantio.areaId, areaIds.length > 0 ? [...areaIds] : ['']),
+        eq(ciclosPlantio.status, 'ativo'),
+        isNull(etapasCiclo.realizadaEm)
+      )
+    );
+}
 
 /** Tem ciclo ativo? ("Redesenhar X?" avisa que a conta das sementes fica desatualizada) */
 export async function existeCicloAtivo(areaId: string): Promise<boolean> {

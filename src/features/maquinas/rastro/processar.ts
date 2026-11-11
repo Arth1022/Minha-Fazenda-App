@@ -3,6 +3,8 @@ import { eq } from 'drizzle-orm';
 
 import { db, maquinas, usosMaquina } from '@/database';
 import type { UsoMaquina } from '@/dtos';
+// Direto do arquivo (não do índice do mapa): roda na tarefa de segundo plano, sem telas
+import { obterFazendaMapa } from '@/features/mapa/data/fazendaMapa';
 import { usuarioAtual } from '@/services/usuario';
 import {
   fecharUso,
@@ -73,13 +75,16 @@ async function gravarEAvaliar(localizacoes: LocationObject[]): Promise<void> {
 export async function aplicarRegras(uso: UsoMaquina, agora = new Date()): Promise<DecisaoAutomatica> {
   const maquina = await db.select().from(maquinas).where(eq(maquinas.id, uso.maquinaId)).get();
   if (!maquina) return { tipo: 'nada' };
+  // Uso reaberto pelo "Desfazer": as regras recomeçam dali (não fecham de novo pelo mesmo motivo)
+  const regrasDesde = uso.regrasDesde?.getTime() ?? 0;
   const [pontos, pausas] = await Promise.all([
-    pontosDoUso(uso.id, new Date(agora.getTime() - JANELA_MS)),
+    pontosDoUso(uso.id, new Date(Math.max(agora.getTime() - JANELA_MS, regrasDesde))),
     pausasDoUso(uso.id),
   ]);
   const pausaAberta = pausas.find((p) => p.fim === null);
+  const fazenda = obterFazendaMapa();
   const decisao = decidirAutomacao({
-    inicio: uso.inicio.getTime(),
+    inicio: Math.max(uso.inicio.getTime(), regrasDesde),
     agora: agora.getTime(),
     estacionario: usoEstacionario(maquina.tipo, uso.atividade),
     velocidadeMaxKmh: velocidadeMaxKmh(maquina),
@@ -87,6 +92,12 @@ export async function aplicarRegras(uso: UsoMaquina, agora = new Date()): Promis
     pausaDesde: pausaAberta?.inicio.getTime() ?? null,
     paradaAvisadaEm: uso.paradaAvisadaEm?.getTime() ?? null,
     continuaAte: uso.continuaAte?.getTime() ?? null,
+    fazenda: fazenda
+      ? {
+          anel: fazenda.divisa,
+          caixa: { minLat: fazenda.minLat, maxLat: fazenda.maxLat, minLng: fazenda.minLng, maxLng: fazenda.maxLng },
+        }
+      : null,
   });
 
   switch (decisao.tipo) {
@@ -103,7 +114,7 @@ export async function aplicarRegras(uso: UsoMaquina, agora = new Date()): Promis
       await fecharUso(uso, { fim: new Date(decisao.fim), motivo: decisao.motivo });
       await limparAvisoParada(uso.id);
       await pararRastro();
-      await avisarEncerradoPeloApp(maquina.nome, decisao.motivo);
+      await avisarEncerradoPeloApp(maquina.nome, decisao.motivo, uso.id);
       break;
   }
   return decisao;
