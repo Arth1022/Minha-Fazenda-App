@@ -89,6 +89,10 @@ const etapa = (
   previstaEm,
   realizadaEm,
   observacao: null,
+  responsavelId: null,
+  responsavelNome: null,
+  atribuidaEm: null,
+  atribuidaPor: null,
   createdAt: HOJE,
   updatedAt: HOJE,
 });

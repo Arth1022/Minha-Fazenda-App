@@ -13,9 +13,9 @@ import {
   type TipoEtapa,
 } from '@/database';
 import { newId } from '@/database/id';
-import { cancelarLembretesDoCiclo, reagendarLembretesDoCiclo } from '@/services/notificacoes';
-import { usuarioAtual } from '@/services/usuario';
-import { adicionarDias, diasEntre, inicioDoDia } from '@/utils/date';
+import { avisarPessoa, cancelarLembretesDoCiclo, reagendarLembretesDoCiclo } from '@/services/notificacoes';
+import { podeAtribuirTarefas, usuarioAtual } from '@/services/usuario';
+import { adicionarDias, diasEntre, formatDiaMes, inicioDoDia } from '@/utils/date';
 
 /**
  * Ciclos de plantio da lavoura (M4). O ciclo ativo tem o resumo copiado para a
@@ -343,6 +343,95 @@ export async function cancelarCiclo(cicloId: string): Promise<void> {
       .run();
   });
   await atualizarLembretes(cicloId);
+}
+
+/** Tela "Minhas tarefas" (tela 27): o aviso de tarefa nova abre nela. */
+export const ROTA_TAREFAS = '/tarefas';
+
+export interface Responsavel {
+  id: string;
+  nome: string;
+}
+
+async function nomeDaArea(areaId: string): Promise<string> {
+  const [area] = await db.select({ nome: talhoes.nome }).from(talhoes).where(eq(talhoes.id, areaId)).limit(1);
+  return area?.nome ?? 'Lavoura';
+}
+
+/**
+ * Atribui a etapa pendente a um colaborador (RF-067): ela vira tarefa dele;
+ * null tira o responsável. Só o admin atribui. A pessoa recebe o aviso
+ * (RF-070; sem API, simulado: ver `avisarPessoa`).
+ */
+export async function atribuirEtapa(etapaId: string, responsavel: Responsavel | null, agora = new Date()): Promise<void> {
+  const quem = usuarioAtual();
+  if (!podeAtribuirTarefas(quem)) throw new Error('Só o admin atribui tarefas.');
+  const { etapa, ciclo } = await etapaDoCicloAtivo(etapaId);
+  if (etapa.realizadaEm) throw new Error('Etapa feita não vira tarefa.');
+  await db
+    .update(etapasCiclo)
+    .set(
+      responsavel
+        ? { responsavelId: responsavel.id, responsavelNome: responsavel.nome, atribuidaEm: agora, atribuidaPor: quem.id }
+        : { responsavelId: null, responsavelNome: null, atribuidaEm: null, atribuidaPor: null }
+    )
+    .where(eq(etapasCiclo.id, etapaId));
+  if (responsavel && responsavel.id !== etapa.responsavelId) {
+    const area = await nomeDaArea(ciclo.areaId);
+    await avisarPessoa(
+      responsavel.id,
+      {
+        titulo: `Nova tarefa: ${etapa.nome}`,
+        mensagem: `${area} · ${ciclo.cultura} · prevista para ${formatDiaMes(etapa.previstaEm)}`,
+        url: ROTA_TAREFAS,
+      },
+      agora
+    ).catch(() => 'semEnvio');
+  }
+}
+
+/** As tarefas da pessoa (RF-068): etapas atribuídas a ela, com a cultura e a área, por data. */
+export function tarefasDe(responsavelId: string) {
+  return db
+    .select({
+      etapa: etapasCiclo,
+      cultura: ciclosPlantio.cultura,
+      cicloStatus: ciclosPlantio.status,
+      areaId: talhoes.id,
+      areaNome: talhoes.nome,
+      areaTipo: talhoes.tipo,
+    })
+    .from(etapasCiclo)
+    .innerJoin(ciclosPlantio, eq(ciclosPlantio.id, etapasCiclo.cicloId))
+    .innerJoin(talhoes, eq(talhoes.id, ciclosPlantio.areaId))
+    .where(and(eq(etapasCiclo.responsavelId, responsavelId), ne(ciclosPlantio.status, 'cancelado')))
+    .orderBy(asc(etapasCiclo.previstaEm));
+}
+export type Tarefa = Awaited<ReturnType<typeof tarefasDe>>[number];
+export const TABELAS_TAREFAS = ['etapas_ciclo', 'ciclos_plantio', 'talhoes'] as const;
+
+/**
+ * Conclui a tarefa (RF-069): é marcar a etapa como feita na linha do tempo do
+ * ciclo. Quem atribuiu recebe o aviso (RF-070; sem API, simulado).
+ */
+export async function concluirTarefa(etapaId: string, quando = new Date()): Promise<void> {
+  const [etapa] = await db.select().from(etapasCiclo).where(eq(etapasCiclo.id, etapaId)).limit(1);
+  if (!etapa) throw new Error('Tarefa não encontrada.');
+  const [ciclo] = await db.select().from(ciclosPlantio).where(eq(ciclosPlantio.id, etapa.cicloId)).limit(1);
+  await marcarEtapaFeita(etapaId, quando);
+  const quem = usuarioAtual();
+  if (ciclo && etapa.atribuidaPor && etapa.atribuidaPor !== quem.id) {
+    const area = await nomeDaArea(ciclo.areaId);
+    await avisarPessoa(
+      etapa.atribuidaPor,
+      {
+        titulo: `${quem.nome} concluiu ${etapa.nome}`,
+        mensagem: `${area} · ${ciclo.cultura}`,
+        url: `/mapa-fazenda?talhao=${encodeURIComponent(ciclo.areaId)}&vista=ciclo`,
+      },
+      quando
+    ).catch(() => 'semEnvio');
+  }
 }
 
 /** Modelos criados pelo admin, por nome (os prontos ficam no código). */

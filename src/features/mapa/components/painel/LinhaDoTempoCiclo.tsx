@@ -4,7 +4,7 @@ import DateTimePicker, { type DateTimePickerEvent } from '@react-native-communit
 
 import { ConfirmacaoSheet, PassoLinhaDoTempo, type EstadoPasso } from '@/components/ui';
 import { COR_POR_TIPO_AREA } from '@/constants/areas';
-import { AgroColors, Spacing } from '@/constants/theme';
+import { AgroColors, Radius, Spacing } from '@/constants/theme';
 import type { CicloPlantio, EtapaCiclo, Talhao } from '@/database';
 import {
   cancelarCiclo,
@@ -12,6 +12,7 @@ import {
   mudarPrevisaoDaEtapa,
   salvarObservacaoDaEtapa,
 } from '@/services/cicloService';
+import { podeAtribuirTarefas } from '@/services/usuario';
 import { diasEntre, formatDataBR } from '@/utils/date';
 import { formatarNumero } from '../../services/calculos';
 import {
@@ -24,6 +25,7 @@ import {
   textoSementes,
   type EstadoEtapa,
 } from '../../services/plantio';
+import { AtribuirEtapaSheet, IniciaisPessoa } from '../AtribuirEtapaSheet';
 import { BotaoMapa, CampoMapa, CoresTexto, LinkMapa } from '../elementos';
 import { BarraProgresso, CabecalhoPainel } from './elementosPainel';
 
@@ -52,7 +54,7 @@ export interface LinhaDoTempoCicloProps {
  * Linha do tempo do ciclo (tela 23, RF-039): etapas feitas com check, a
  * próxima com o prazo e "Marcar feita". Tocar numa etapa abre a data prevista
  * (dá para mudar) e a observação. O visual dos passos é o da reprodução (RF-040).
- * "Atribuir" e o responsável são da M6 (tarefas de colaboradores).
+ * O admin atribui a etapa a alguém ("+ Atribuir"): vira tarefa da pessoa (M6).
  */
 export function LinhaDoTempoCiclo({
   area,
@@ -70,6 +72,14 @@ export function LinhaDoTempoCiclo({
   const [mudandoData, setMudandoData] = useState<EtapaCiclo | null>(null);
   const [marcando, setMarcando] = useState<string | null>(null);
   const [cancelando, setCancelando] = useState(false);
+  // Folha "Atribuir": a etapa fica guardada para a folha sumir deslizando
+  const [atribuindo, setAtribuindo] = useState<EtapaCiclo | null>(null);
+  const [atribuirVisivel, setAtribuirVisivel] = useState(false);
+  const podeAtribuir = !somenteLeitura && podeAtribuirTarefas();
+  const abrirAtribuir = (etapa: EtapaCiclo) => {
+    setAtribuindo(etapa);
+    setAtribuirVisivel(true);
+  };
 
   const marcar = async (etapa: EtapaCiclo) => {
     setMarcando(etapa.id);
@@ -148,6 +158,26 @@ export function LinhaDoTempoCiclo({
                 </View>
               ) : null}
 
+              {etapa.responsavelNome ? (
+                <Pressable
+                  onPress={podeAtribuir && estado !== 'feita' ? () => abrirAtribuir(etapa) : undefined}
+                  disabled={!podeAtribuir || estado === 'feita'}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Responsável: ${etapa.responsavelNome}`}
+                  style={estilos.responsavel}>
+                  <IniciaisPessoa nome={etapa.responsavelNome} />
+                  <Text style={estilos.responsavelNome}>{etapa.responsavelNome}</Text>
+                </Pressable>
+              ) : podeAtribuir && estado !== 'feita' ? (
+                <Pressable
+                  onPress={() => abrirAtribuir(etapa)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Atribuir ${etapa.nome}`}
+                  style={({ pressed }) => [estilos.atribuir, pressed && estilos.pressionado]}>
+                  <Text style={estilos.atribuirTexto}>+ Atribuir</Text>
+                </Pressable>
+              ) : null}
+
               {etapa.observacao && !aberta ? (
                 <Text style={estilos.observacao} numberOfLines={2}>
                   {etapa.observacao}
@@ -192,6 +222,13 @@ export function LinhaDoTempoCiclo({
           onChange={aoEscolherData}
         />
       ) : null}
+
+      <AtribuirEtapaSheet
+        visible={atribuirVisivel}
+        etapa={atribuindo ? (etapas.find((e) => e.id === atribuindo.id) ?? atribuindo) : null}
+        contexto={`${area.nome} · ${ciclo.cultura}`}
+        onClose={() => setAtribuirVisivel(false)}
+      />
 
       <ConfirmacaoSheet
         visible={cancelando}
@@ -285,6 +322,19 @@ const estilos = StyleSheet.create({
   prazoAtrasado: { color: AgroColors.danger },
   botaoMarcar: { minHeight: 44, paddingHorizontal: Spacing.lg },
   observacao: { marginTop: Spacing.xs, fontSize: 14, lineHeight: 19, color: CoresTexto.suave },
+  responsavel: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: Spacing.sm, alignSelf: 'flex-start' },
+  responsavelNome: { fontSize: 15, fontWeight: '600', color: CoresTexto.escuro },
+  atribuir: {
+    alignSelf: 'flex-start',
+    marginTop: Spacing.sm,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: AgroColors.borderStrong,
+    borderRadius: Radius.full,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+  },
+  atribuirTexto: { fontSize: 14.5, fontWeight: '700', color: CoresTexto.escuro },
   detalhe: { gap: Spacing.sm, marginTop: Spacing.sm },
   detalheLinha: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
   detalheTexto: { flexShrink: 1, fontSize: 14.5, lineHeight: 20, color: CoresTexto.suave },

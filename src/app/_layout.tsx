@@ -20,6 +20,7 @@ export default function RootLayout() {
         <Stack.Screen name="lote/[id]" />
         <Stack.Screen name="maquina/[id]" />
         <Stack.Screen name="maquina/em-uso" />
+        <Stack.Screen name="tarefas" />
       </Stack>
     </AppProviders>
   );
