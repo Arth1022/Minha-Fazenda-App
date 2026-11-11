@@ -140,7 +140,7 @@ export function avisosTrocaDeTipo(area: DadosSafra, novoTipo: TipoTalhao): strin
   if (novoTipo === area.tipo) return [];
   const avisos: string[] = [];
   const safra = descreverSafra(area);
-  if (safra) avisos.push(`A safra registrada (${safra}) será apagada.`);
+  if (safra) avisos.push(`O plantio atual (${safra}) será encerrado.`);
   return avisos;
 }
 
@@ -148,7 +148,7 @@ export function avisosTrocaDeTipo(area: DadosSafra, novoTipo: TipoTalhao): strin
  * "Redesenhar Pasto 1?" (RF-008): o que muda e o que continua. O ciclo de
  * plantio entra aqui quando chegar ao mapa.
  */
-export function consequenciasRedesenho(cabecas = 0, temCerca = false): ItemConfirmacao[] {
+export function consequenciasRedesenho(cabecas = 0, temCerca = false, temCiclo = false): ItemConfirmacao[] {
   const itens: ItemConfirmacao[] = [];
   if (cabecas > 0) {
     itens.push({
@@ -157,6 +157,7 @@ export function consequenciasRedesenho(cabecas = 0, temCerca = false): ItemConfi
     });
   }
   if (temCerca) itens.push({ icone: 'fence', texto: 'A cerca salva fica desatualizada' });
+  if (temCiclo) itens.push({ icone: 'sprout', texto: 'A conta das sementes do plantio fica desatualizada' });
   itens.push({ icone: 'check', texto: 'Nome, tipo e histórico continuam', tom: 'ok' });
   return itens;
 }

@@ -13,6 +13,7 @@ export {
   reagendarLembreteOrdenha,
   reagendarLembretesDoAnimal,
 } from './lembretes';
+export { cancelarLembretesDoCiclo, lembretesDoCiclo, reagendarLembretesDoCiclo } from './lavoura';
 export {
   agendarNotificacao,
   alarmeExatoPermitido,

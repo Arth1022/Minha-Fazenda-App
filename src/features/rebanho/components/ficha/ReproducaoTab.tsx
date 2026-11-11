@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { AppIcon, Button, FichaCard } from '@/components/ui';
+import { AppIcon, Button, FichaCard, PassoLinhaDoTempo } from '@/components/ui';
 import { AgroColors, IconSize, Radius, Spacing, Typography } from '@/constants/theme';
 import type { Animal, FichaAnimal } from '@/dtos';
 import { formatDataBR } from '@/utils/date';
@@ -114,12 +114,8 @@ export function ReproducaoTab({
               const ultimo = index === eventos.length - 1;
               const coberturaSemTouro = evento.informarTouroDe;
               return (
-                <View key={evento.chave} style={styles.evento}>
-                  <View style={styles.trilho}>
-                    <View style={[styles.ponto, evento.feito ? styles.pontoFeito : styles.pontoAFazer]} />
-                    {!ultimo ? <View style={styles.linhaVertical} /> : null}
-                  </View>
-                  <View style={[styles.eventoTextos, !ultimo && styles.eventoEspaco]}>
+                <PassoLinhaDoTempo key={evento.chave} estado={evento.feito ? 'feito' : 'aFazer'} ultimo={ultimo}>
+                  <View style={styles.eventoTextos}>
                     <Text style={styles.eventoRotulo}>{evento.rotulo}</Text>
                     <Text style={styles.eventoTitulo}>{evento.titulo}</Text>
                     {evento.detalhe ? (
@@ -136,7 +132,7 @@ export function ReproducaoTab({
                       </View>
                     ) : null}
                   </View>
-                </View>
+                </PassoLinhaDoTempo>
               );
             })}
           </View>
@@ -210,40 +206,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 24,
   },
-  evento: {
-    flexDirection: 'row',
-    gap: Spacing.three,
-  },
-  trilho: {
-    width: 18,
-    alignItems: 'center',
-  },
-  ponto: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    marginTop: 2,
-  },
-  pontoFeito: {
-    backgroundColor: AgroColors.primary,
-  },
-  pontoAFazer: {
-    borderWidth: 2.5,
-    borderColor: AgroColors.textMuted,
-    backgroundColor: AgroColors.cardBg,
-  },
-  linhaVertical: {
-    flex: 1,
-    width: 2,
-    marginVertical: Spacing.one,
-    backgroundColor: AgroColors.border,
-  },
   eventoTextos: {
     flex: 1,
     gap: Spacing.half,
-  },
-  eventoEspaco: {
-    paddingBottom: Spacing.lg,
   },
   eventoRotulo: {
     ...Typography.caption,

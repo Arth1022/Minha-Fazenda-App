@@ -11,18 +11,24 @@ import { CoresTexto } from '../elementos';
 export function CabecalhoPainel({
   titulo,
   subtitulo,
+  cor,
   onFechar,
 }: {
   titulo: string;
   subtitulo?: string | null;
+  /** Quadradinho com a cor do tipo da área antes do título (tela 23) */
+  cor?: string;
   onFechar: () => void;
 }) {
   return (
     <View style={estilos.cabecalho}>
       <View style={estilos.cabecalhoTextos}>
-        <Text style={estilos.titulo} numberOfLines={1}>
-          {titulo}
-        </Text>
+        <View style={estilos.tituloLinha}>
+          {cor ? <View style={[estilos.cor, { backgroundColor: cor }]} /> : null}
+          <Text style={estilos.titulo} numberOfLines={1}>
+            {titulo}
+          </Text>
+        </View>
         {subtitulo ? <Text style={estilos.subtitulo}>{subtitulo}</Text> : null}
       </View>
       <BotaoRedondo icone="x" rotulo="Voltar ao resumo da área" onPress={onFechar} />
@@ -99,6 +105,19 @@ export function BolinhaEscolha({ escolhida }: { escolhida: boolean }) {
   );
 }
 
+/** Barra do andamento do ciclo ("dia 21 de 110"): trilho cinza, parte feita verde. */
+export function BarraProgresso({ fracao }: { fracao: number }) {
+  const parte = Math.max(0, Math.min(1, fracao));
+  return (
+    <View
+      style={estilos.barra}
+      accessibilityRole="progressbar"
+      accessibilityValue={{ min: 0, max: 100, now: Math.round(parte * 100) }}>
+      <View style={[estilos.barraFeita, { width: `${parte * 100}%` }]} />
+    </View>
+  );
+}
+
 /** Linha de lista com ícone, rótulo, valor à direita e seta ("Histórico de ocupação  >"). */
 export function LinhaNavegacao({
   icone,
@@ -137,7 +156,9 @@ const estilos = StyleSheet.create({
   pressionado: { opacity: 0.7 },
   cabecalho: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   cabecalhoTextos: { flex: 1, gap: 2 },
-  titulo: { fontSize: 21, lineHeight: 27, fontWeight: '800', color: CoresTexto.escuro },
+  tituloLinha: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  cor: { width: 14, height: 14, borderRadius: 3 },
+  titulo: { flexShrink: 1, fontSize: 21, lineHeight: 27, fontWeight: '800', color: CoresTexto.escuro },
   subtitulo: { fontSize: 14.5, lineHeight: 20, color: CoresTexto.suave },
   botaoRedondo: {
     width: 44,
@@ -201,4 +222,6 @@ const estilos = StyleSheet.create({
   linhaRotulo: { flex: 1, fontSize: 16, lineHeight: 21, fontWeight: '600', color: CoresTexto.escuro },
   linhaValor: { fontSize: 15, lineHeight: 20, fontWeight: '600', color: CoresTexto.suave },
   linhaValorAlerta: { color: AgroColors.health },
+  barra: { height: 8, borderRadius: Radius.full, backgroundColor: AgroColors.border, overflow: 'hidden' },
+  barraFeita: { height: '100%', borderRadius: Radius.full, backgroundColor: AgroColors.forest },
 });

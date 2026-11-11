@@ -155,6 +155,13 @@
       "when": 1794329830966,
       "tag": "0021_cerca_na_area",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1794344734910,
+      "tag": "0022_plantio_na_area",
+      "breakpoints": true
     }
   ]
 }

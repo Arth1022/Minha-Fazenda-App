@@ -49,6 +49,11 @@ export {
   type FichaTopoProps,
 } from './FichaTopo';
 export {
+  PassoLinhaDoTempo,
+  type EstadoPasso,
+  type PassoLinhaDoTempoProps,
+} from './PassoLinhaDoTempo';
+export {
   ConfirmacaoSheet,
   type ConfirmacaoSheetProps,
   type ItemConfirmacao,

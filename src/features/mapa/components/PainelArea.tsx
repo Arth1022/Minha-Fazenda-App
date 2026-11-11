@@ -2,7 +2,6 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AppIcon } from '@/components/ui';
 import { COR_POR_TIPO_AREA } from '@/constants/areas';
 import { AgroColors, MaxContentWidth, Radius, Shadows, Spacing } from '@/constants/theme';
 import { useConsultaAoVivo, type CalculoCerca, type Talhao } from '@/database';
@@ -11,15 +10,15 @@ import { useAlturaTeclado } from '../hooks/useAlturaTeclado';
 import {
   podeCercar,
   resumoDaArea,
-  resumoDaSafra,
   ROTULO_ESTADO_AREA,
   situacaoDaArea,
   type EstadoArea,
 } from '../services/areas';
 import { resumoDaCerca } from '../services/cerca';
 import type { OcupacaoArea } from '../services/ocupacao';
-import { BotaoMapa, CoresTexto } from './elementos';
+import { CoresTexto } from './elementos';
 import { CercarArea } from './painel/CercarArea';
+import { ConteudoLavoura } from './painel/ConteudoLavoura';
 import { ConteudoPasto } from './painel/ConteudoPasto';
 import { BotaoRedondo, LinhaNavegacao } from './painel/elementosPainel';
 
@@ -43,8 +42,6 @@ export interface PainelAreaProps {
   /** "⋮": renomear, redesenhar, ponto de atenção, excluir */
   onOpcoes: () => void;
   onFechar: () => void;
-  /** Lavoura: registrar ou atualizar a safra */
-  onSafra: () => void;
   /** Destino escolhido ao mover animais, para o mapa destacar */
   onDestaque: (areaId: string | null) => void;
   /** Altura do painel, para a câmera enquadrar a área acima dele */
@@ -53,6 +50,10 @@ export interface PainelAreaProps {
   cercando: boolean;
   /** Abre ("Cerca" do painel ou "⋮") ou fecha o "Cercar" */
   onCercando: (ativo: boolean) => void;
+  /** Admin cria cultura nova no "Plantar" (RF-042) */
+  podeCriarCultura: boolean;
+  /** Lavoura: abre direto na linha do tempo do ciclo (toque no aviso de uma etapa) */
+  abrirLinhaDoTempo?: boolean;
 }
 
 /**
@@ -69,16 +70,16 @@ export function PainelArea({
   destaque = null,
   onOpcoes,
   onFechar,
-  onSafra,
   onDestaque,
   onAltura,
   cercando,
   onCercando,
+  podeCriarCultura,
+  abrirLinhaDoTempo = false,
 }: PainelAreaProps) {
   const insets = useSafeAreaInsets();
   const alturaTeclado = useAlturaTeclado();
   const { estado } = situacaoDaArea(area, ocupacao);
-  const safra = resumoDaSafra(area);
   const { dados: cercas } = useConsultaAoVivo<CalculoCerca[]>(
     () => calculoCercaDaArea(area.id),
     TABELAS_CERCA,
@@ -150,35 +151,21 @@ export function PainelArea({
             onDestaque={onDestaque}
             linhaCerca={linhaCerca}
           />
+        ) : area.tipo === 'lavoura' ? (
+          <ConteudoLavoura
+            area={area}
+            cabecalho={cabecalho}
+            linhaCerca={linhaCerca}
+            alturaTeclado={alturaTeclado}
+            podeCriarCultura={podeCriarCultura}
+            abrirLinhaDoTempo={abrirLinhaDoTempo}
+          />
         ) : (
-          cabecalho
-        )}
-
-        {!cercando && area.tipo === 'lavoura' ? (
           <>
-            {safra ? (
-              <View style={estilos.cartao}>
-                <View style={estilos.cartaoLinha}>
-                  <AppIcon name="sprout" size={20} color={AgroColors.forest} />
-                  <Text style={estilos.cartaoTitulo} numberOfLines={1}>
-                    {safra.cultura}
-                  </Text>
-                  {safra.dias !== null ? <Text style={estilos.cartaoDetalhe}>dia {safra.dias}</Text> : null}
-                </View>
-                {safra.fase ? <Text style={estilos.cartaoDetalhe}>{safra.fase}</Text> : null}
-              </View>
-            ) : null}
-            <BotaoMapa
-              rotulo={safra ? 'Atualizar safra' : 'Registrar safra'}
-              icone="sprout"
-              variante={safra ? 'contorno' : 'primario'}
-              onPress={onSafra}
-            />
+            {cabecalho}
+            {linhaCerca}
           </>
-        ) : null}
-
-        {/* No pasto a linha vai dentro do resumo, depois do histórico */}
-        {!cercando && area.tipo !== 'pasto' ? linhaCerca : null}
+        )}
       </View>
     </View>
   );
@@ -217,13 +204,4 @@ const estilos = StyleSheet.create({
   selo: { paddingHorizontal: Spacing.two, paddingVertical: 3, borderRadius: Radius.xs },
   seloTexto: { fontSize: 12.5, lineHeight: 16, fontWeight: '700' },
   resumo: { fontSize: 14.5, lineHeight: 20, color: CoresTexto.suave },
-  cartao: {
-    backgroundColor: AgroColors.surfaceMuted,
-    borderRadius: Radius.xl,
-    padding: Spacing.three,
-    gap: Spacing.xs,
-  },
-  cartaoLinha: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  cartaoTitulo: { flex: 1, fontSize: 16.5, lineHeight: 22, fontWeight: '700', color: CoresTexto.escuro },
-  cartaoDetalhe: { fontSize: 14, lineHeight: 19, color: CoresTexto.suave },
 });
