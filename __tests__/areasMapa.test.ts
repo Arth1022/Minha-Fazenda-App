@@ -130,10 +130,10 @@ function regrasPuras() {
 
   // Menu "⋮" por papel
   check(
-    opcoesDaArea(true).join() === 'editar,redesenhar,pontoAtencao,excluir',
+    opcoesDaArea(true, 'outro').join() === 'editar,redesenhar,pontoAtencao,excluir',
     'admin: renomear/tipo, redesenhar, ponto de atenção e excluir'
   );
-  check(opcoesDaArea(false).join() === 'editar,pontoAtencao', 'colaborador não vê redesenhar nem excluir (RN-012)');
+  check(opcoesDaArea(false, 'outro').join() === 'editar,pontoAtencao', 'colaborador não vê redesenhar nem excluir (RN-012)');
 
   // Trocar o tipo avisa o que deixa de valer
   check(descreverSafra(plantada) === 'Milho · Plantada', 'descreve a safra registrada com os textos da folha "Safra"');

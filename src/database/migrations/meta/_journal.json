@@ -148,6 +148,13 @@
       "when": 1794329516998,
       "tag": "0020_lotes_pasto",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1794329830966,
+      "tag": "0021_cerca_na_area",
+      "breakpoints": true
     }
   ]
 }

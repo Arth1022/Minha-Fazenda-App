@@ -22,6 +22,7 @@ import m0017 from './0017_agricultura_mapa.sql';
 import m0018 from './0018_areas_no_mapa.sql';
 import m0019 from './0019_rebanho_no_mapa.sql';
 import m0020 from './0020_lotes_pasto.sql';
+import m0021 from './0021_cerca_na_area.sql';
 
   export default {
     journal,
@@ -46,7 +47,8 @@ m0016,
 m0017,
 m0018,
 m0019,
-m0020
+m0020,
+m0021
     }
   }
   

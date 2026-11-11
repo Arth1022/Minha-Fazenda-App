@@ -153,3 +153,27 @@ export function pontoDentroDoPoligono(ponto: Coordenada, poligono: Coordenada[])
   }
   return dentro;
 }
+
+/**
+ * Cantos do contorno: vértices onde o rumo vira pelo menos `anguloMinimo`
+ * graus (onde a cerca precisa de esticador). Um ponto tocado no meio de um
+ * lado reto não conta. Plano local com a longitude encolhida por cos(lat).
+ */
+export function contarCantos(coordenadas: Coordenada[], anguloMinimo = 30): number {
+  const pontos = fecharAnelLinear(coordenadas).slice(0, -1);
+  const n = pontos.length;
+  if (n < 3) return 0;
+  const escala = Math.cos(paraRad(pontos.reduce((soma, p) => soma + p[1], 0) / n));
+  const rumo = (de: Coordenada, para: Coordenada) =>
+    Math.atan2(para[1] - de[1], (para[0] - de[0]) * escala);
+  let cantos = 0;
+  for (let i = 0; i < n; i++) {
+    const anterior = pontos[(i - 1 + n) % n];
+    const atual = pontos[i];
+    const proximo = pontos[(i + 1) % n];
+    let giro = (Math.abs(rumo(atual, proximo) - rumo(anterior, atual)) * 180) / Math.PI;
+    if (giro > 180) giro = 360 - giro;
+    if (giro >= anguloMinimo) cantos += 1;
+  }
+  return cantos;
+}

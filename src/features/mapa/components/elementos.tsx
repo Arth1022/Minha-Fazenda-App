@@ -11,9 +11,7 @@ import {
 } from 'react-native';
 
 import { AppIcon, type AppIconName } from '@/components/ui';
-import { COR_POR_TIPO_AREA } from '@/constants/areas';
 import { AgroColors, Radius, Spacing } from '@/constants/theme';
-import type { Talhao } from '@/database';
 
 /* Peças visuais da tela de Mapa, no padrão do protótipo (PDF "Minha Fazenda"). */
 
@@ -75,7 +73,7 @@ export function BotaoMapa({
   );
 }
 
-/** Link verde com ícone (ex.: "Usar um talhão", "Salvar este ponto..."). */
+/** Link verde com ícone (ex.: "+ Preços para ver o custo", "Salvar este ponto..."). */
 export function LinkMapa({
   rotulo,
   icone,
@@ -198,52 +196,6 @@ export function CaixaResultado({ children }: { children: React.ReactNode }) {
   );
 }
 
-/**
- * Lista dos talhões para preencher a calculadora (aberta pelo "Usar um talhão").
- * `medida` diz o que mostrar de cada um (área ou perímetro).
- */
-export function SeletorTalhao({
-  talhoes,
-  medida,
-  onEscolher,
-}: {
-  talhoes: Talhao[];
-  medida: (talhao: Talhao) => string;
-  onEscolher: (talhao: Talhao) => void;
-}) {
-  if (talhoes.length === 0) {
-    return (
-      <View style={estilos.seletorVazio}>
-        <Text style={estilos.seletorVazioTexto}>
-          Nenhuma área desenhada ainda. Desenhe no mapa para usar a medida dela aqui.
-        </Text>
-      </View>
-    );
-  }
-
-  return (
-    <View style={estilos.seletor}>
-      {talhoes.map((talhao, indice) => (
-        <Pressable
-          key={talhao.id}
-          onPress={() => onEscolher(talhao)}
-          accessibilityRole="button"
-          style={({ pressed }) => [
-            estilos.seletorLinha,
-            indice > 0 && estilos.seletorDivisor,
-            pressed && estilos.pressionado,
-          ]}>
-          <View style={[estilos.pontoCor, { backgroundColor: COR_POR_TIPO_AREA[talhao.tipo] }]} />
-          <Text style={estilos.seletorNome} numberOfLines={1}>
-            {talhao.nome}
-          </Text>
-          <Text style={estilos.seletorMedida}>{medida(talhao)}</Text>
-        </Pressable>
-      ))}
-    </View>
-  );
-}
-
 export const CoresTexto = { escuro: TEXTO_ESCURO, suave: TEXTO_SUAVE } as const;
 
 const estilos = StyleSheet.create({
@@ -316,28 +268,4 @@ const estilos = StyleSheet.create({
     gap: Spacing.half,
   },
   resultadoTitulo: { fontSize: 14, lineHeight: 19, fontWeight: '600', color: '#3A403C' },
-  seletor: {
-    borderWidth: 1,
-    borderColor: AgroColors.border,
-    borderRadius: Radius.lg,
-    overflow: 'hidden',
-  },
-  seletorLinha: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 12,
-    backgroundColor: AgroColors.cardBg,
-  },
-  seletorDivisor: { borderTopWidth: 1, borderTopColor: AgroColors.divider },
-  pontoCor: { width: 12, height: 12, borderRadius: Radius.full },
-  seletorNome: { flex: 1, fontSize: 15, fontWeight: '600', color: TEXTO_ESCURO },
-  seletorMedida: { fontSize: 14, fontWeight: '600', color: TEXTO_SUAVE },
-  seletorVazio: {
-    backgroundColor: AgroColors.surfaceMuted,
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
-  },
-  seletorVazioTexto: { fontSize: 14, lineHeight: 20, color: TEXTO_SUAVE },
 });

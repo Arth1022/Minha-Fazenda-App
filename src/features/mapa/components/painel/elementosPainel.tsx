@@ -104,12 +104,15 @@ export function LinhaNavegacao({
   icone,
   rotulo,
   valor,
+  alerta = false,
   onPress,
   divisor = true,
 }: {
   icone?: AppIconName;
   rotulo: string;
   valor?: string | number | null;
+  /** Valor em laranja (ex.: "desatualizada") */
+  alerta?: boolean;
   onPress: () => void;
   divisor?: boolean;
 }) {
@@ -122,7 +125,9 @@ export function LinhaNavegacao({
       <Text style={estilos.linhaRotulo} numberOfLines={1}>
         {rotulo}
       </Text>
-      {valor !== undefined && valor !== null ? <Text style={estilos.linhaValor}>{valor}</Text> : null}
+      {valor !== undefined && valor !== null ? (
+        <Text style={[estilos.linhaValor, alerta && estilos.linhaValorAlerta]}>{valor}</Text>
+      ) : null}
       <AppIcon name="chevronRight" size={IconSize.lg} color={CoresTexto.suave} />
     </Pressable>
   );
@@ -195,4 +200,5 @@ const estilos = StyleSheet.create({
   linhaDivisor: { borderTopWidth: 1, borderTopColor: AgroColors.divider },
   linhaRotulo: { flex: 1, fontSize: 16, lineHeight: 21, fontWeight: '600', color: CoresTexto.escuro },
   linhaValor: { fontSize: 15, lineHeight: 20, fontWeight: '600', color: CoresTexto.suave },
+  linhaValorAlerta: { color: AgroColors.health },
 });

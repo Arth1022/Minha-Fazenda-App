@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 
-import { AppIcon, Header, ScreenContainer, type AppIconName } from '@/components/ui';
+import { AppIcon, Header, ScreenContainer } from '@/components/ui';
 import { APP_NAME } from '@/constants/app';
 import { COR_POR_TIPO_AREA } from '@/constants/areas';
 import { AgroColors, Radius, Spacing } from '@/constants/theme';
@@ -14,8 +14,6 @@ import { CamadaDivisaFazenda } from '../components/CamadaDivisaFazenda';
 import { CamadaTalhoesSalvos } from '../components/CamadaTalhoesSalvos';
 import { BotaoMapa, CoresTexto } from '../components/elementos';
 import { MapaBase } from '../components/MapaBase';
-import { ModalCalculadoraCercas } from '../components/ModalCalculadoraCercas';
-import { ModalCalculadoraSementes } from '../components/ModalCalculadoraSementes';
 import { useFazendaMapa } from '../data/fazendaMapa';
 import { detalheDaArea } from '../services/areas';
 import { formatarHectares } from '../services/calculos';
@@ -49,7 +47,6 @@ export default function MapeamentoScreen() {
     []
   );
   const ocupacoes = useMemo(() => mapaDeOcupacao(linhasOcupacao), [linhasOcupacao]);
-  const [calculadora, setCalculadora] = useState<'sementes' | 'cerca' | null>(null);
 
   // Com erro na consulta, a tela segue (sem talhões) em vez de ficar presa em "…"
   const carregado = updatedAt !== undefined || error !== undefined;
@@ -110,33 +107,6 @@ export default function MapeamentoScreen() {
       {carregado && talhoes.length > 0 ? (
         <ListaAreas talhoes={talhoes} ocupacoes={ocupacoes} podeDesenhar={admin && fazenda !== null} />
       ) : null}
-
-      <Text style={estilos.secao}>Calculadoras</Text>
-      <View style={estilos.calculadoras}>
-        <CartaoCalculadora
-          icone="sprout"
-          titulo="Insumos"
-          subtitulo="Sementes e adubo"
-          onPress={() => setCalculadora('sementes')}
-        />
-        <CartaoCalculadora
-          icone="fence"
-          titulo="Cerca"
-          subtitulo="Arame e mourões"
-          onPress={() => setCalculadora('cerca')}
-        />
-      </View>
-
-      <ModalCalculadoraSementes
-        visible={calculadora === 'sementes'}
-        talhoes={talhoes}
-        onClose={() => setCalculadora(null)}
-      />
-      <ModalCalculadoraCercas
-        visible={calculadora === 'cerca'}
-        talhoes={talhoes}
-        onClose={() => setCalculadora(null)}
-      />
     </ScreenContainer>
   );
 }
@@ -228,38 +198,6 @@ function ListaAreas({
   );
 }
 
-function CartaoCalculadora({
-  icone,
-  titulo,
-  subtitulo,
-  onPress,
-}: {
-  icone: AppIconName;
-  titulo: string;
-  subtitulo: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`Calculadora de ${titulo.toLowerCase()}`}
-      style={({ pressed }) => [estilos.calculadora, pressed && estilos.pressionado]}>
-      <View style={estilos.calculadoraIcone}>
-        <AppIcon name={icone} size={22} color={AgroColors.forest} />
-      </View>
-      <View style={estilos.calculadoraTextos}>
-        <Text style={estilos.calculadoraTitulo} numberOfLines={1}>
-          {titulo}
-        </Text>
-        <Text style={estilos.calculadoraSub} numberOfLines={1}>
-          {subtitulo}
-        </Text>
-      </View>
-    </Pressable>
-  );
-}
-
 const BORDA_CARTAO = '#E3E7E4';
 
 const estilos = StyleSheet.create({
@@ -333,36 +271,4 @@ const estilos = StyleSheet.create({
   talhaoTipo: { fontSize: 13.5, color: CoresTexto.suave },
   talhaoArea: { fontSize: 15, fontWeight: '700', color: CoresTexto.escuro },
 
-  secao: {
-    fontSize: 17,
-    lineHeight: 22,
-    fontWeight: '600',
-    color: '#3A403C',
-    marginTop: Spacing.two,
-  },
-  calculadoras: { flexDirection: 'row', gap: Spacing.md },
-  calculadora: {
-    flex: 1,
-    minHeight: 62,
-    backgroundColor: AgroColors.cardBg,
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-    borderColor: BORDA_CARTAO,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    gap: Spacing.md,
-  },
-  calculadoraIcone: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: AgroColors.surfaceMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  calculadoraTextos: { flex: 1 },
-  calculadoraTitulo: { fontSize: 16.5, lineHeight: 22, fontWeight: '600', color: CoresTexto.escuro },
-  calculadoraSub: { fontSize: 13.5, lineHeight: 18, color: CoresTexto.suave },
 });

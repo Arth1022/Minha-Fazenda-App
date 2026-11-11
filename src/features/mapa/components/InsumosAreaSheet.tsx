@@ -10,21 +10,14 @@ import {
   ORDEM_INSUMOS_ADUBACAO,
   calcularAdubacao,
   calcularSementes,
+  formatarHectares,
   formatarNumero,
   lerNumero,
   paraCampo,
   type CulturaSemente,
   type InsumoAdubacao,
 } from '../services/calculos';
-import {
-  CaixaResultado,
-  CampoMapa,
-  CoresTexto,
-  GradeOpcoes,
-  LinkMapa,
-  RotuloCampo,
-  SeletorTalhao,
-} from './elementos';
+import { CaixaResultado, CampoMapa, CoresTexto, GradeOpcoes, RotuloCampo } from './elementos';
 
 type ModoInsumo = 'sementes' | 'adubacao';
 
@@ -39,33 +32,52 @@ const OPCOES_ADUBACAO = ORDEM_INSUMOS_ADUBACAO.map((valor) => ({
   rotulo: INSUMOS_ADUBACAO[valor].rotulo,
 }));
 
-export interface ModalCalculadoraSementesProps {
+/** Semente sugerida ao abrir: forrageira no pasto; na lavoura, a cultura registrada quando há semente para ela. */
+function culturaDaArea(area: Talhao): CulturaSemente {
+  if (area.tipo === 'pasto') return 'braquiaria';
+  return area.cultura === 'milho' || area.cultura === 'silagem' ? 'milho' : 'outra';
+}
+
+const textoTaxa = (cultura: CulturaSemente) => {
+  const sugerida = CULTURAS[cultura].taxaKgHa;
+  return sugerida === null ? '' : String(sugerida);
+};
+
+export interface InsumosAreaSheetProps {
   visible: boolean;
-  talhoes: Talhao[];
+  /** Área do "⋮": a conta começa com o tamanho dela */
+  area: Talhao | null;
   onClose: () => void;
 }
 
-/** "Calculadora de insumos": sementes, adubação (NPK/Ureia) e calagem por área. */
-export function ModalCalculadoraSementes({ visible, talhoes, onClose }: ModalCalculadoraSementesProps) {
+/**
+ * "Calcular insumos" do menu "⋮" da área (RF-044: saiu da aba Mapa e passou a
+ * ser da área): sementes, adubação (NPK/Ureia) e calagem. A área vem
+ * preenchida e dá para mudar, para quem planta ou aduba só uma parte.
+ */
+export function InsumosAreaSheet({ visible, area, onClose }: InsumosAreaSheetProps) {
   const [modo, setModo] = useState<ModoInsumo>('sementes');
   const [areaTexto, setAreaTexto] = useState('');
   const [cultura, setCultura] = useState<CulturaSemente>('braquiaria');
-  const [taxaTexto, setTaxaTexto] = useState(String(CULTURAS.braquiaria.taxaKgHa));
+  const [taxaTexto, setTaxaTexto] = useState(textoTaxa('braquiaria'));
   const [insumo, setInsumo] = useState<InsumoAdubacao>('npk');
   const [doseTexto, setDoseTexto] = useState(String(INSUMOS_ADUBACAO.npk.doseKgHa));
-  const [escolhendoTalhao, setEscolhendoTalhao] = useState(false);
 
-  // Reabrir a calculadora fecha a lista de talhões (ajuste no render, sem efeito)
-  const [abertaAntes, setAbertaAntes] = useState(visible);
+  // Ao abrir, começa com o tamanho e o tipo da área (ajuste no render, sem efeito)
+  const [abertaAntes, setAbertaAntes] = useState(false);
   if (visible !== abertaAntes) {
     setAbertaAntes(visible);
-    if (visible) setEscolhendoTalhao(false);
+    if (visible && area) {
+      const sugerida = culturaDaArea(area);
+      setAreaTexto(paraCampo(area.areaHectares, 2));
+      setCultura(sugerida);
+      setTaxaTexto(textoTaxa(sugerida));
+    }
   }
 
   const trocarCultura = (nova: CulturaSemente) => {
     setCultura(nova);
-    const sugerida = CULTURAS[nova].taxaKgHa;
-    setTaxaTexto(sugerida === null ? '' : String(sugerida));
+    setTaxaTexto(textoTaxa(nova));
   };
 
   const trocarInsumo = (novo: InsumoAdubacao) => {
@@ -84,8 +96,8 @@ export function ModalCalculadoraSementes({ visible, talhoes, onClose }: ModalCal
   return (
     <BottomSheet
       visible={visible}
-      title="Calculadora de insumos"
-      subtitle="Sementes, adubação e calagem por área"
+      title={area ? `Insumos para ${area.nome}` : 'Insumos'}
+      subtitle={area ? `${formatarHectares(area.areaHectares)} · sementes, adubação e calagem` : undefined}
       alturaMaxima={0.8}
       onClose={onClose}>
       <View style={estilos.conteudo}>
@@ -95,33 +107,17 @@ export function ModalCalculadoraSementes({ visible, talhoes, onClose }: ModalCal
         </View>
 
         <View style={estilos.bloco}>
-          <RotuloCampo
-            titulo="Área da lavoura ou pasto"
-            acao={
-              <LinkMapa
-                rotulo="Usar um talhão"
-                icone="pentagon"
-                onPress={() => setEscolhendoTalhao((atual) => !atual)}
-              />
-            }
-          />
-          {escolhendoTalhao ? (
-            <SeletorTalhao
-              talhoes={talhoes}
-              medida={(t) => `${formatarNumero(t.areaHectares, 2)} ha`}
-              onEscolher={(t) => {
-                setAreaTexto(paraCampo(t.areaHectares, 2));
-                setEscolhendoTalhao(false);
-              }}
-            />
-          ) : null}
+          <RotuloCampo titulo={ehAdubacao ? 'Área a adubar' : 'Área a plantar'} />
           <CampoMapa
             valor={areaTexto}
             onChange={setAreaTexto}
             unidade="ha"
             placeholder="0"
-            acessibilidade="Área para plantio em hectares"
+            acessibilidade={ehAdubacao ? 'Área a adubar em hectares' : 'Área a plantar em hectares'}
           />
+          {area && Math.abs(areaHa - area.areaHectares) > 0.005 ? (
+            <Text style={estilos.ajuda}>A área inteira tem {formatarHectares(area.areaHectares)}.</Text>
+          ) : null}
         </View>
 
         {ehAdubacao ? (

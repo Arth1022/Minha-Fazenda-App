@@ -5,19 +5,23 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppIcon } from '@/components/ui';
 import { COR_POR_TIPO_AREA } from '@/constants/areas';
 import { AgroColors, MaxContentWidth, Radius, Shadows, Spacing } from '@/constants/theme';
-import type { Talhao } from '@/database';
+import { useConsultaAoVivo, type CalculoCerca, type Talhao } from '@/database';
+import { calculoCercaDaArea, TABELAS_CERCA } from '@/services/cercaService';
 import { useAlturaTeclado } from '../hooks/useAlturaTeclado';
 import {
+  podeCercar,
   resumoDaArea,
   resumoDaSafra,
   ROTULO_ESTADO_AREA,
   situacaoDaArea,
   type EstadoArea,
 } from '../services/areas';
+import { resumoDaCerca } from '../services/cerca';
 import type { OcupacaoArea } from '../services/ocupacao';
 import { BotaoMapa, CoresTexto } from './elementos';
+import { CercarArea } from './painel/CercarArea';
 import { ConteudoPasto } from './painel/ConteudoPasto';
-import { BotaoRedondo } from './painel/elementosPainel';
+import { BotaoRedondo, LinhaNavegacao } from './painel/elementosPainel';
 
 const TOM_ESTADO: Record<EstadoArea, { fundo: string; texto: string }> = {
   ocupado: { fundo: AgroColors.forestTint, texto: AgroColors.forest },
@@ -45,6 +49,10 @@ export interface PainelAreaProps {
   onDestaque: (areaId: string | null) => void;
   /** Altura do painel, para a câmera enquadrar a área acima dele */
   onAltura?: (altura: number) => void;
+  /** Mostrando "Cercar" (tela 21) no lugar do resumo */
+  cercando: boolean;
+  /** Abre ("Cerca" do painel ou "⋮") ou fecha o "Cercar" */
+  onCercando: (ativo: boolean) => void;
 }
 
 /**
@@ -64,11 +72,31 @@ export function PainelArea({
   onSafra,
   onDestaque,
   onAltura,
+  cercando,
+  onCercando,
 }: PainelAreaProps) {
   const insets = useSafeAreaInsets();
   const alturaTeclado = useAlturaTeclado();
   const { estado } = situacaoDaArea(area, ocupacao);
   const safra = resumoDaSafra(area);
+  const { dados: cercas } = useConsultaAoVivo<CalculoCerca[]>(
+    () => calculoCercaDaArea(area.id),
+    TABELAS_CERCA,
+    area.id,
+    []
+  );
+  const cerca = cercas[0] ?? null;
+
+  // Cerca (RF-028 a RF-032): pasto, lavoura e reserva; "outro" não tem
+  const linhaCerca = !podeCercar(area.tipo) ? null : (
+      <LinhaNavegacao
+        icone="fence"
+        rotulo={cerca ? 'Cerca' : 'Cercar esta área'}
+        valor={cerca ? (cerca.desatualizado ? 'desatualizada' : resumoDaCerca(cerca)) : null}
+        alerta={cerca?.desatualizado ?? false}
+        onPress={() => onCercando(true)}
+      />
+    );
 
   const cabecalho = (
     <View style={estilos.cabecalho}>
@@ -103,7 +131,14 @@ export function PainelArea({
         onLayout={(e) => onAltura?.(e.nativeEvent.layout.height)}>
         <View style={estilos.alca} />
 
-        {area.tipo === 'pasto' ? (
+        {cercando ? (
+          <CercarArea
+            area={area}
+            calculo={cerca}
+            alturaTeclado={alturaTeclado}
+            onFechar={() => onCercando(false)}
+          />
+        ) : area.tipo === 'pasto' ? (
           <ConteudoPasto
             area={area}
             ocupacao={ocupacao}
@@ -113,12 +148,13 @@ export function PainelArea({
             destaque={destaque}
             tecladoAberto={alturaTeclado > 0}
             onDestaque={onDestaque}
+            linhaCerca={linhaCerca}
           />
         ) : (
           cabecalho
         )}
 
-        {area.tipo === 'lavoura' ? (
+        {!cercando && area.tipo === 'lavoura' ? (
           <>
             {safra ? (
               <View style={estilos.cartao}>
@@ -140,6 +176,9 @@ export function PainelArea({
             />
           </>
         ) : null}
+
+        {/* No pasto a linha vai dentro do resumo, depois do histórico */}
+        {!cercando && area.tipo !== 'pasto' ? linhaCerca : null}
       </View>
     </View>
   );
