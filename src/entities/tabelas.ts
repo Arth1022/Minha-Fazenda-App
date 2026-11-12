@@ -65,6 +65,7 @@ export const tabelas = {
 
   tarefas: tarefas.tarefas,
   tarefaEventos: tarefas.tarefaEventos,
+  avisosFazenda: tarefas.avisosFazenda,
   tarefasRelations: tarefas.tarefasRelations,
   tarefaEventosRelations: tarefas.tarefaEventosRelations,
 };

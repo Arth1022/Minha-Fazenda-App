@@ -52,10 +52,12 @@ export type AppIconName =
   | 'moreVertical'
   | 'ruler'
   | 'calendar'
+  | 'megaphone'
   | 'cloud';
 
 /** Ícones só de traços (Lucide), desenhados pela lista de caminhos. */
 const PATH_ICONS: Partial<Record<AppIconName, string[]>> = {
+  megaphone: ['m3 11 18-5v12L3 14v-3z', 'M11.6 16.8a3 3 0 1 1-5.8-1.6'],
   // Lucide "cloud" (estado do sync no cabeçalho)
   cloud: ['M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z'],
   // Lucide "calendar" (o retângulo de cantos arredondados escrito como caminho)

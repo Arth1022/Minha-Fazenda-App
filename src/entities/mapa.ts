@@ -100,6 +100,8 @@ export const movimentacoes = sqliteTable(
     index('movimentacoes_area_idx').on(table.areaId, table.saidaEm, table.entradaEm),
     // Pasto do lote: a última vez que ele foi movido inteiro
     index('movimentacoes_lote_entrada_idx').on(table.loteId, table.entradaEm),
+    // Feed da fazenda: movimentações do dia
+    index('movimentacoes_entrada_em_idx').on(table.entradaEm),
   ]
 );
 
