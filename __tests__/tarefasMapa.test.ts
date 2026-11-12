@@ -13,7 +13,28 @@ import { avisarPessoa, listarNotificacoesAgendadas } from '@/services/notificaco
 import { criarTalhao } from '@/services/talhaoService';
 import { listarColaboradores, podeAtribuirTarefas, usuarioAtual } from '@/services/usuario';
 import type { Coordenada } from '@/utils/geoMath';
-import { db, etapasCiclo, initTestDatabase } from './support/database';
+import {
+  db,
+  etapasCiclo,
+  FAZENDA_TESTE,
+  fazendaMembros,
+  initTestDatabase,
+  usuarios,
+  fecharTestDatabase,
+} from './support/database';
+
+/** Membros da fazenda como descem pelo sync (no celular essas tabelas são só leitura). */
+async function equipeDaFazenda() {
+  const pessoas = [
+    { id: 'usuario-beta', nome: 'Beta', papel: 'owner' as const },
+    { id: 'colaborador-joao', nome: 'João', papel: 'collaborator' as const },
+    { id: 'colaborador-maria', nome: 'Maria', papel: 'collaborator' as const },
+  ];
+  for (const p of pessoas) {
+    await db.insert(usuarios).values({ id: p.id, nome: p.nome });
+    await db.insert(fazendaMembros).values({ id: `m-${p.id}`, fazendaId: FAZENDA_TESTE, usuarioId: p.id, papel: p.papel });
+  }
+}
 
 function check(condition: boolean, message: string) {
   if (!condition) throw new Error(message);
@@ -60,19 +81,20 @@ function plantarMilho(areaId: string, plantio: Date) {
 async function runTarefasMapaTest() {
   console.log('👷 MINHA FAZENDA - TAREFAS DA EQUIPE (FASE 6, COM DADOS DE EXEMPLO)\n');
 
-  // Equipe de exemplo (sem o sistema online de colaboradores ainda)
+  await initTestDatabase();
+  await equipeDaFazenda();
+
+  // Equipe: os membros da fazenda (descem pelo sync)
   const eu = usuarioAtual();
-  const equipe = listarColaboradores();
+  const equipe = await listarColaboradores();
   check(
     equipe[0].id === eu.id && equipe.some((p) => p.nome === 'João') && new Set(equipe.map((p) => p.id)).size === equipe.length,
-    'equipe de exemplo: quem está com o celular primeiro, sem repetir'
+    'equipe da fazenda: quem está com o celular primeiro, sem repetir'
   );
   check(
-    podeAtribuirTarefas(eu) && !podeAtribuirTarefas({ id: 'x', nome: 'João', papel: 'colaborador' }),
-    'só o admin atribui (RF-067)'
+    podeAtribuirTarefas(eu) && !podeAtribuirTarefas({ id: 'x', nome: 'João', papel: 'collaborator' }),
+    'só o dono atribui (RF-067)'
   );
-
-  await initTestDatabase();
 
   // Aviso para a pessoa (RF-070): sem API, só sai notificação no próprio celular
   check((await avisarPessoa('colaborador-joao', { titulo: 'Teste', mensagem: 'x' })) === 'semEnvio', 'aviso para outra pessoa fica sem envio até a API');
@@ -159,7 +181,7 @@ async function runTarefasMapaTest() {
   console.log('\n🎉 TAREFAS DA EQUIPE OK!');
 }
 
-runTarefasMapaTest().catch((erro) => {
+runTarefasMapaTest().then(fecharTestDatabase).catch((erro) => {
   console.error('❌', erro);
   process.exit(1);
 });

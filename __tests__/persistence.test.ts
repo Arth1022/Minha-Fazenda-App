@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 
-// As features importam `@/database`; o tsconfig.test.json aponta esse caminho para
-// ./support/database (sql.js em memória com o mesmo schema e migrations do app).
+// As features importam `@/database`, que lê o banco de `@/features/sync/db`; o
+// tsconfig.test.json aponta esse caminho para ./support/database (PowerSync em Node).
 import type { CriasDaMae, UltimaPesagem, UltimoParto } from '@/dtos';
 import { salvarOrdenha, todasOrdenhas } from '@/features/home/ordenhas';
 import {
@@ -18,23 +18,25 @@ import {
 import { createPesagem, pesagensDoAnimal, pesosAtuais } from '@/features/rebanho/data/pesagens';
 import { createReproducao, reproducoesDoAnimal } from '@/features/rebanho/data/reproducoes';
 import {
+  alterarFimDoTratamento,
   createTratamento,
-  toggleDiaConfirmado,
   tratamentosComCarencia,
   tratamentosDoAnimal,
   ultimoUsoDoMedicamento,
 } from '@/features/rebanho/data/tratamentos';
 import { calcularFase } from '@/features/rebanho/services/fase';
-import { salvarTipoProducao } from '@/providers/FazendaProvider';
+import { salvarTipoProducao } from '@/features/fazenda/configFazenda';
+import { excluirLote } from '@/services/loteService';
 import {
   animais,
   db,
   fazendaConfig,
   initTestDatabase,
+  FAZENDA_TESTE,
   lotes,
-  reproducoes,
-  sqlite,
-  tratamentos,
+  novoRegistro,
+  powersync,
+  fecharTestDatabase,
 } from './support/database';
 
 const UUID_V4 =
@@ -71,9 +73,10 @@ async function runPersistenceTest() {
   await salvarTipoProducao('misto');
   const configs = await db.select().from(fazendaConfig);
   check(configs.length === 1 && configs[0].tipoProducao === 'misto', 'tipo de produção gravado e alterado numa única linha');
+  check(configs[0].id === FAZENDA_TESTE && configs[0].fazendaId === FAZENDA_TESTE, 'a configuração é a linha da fazenda ativa (id = fazenda_id)');
 
   // 2. Cadastro com valores padrão
-  const [lote] = await db.insert(lotes).values({ nome: 'Maternidade' }).returning();
+  const [lote] = await db.insert(lotes).values(novoRegistro({ nome: 'Maternidade' })).returning();
   const vaca = await createAnimal({
     brinco: '#201',
     nome: 'Mimosa',
@@ -84,6 +87,7 @@ async function runPersistenceTest() {
   check(UUID_V4.test(vaca.id), `id do animal é UUID v4 (${vaca.id})`);
   check(vaca.sexo === 'F' && vaca.status === 'ativo' && !vaca.nascimentoAproximado, 'padrões: fêmea, ativa, nascimento exato');
   check(vaca.createdAt instanceof Date && vaca.updatedAt instanceof Date, 'created_at / updated_at preenchidos como Date');
+  check(vaca.fazendaId === FAZENDA_TESTE && vaca.createdBy === 'usuario-beta' && vaca.deletedAt === null, 'novoRegistro grava a fazenda ativa e quem criou');
   check((await animalPorId(vaca.id))?.raca === 'Girolando', 'animalPorId encontra o animal com os campos mapeados');
   check(vaca.jaPariu === false, 'ja_pariu começa false (sem backfill por idade)');
   const compradaParida = await createAnimal({ brinco: '#205', origem: 'comprado', dataNascimento: dia(1, 1, 2020), jaPariu: true });
@@ -168,17 +172,15 @@ async function runPersistenceTest() {
     carenciaLeiteDias: 4,
     carenciaCarneDias: 21,
   });
-  check(tratamento.diasConfirmados.length === 0 && tratamento.notificacaoAtiva, 'tratamento começa sem dias confirmados');
+  check(tratamento.notificacaoAtiva && tratamento.diasSemana.length === 7, 'tratamento começa com aviso e todos os dias');
   await sleep(5);
-  await toggleDiaConfirmado(tratamento, 3);
-  let [atual] = await tratamentosDoAnimal(vaca.id);
-  await toggleDiaConfirmado(atual, 1);
-  [atual] = await tratamentosDoAnimal(vaca.id);
-  check(atual.diasConfirmados.join(',') === '1,3', 'marcar dias mantém a lista ordenada');
+  await alterarFimDoTratamento(tratamento, dia(30, 10));
+  const [atual] = await tratamentosDoAnimal(vaca.id);
+  check(atual.dataFim?.getTime() === dia(30, 10).getTime(), 'fim do tratamento alterado');
   check(
-    atual.updatedAt.getTime() > tratamento.updatedAt.getTime() &&
-      atual.createdAt.getTime() === tratamento.createdAt.getTime(),
-    'update renova updated_at e preserva created_at'
+    atual.updatedAt!.getTime() > tratamento.updatedAt!.getTime() &&
+      atual.createdAt!.getTime() === tratamento.createdAt!.getTime(),
+    'atualizar renova updated_at e preserva created_at'
   );
 
   const ultimoUso = await ultimoUsoDoMedicamento('  ANTIBIOTICO ');
@@ -189,14 +191,18 @@ async function runPersistenceTest() {
   check((await ultimoUsoDoMedicamento('Vermífugo')) === null, 'remédio nunca usado não preenche nada');
   check((await tratamentosComCarencia()).length === 1, 'lista tratamentos com carência para os alertas');
 
-  const [bruto] = sqlite.exec(
-    `select data_inicio, dias_confirmados from tratamentos where id = '${tratamento.id}'`
-  )[0].values;
-  check(bruto[0] === dia(20, 10).getTime() && bruto[1] === '[1,3]', 'datas gravadas em epoch ms e arrays em JSON');
+  const [bruto] = await powersync.getAll<{ data_inicio: string; dias_semana: string }>(
+    'select data_inicio, dias_semana from tratamentos where id = ?',
+    [tratamento.id]
+  );
+  check(
+    bruto.data_inicio === dia(20, 10).toISOString() && bruto.dias_semana === '[1,2,3,4,5,6,7]',
+    'datas gravadas em texto ISO 8601 (UTC) e listas em JSON'
+  );
 
   check(
     await rejeita(() => createTratamento({ animalId: 'nao-existe', medicamento: 'X', dataInicio: new Date() })),
-    'chave estrangeira rejeita tratamento de animal inexistente'
+    'tratamento de animal inexistente é recusado (sem FK no banco do sync, o app confere)'
   );
 
   // 7. Saída: muda o status, nunca apaga
@@ -220,18 +226,16 @@ async function runPersistenceTest() {
   const ordenhasSalvas = await todasOrdenhas();
   check(ordenhasSalvas.length === 1 && ordenhasSalvas[0].horarioPrevisto === '06:00', 'salvarOrdenha atualiza o registro existente do turno');
 
-  // 9. Integridade ao apagar (o app não apaga animais; o banco protege as referências)
-  await db.delete(lotes).where(eq(lotes.id, lote.id));
-  check((await animalPorId(vaca.id))?.loteId === null, 'apagar lote limpa o lote dos animais');
-  await db.delete(animais).where(eq(animais.id, vaca.id));
-  check((await animalPorId(cria.id))?.maeId === null, 'apagar a mãe mantém a cria, sem mãe');
-  check((await db.select().from(tratamentos)).length === 0, 'apagar o animal apaga os tratamentos dele');
-  check((await db.select().from(reproducoes)).length === 0, 'apagar o animal apaga as reproduções dele');
+  // 9. Apagar = preencher deleted_at (a linha fica para o sync levar a exclusão)
+  await excluirLote(lote.id);
+  check((await animalPorId(vaca.id))?.loteId === null, 'excluir lote tira o lote dos animais');
+  const [loteApagado] = await db.select().from(lotes).where(eq(lotes.id, lote.id));
+  check(loteApagado?.deletedAt instanceof Date, 'o lote excluído continua no banco com deleted_at');
 
   console.log('\n🎉 TODOS OS TESTES PASSARAM COM 100% DE SUCESSO!\n');
 }
 
-runPersistenceTest().catch((error) => {
+runPersistenceTest().then(fecharTestDatabase).catch((error) => {
   console.error('❌ Falha nos testes de persistência:', error);
   process.exit(1);
 });

@@ -17,7 +17,7 @@ import {
   proximasDoses,
   tratamentosAtivos,
 } from '@/features/rebanho/services/doses';
-import { db, initTestDatabase, tratamentos } from './support/database';
+import { db, initTestDatabase, tratamentos, fecharTestDatabase } from './support/database';
 
 function check(condition: boolean, message: string) {
   if (!condition) throw new Error(message);
@@ -192,7 +192,7 @@ async function runDosesTest() {
   console.log('\n🎉 DOSES OK!\n');
 }
 
-runDosesTest().catch((error) => {
+runDosesTest().then(fecharTestDatabase).catch((error) => {
   console.error('❌ Falha nos testes de doses:', error);
   process.exit(1);
 });

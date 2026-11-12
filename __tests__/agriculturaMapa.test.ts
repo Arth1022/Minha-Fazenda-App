@@ -16,7 +16,7 @@ import {
   listarTalhoesAtivos,
 } from '@/services/talhaoService';
 import type { Coordenada } from '@/utils/geoMath';
-import { db, initTestDatabase, marcadoresMapa, talhoes } from './support/database';
+import { db, initTestDatabase, marcadoresMapa, talhoes, fecharTestDatabase } from './support/database';
 
 function check(condition: boolean, message: string) {
   if (!condition) {
@@ -148,20 +148,20 @@ async function runAgriculturaMapaTest() {
   });
   check(Boolean(marcadorErosao.id), 'segundo marcador criado no talhão');
 
-  await db.delete(talhoes).where(eq(talhoes.id, lavouraMilho.id));
+  await deletarTalhao(lavouraMilho.id);
   const marcadoresRestantesCascade = await db
     .select()
     .from(marcadoresMapa)
     .where(eq(marcadoresMapa.talhaoId, lavouraMilho.id));
   check(
-    marcadoresRestantesCascade.length === 0,
-    'ON DELETE CASCADE remove automaticamente os marcadores do talhão excluído no SQLite',
+    marcadoresRestantesCascade.length > 0 && marcadoresRestantesCascade.every((m) => m.deletedAt instanceof Date),
+    'excluir o talhão apaga (soft delete) os marcadores dele na mesma transação',
   );
 
   console.log('\n🎉 TODOS OS TESTES DE AGRICULTURA NO MAPA PASSARAM!');
 }
 
-runAgriculturaMapaTest().catch((err) => {
+runAgriculturaMapaTest().then(fecharTestDatabase).catch((err) => {
   console.error('❌ Falha nos testes de agricultura no mapa:', err);
   process.exit(1);
 });

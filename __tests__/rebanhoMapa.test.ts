@@ -40,7 +40,7 @@ import {
 } from '@/services/movimentacaoService';
 import { atualizarTalhao, criarTalhao, deletarTalhao } from '@/services/talhaoService';
 import type { Coordenada } from '@/utils/geoMath';
-import { animais, db, initTestDatabase, lotes, movimentacoes, sqlite } from './support/database';
+import { animais, db, initTestDatabase, lotes, movimentacoes, novoRegistro, fecharTestDatabase } from './support/database';
 
 function check(condition: boolean, message: string) {
   if (!condition) throw new Error(message);
@@ -183,7 +183,7 @@ async function banco() {
   const p3 = await criarTalhao({ nome: 'Pasto 3', tipo: 'pasto', coordenadas: quadrado(0.004) });
   const lavoura = await criarTalhao({ nome: 'Talhão 3', tipo: 'lavoura', coordenadas: quadrado(0.006) });
   const novo = async (brinco: string, nome: string) =>
-    (await db.insert(animais).values({ brinco, nome }).returning())[0];
+    (await db.insert(animais).values(novoRegistro({ brinco, nome })).returning())[0];
   const estrela = await novo('10388', 'Estrela');
   const teste = await novo('23232', 'Teste');
   const pintada = await novo('10391', 'Pintada');
@@ -224,16 +224,13 @@ async function banco() {
     (await rejeita(() => moverAnimais({ animalIds: [estrela.id], destinoId: lavoura.id })))?.includes('Pasto') ?? false,
     'só área do tipo Pasto recebe animais (RN-003)'
   );
-  let duplicou = false;
-  try {
-    sqlite.run(
-      `insert into movimentacoes (id, animal_id, area_id, entrada_em, created_at, updated_at) values ('x', '${teste.id}', '${p3.id}', 1, 0, 0)`
-    );
-    duplicou = true;
-  } catch {
-    // esperado: índice único parcial
-  }
-  check(!duplicou, 'o banco recusa dois locais atuais para o mesmo animal (RN-001)');
+  // RN-001 sem índice único (banco do sync): mover de novo fecha a linha aberta antes de abrir outra
+  await moverAnimais({ animalIds: [teste.id], destinoId: p3.id, quando: em(5) });
+  await moverAnimais({ animalIds: [teste.id], destinoId: p2.id, quando: em(5) });
+  const abertasDoTeste = (await db.select().from(movimentacoes)).filter(
+    (m) => m.animalId === teste.id && m.saidaEm === null
+  );
+  check(abertasDoTeste.length === 1, 'um local atual por animal: mover fecha o anterior (RN-001)');
 
   // Tirar do pasto: sem local é válido (RN-002)
   await moverAnimais({ animalIds: [pintada.id], destinoId: null, quando: em(6) });
@@ -337,7 +334,7 @@ async function runRebanhoMapaTest() {
   console.log('\n🎉 REBANHO NO MAPA OK!');
 }
 
-runRebanhoMapaTest().catch((erro) => {
+runRebanhoMapaTest().then(fecharTestDatabase).catch((erro) => {
   console.error('❌', erro);
   process.exit(1);
 });
