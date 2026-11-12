@@ -13,9 +13,11 @@ export interface FazendaAtiva {
   papel: Papel | null;
   /** Há uma fazenda escolhida que ainda não chegou pelo sync */
   aguardandoSync: boolean;
+  /** Lendo a fazenda guardada no banco (abertura do app) */
+  carregando: boolean;
 }
 
-const Contexto = createContext<FazendaAtiva>({ fazenda: null, papel: null, aguardandoSync: false });
+const Contexto = createContext<FazendaAtiva>({ fazenda: null, papel: null, aguardandoSync: false, carregando: false });
 
 /**
  * Acompanha a fazenda ativa no banco local: guarda o papel do usuário nela e,
@@ -28,13 +30,18 @@ export function FazendaAtivaProvider({ children }: { children: React.ReactNode }
   const usuario = useUsuarioAtual();
   const chave = `${salva?.id ?? ''}:${usuario.id}:${estado}`;
 
-  const { dados: linha, carregado } = useConsultaAoVivo<FazendaDoUsuario | null>(
-    () => (salva ? fazendaComPapel(salva.id, usuario.id, estado) : Promise.resolve(null)),
+  const { dados: lida, carregado: algumaLida } = useConsultaAoVivo<{ chave: string; linha: FazendaDoUsuario | null }>(
+    async () => ({
+      chave,
+      linha: salva && estado !== 'carregando' ? await fazendaComPapel(salva.id, usuario.id, estado) : null,
+    }),
     TABELAS_FAZENDAS,
     chave,
-    null
+    { chave: '', linha: null }
   );
-  // A leitura é da chave atual (troca de fazenda não usa a linha da anterior)
+  // Só vale a leitura desta chave (troca de fazenda ou de conta não usa a anterior)
+  const carregado = algumaLida && lida.chave === chave && estado !== 'carregando';
+  const linha = carregado ? lida.linha : null;
   const atual = linha && salva && linha.id === salva.id ? linha : null;
 
   useEffect(() => {
@@ -53,9 +60,10 @@ export function FazendaAtivaProvider({ children }: { children: React.ReactNode }
     () => ({
       fazenda: atual ? { id: atual.id, nome: atual.nome } : null,
       papel: atual?.papel ?? null,
-      aguardandoSync: salva !== null && atual === null,
+      aguardandoSync: salva !== null && carregado && atual === null,
+      carregando: salva !== null && !carregado,
     }),
-    [atual, salva]
+    [atual, salva, carregado]
   );
 
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;
