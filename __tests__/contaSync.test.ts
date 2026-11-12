@@ -265,12 +265,28 @@ async function uploadEConnector() {
   configurarSessaoDaApi(null);
 }
 
+/** Saída (com ou sem conta) usa `disconnectAndClear()`: sem conta, o perfil local e a fila também têm que sumir. */
+async function saidaApagaTudo() {
+  await db.insert(perfilLocal).values({ nome: 'Eu' });
+  await db.insert(fazendas).values(novaFazendaLocal('Sítio'));
+  await db.insert(animais).values(novoRegistro({ brinco: '8', nome: 'Mimosa' }));
+
+  await powersync.disconnectAndClear();
+
+  check((await db.select().from(perfilLocal)).length === 0, 'saída apaga o perfil local (tabela local-only)');
+  check((await db.select().from(fazendas)).length === 0, 'saída apaga as fazendas');
+  check((await db.select().from(animais)).length === 0, 'saída apaga os registros');
+  check((await powersync.getCrudBatch(1)) === null, 'saída esvazia a fila de upload');
+}
+
 async function runContaSyncTest() {
   console.log('🔄 MINHA FAZENDA - CONTA E SYNC\n');
   regrasDoAvatar();
   await clienteDaApi();
   await escritaEFiltros();
   await uploadEConnector();
+  // Por último: apaga o banco inteiro
+  await saidaApagaTudo();
   console.log('\n🎉 CONTA E SYNC OK!');
 }
 

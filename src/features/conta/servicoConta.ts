@@ -6,6 +6,7 @@ import {
   limparFazendaAtiva,
 } from '@/features/fazenda';
 import { conectarSync, desconectarELimpar, desconectarSync } from '@/features/sync';
+import { apagarTodasAsFotos } from '@/services/fotos';
 import { cancelarTodasNotificacoes } from '@/services/notificacoes';
 import { definirEstadoDaConta, definirUsuarioAtual, estadoDaConta } from '@/services/usuario';
 import { api, configurarSessaoDaApi, ehErroApi, ErroApi } from '@/shared/api';
@@ -214,9 +215,12 @@ export async function entrarSemConta(dados: { nome: string; fotoUri: string | nu
 
 /**
  * Saída: revoga a sessão na API (se der), para o sync e apaga os dados locais.
- * O próximo login baixa tudo de novo.
+ * O próximo login baixa tudo de novo. Sem conta não há o que baixar: o perfil,
+ * as fazendas e as fotos saem de vez (`disconnectAndClear` limpa também as
+ * tabelas local-only, como `perfil_local`).
  */
 export async function sair(): Promise<void> {
+  const semConta = estadoDaConta() === 'sem-conta';
   const refreshToken = refreshTokenAtual();
   if (refreshToken) {
     await api('/auth/logout', { metodo: 'POST', corpo: { refreshToken } }).catch(() => undefined);
@@ -225,6 +229,8 @@ export async function sair(): Promise<void> {
   // Os avisos agendados eram dos dados que vão sair do celular
   await cancelarTodasNotificacoes().catch(() => undefined);
   await desconectarELimpar().catch(() => undefined);
+  // Com conta, as fotos ficam: os registros voltam pelo sync apontando para elas
+  if (semConta) apagarTodasAsFotos();
   await limparSessao();
   definirUsuarioAtual(null);
   definirEstadoDaConta('deslogado');

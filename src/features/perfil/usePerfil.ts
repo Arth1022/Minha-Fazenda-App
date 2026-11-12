@@ -18,6 +18,8 @@ import { ehErroApi, mensagemDoErro, SEM_CONEXAO } from '@/shared/api';
 
 const AVISO_PENDENTES =
   'Você tem alterações não enviadas. Conecte-se à internet antes de sair ou elas serão perdidas';
+const AVISO_SEM_CONTA =
+  'Sem conta, os dados ficam só neste celular. Ao sair, o seu perfil, as fazendas, os animais, as fotos e todos os registros serão apagados e não dá para recuperar.';
 
 function perguntar(titulo: string, mensagem: string, confirmar: string): Promise<boolean> {
   return new Promise((resolver) => {
@@ -109,10 +111,17 @@ export function usePerfil() {
     }
   };
 
-  /** Sair: com escritas na fila de upload, avisa que elas se perdem e pede confirmação. */
+  /**
+   * Sair: com escritas na fila de upload, avisa que elas se perdem e pede
+   * confirmação. Sem conta, sempre pede: os dados só existem neste celular.
+   */
   const sairDaConta = async () => {
-    const pendentes = await contarPendentes().catch(() => 0);
-    if (pendentes > 0 && !(await perguntar('Sair', AVISO_PENDENTES, 'Sair mesmo assim'))) return;
+    if (semConta) {
+      if (!(await perguntar('Sair e apagar tudo', AVISO_SEM_CONTA, 'Apagar e sair'))) return;
+    } else {
+      const pendentes = await contarPendentes().catch(() => 0);
+      if (pendentes > 0 && !(await perguntar('Sair', AVISO_PENDENTES, 'Sair mesmo assim'))) return;
+    }
     try {
       await sair();
     } catch (e) {

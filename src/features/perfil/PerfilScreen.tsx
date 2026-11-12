@@ -49,9 +49,8 @@ export default function PerfilScreen() {
         {p.semConta ? (
           // TODO(decisao): criar conta a partir do modo sem conta e levar os dados (fora desta entrega)
           <Text style={Typography.caption}>Sem conta: os dados ficam só neste celular.</Text>
-        ) : (
-          <Button label="Sair" variant="danger" onPress={p.sairDaConta} fullWidth />
-        )}
+        ) : null}
+        <Button label="Sair" variant="danger" onPress={p.sairDaConta} fullWidth />
       </View>
     </ScreenContainer>
   );
