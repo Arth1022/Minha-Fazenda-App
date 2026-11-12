@@ -71,6 +71,8 @@ export function camposApagado(): { deletedAt: Date; updatedAt: Date } {
  * Apaga (preenche `deleted_at`) o registro com esse id, ou os que atendem a
  * condição (ex.: os registros filhos de um animal). Nada sai do banco: a linha
  * fica para o sync levar a exclusão aos outros celulares.
+ * TODO(decisao): collaborator pode apagar registros? Padrão: pode (soft delete);
+ * o botão aparece para os dois papéis e quem decide é a API.
  */
 export async function apagar(
   executor: Executor,

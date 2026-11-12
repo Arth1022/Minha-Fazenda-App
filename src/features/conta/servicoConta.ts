@@ -6,6 +6,7 @@ import {
   limparFazendaAtiva,
 } from '@/features/fazenda';
 import { conectarSync, desconectarELimpar, desconectarSync } from '@/features/sync';
+import { cancelarTodasNotificacoes } from '@/services/notificacoes';
 import { definirEstadoDaConta, definirUsuarioAtual, estadoDaConta } from '@/services/usuario';
 import { api, configurarSessaoDaApi, ehErroApi, ErroApi } from '@/shared/api';
 import { obterDeviceId } from '@/shared/deviceId';
@@ -224,6 +225,8 @@ export async function sair(): Promise<void> {
     await api('/auth/logout', { metodo: 'POST', corpo: { refreshToken } }).catch(() => undefined);
   }
   limparFazendaAtiva();
+  // Os avisos agendados eram dos dados que vão sair do celular
+  await cancelarTodasNotificacoes().catch(() => undefined);
   await desconectarELimpar().catch(() => undefined);
   await limparSessao();
   definirUsuarioAtual(null);

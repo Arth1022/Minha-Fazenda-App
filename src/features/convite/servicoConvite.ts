@@ -25,7 +25,10 @@ export async function revogarConvite(conviteId: string): Promise<void> {
   await api(`/convites/${encodeURIComponent(conviteId)}`, { metodo: 'DELETE' });
 }
 
-/** Entra na fazenda do convite (como colaborador). */
+/**
+ * Entra na fazenda do convite (como colaborador).
+ * TODO(decisao): convite com aprovação do owner; padrão: entrada direta ao aceitar.
+ */
 export function aceitarConvite(token: string): Promise<{ fazendaId: string }> {
   return api<{ fazendaId: string }>('/convites/aceitar', { metodo: 'POST', corpo: { token } });
 }

@@ -6,7 +6,7 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 
 import { AnimatedSplashOverlay } from '@/components/AnimatedSplashOverlay';
-import { useConta } from '@/features/conta';
+import { sessaoEmMemoria, useConta } from '@/features/conta';
 import { useFazendaAtiva } from '@/features/fazenda';
 import { AppProviders } from '@/providers/AppProviders';
 
@@ -25,6 +25,8 @@ function Navegacao() {
 
   const entrou = estado === 'logado' || estado === 'sem-conta';
   const temFazenda = entrou && fazenda !== null;
+  // Sessão encerrada pela API (o usuário fica guardado): volta direto para o login
+  const paraQuemSaiu = sessaoEmMemoria().usuario ? '/entrar' : '/boas-vindas';
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
@@ -32,12 +34,12 @@ function Navegacao() {
         <Stack.Screen name="(conta)" />
       </Stack.Protected>
 
-      <Stack.Protected guard={entrou} redirectTo="/boas-vindas">
+      <Stack.Protected guard={entrou} redirectTo={paraQuemSaiu}>
         <Stack.Screen name="fazendas" />
         <Stack.Screen name="perfil" />
       </Stack.Protected>
 
-      <Stack.Protected guard={temFazenda} redirectTo={entrou ? '/fazendas' : '/boas-vindas'}>
+      <Stack.Protected guard={temFazenda} redirectTo={entrou ? '/fazendas' : paraQuemSaiu}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="membros" />
         <Stack.Screen name="animal/[id]" />
