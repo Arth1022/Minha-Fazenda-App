@@ -1,1 +1,0 @@
-ALTER TABLE `animais` ADD `crias_anteriores` integer DEFAULT 0 NOT NULL;

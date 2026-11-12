@@ -1,4 +1,4 @@
-import type { FaseLavoura } from '@/database/schema';
+import type { FaseLavoura } from '@/database';
 
 /**
  * Contas das calculadoras do Mapa (sementes e cerca). Funções puras: a tela só

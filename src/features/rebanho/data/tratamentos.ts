@@ -1,6 +1,6 @@
-import { desc, eq, isNotNull, max, or } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, max, or } from 'drizzle-orm';
 
-import { db, tratamentos } from '@/database';
+import { animais, atualizar, daFazenda, db, novoRegistro, tratamentos } from '@/database';
 import type { NovoTratamento, Tratamento, UltimoUsoMedicamento } from '@/dtos';
 import { normalizarTexto } from '@/utils';
 import { inicioDoDia } from '@/utils/date';
@@ -11,7 +11,7 @@ export function tratamentosDoAnimal(animalId: string) {
   return db
     .select()
     .from(tratamentos)
-    .where(eq(tratamentos.animalId, animalId))
+    .where(and(daFazenda(tratamentos), eq(tratamentos.animalId, animalId)))
     .orderBy(desc(tratamentos.dataInicio));
 }
 
@@ -21,9 +21,9 @@ export function tratamentosComCarencia() {
     .select()
     .from(tratamentos)
     .where(
-      or(
-        isNotNull(tratamentos.carenciaLeiteDias),
-        isNotNull(tratamentos.carenciaCarneDias)
+      and(
+        daFazenda(tratamentos),
+        or(isNotNull(tratamentos.carenciaLeiteDias), isNotNull(tratamentos.carenciaCarneDias))
       )
     );
 }
@@ -42,6 +42,7 @@ export async function nomesDeMedicamentos(
   const usados = await db
     .select({ medicamento: tratamentos.medicamento, ultimoUso: max(tratamentos.dataInicio) })
     .from(tratamentos)
+    .where(daFazenda(tratamentos))
     .groupBy(tratamentos.medicamento)
     .orderBy(desc(max(tratamentos.dataInicio)));
 
@@ -76,6 +77,7 @@ export async function ultimoUsoDoMedicamento(
       ultimoInicio: max(tratamentos.dataInicio),
     })
     .from(tratamentos)
+    .where(daFazenda(tratamentos))
     .groupBy(tratamentos.medicamento)
     .orderBy(desc(max(tratamentos.dataInicio)), desc(max(tratamentos.createdAt)));
 
@@ -105,8 +107,15 @@ export async function createTratamento(
     avisoMinutosAntes: valores.avisoMinutosAntes,
   });
   if (erros.length > 0) throw new Error(erros.join('; '));
+  // Sem chave estrangeira no banco do sync: confere o animal na fazenda
+  const [animal] = await db
+    .select({ id: animais.id })
+    .from(animais)
+    .where(and(daFazenda(animais), eq(animais.id, valores.animalId)))
+    .limit(1);
+  if (!animal) throw new Error('Animal não encontrado');
 
-  const [created] = await db.insert(tratamentos).values(valores).returning();
+  const [created] = await db.insert(tratamentos).values(novoRegistro(valores)).returning();
   return created;
 }
 
@@ -122,24 +131,5 @@ export async function alterarFimDoTratamento(
   const erros = errosDaAgenda({ ...tratamento, dataFim: fim });
   if (erros.length > 0) throw new Error(erros.join('; '));
 
-  await db.update(tratamentos).set({ dataFim: fim }).where(eq(tratamentos.id, tratamento.id));
-}
-
-/**
- * Marca ou desmarca a dose de um dia, mantendo os dias ordenados.
- * @deprecated use `confirmarDia` / `desfazerDia` (data/doses), que gravam em doses_aplicadas.
- */
-export async function toggleDiaConfirmado(
-  tratamento: Tratamento,
-  dia: number
-): Promise<void> {
-  const atuais = tratamento.diasConfirmados;
-  const diasConfirmados = atuais.includes(dia)
-    ? atuais.filter((d) => d !== dia)
-    : [...atuais, dia].sort((a, b) => a - b);
-
-  await db
-    .update(tratamentos)
-    .set({ diasConfirmados })
-    .where(eq(tratamentos.id, tratamento.id));
+  await db.update(tratamentos).set(atualizar({ dataFim: fim })).where(eq(tratamentos.id, tratamento.id));
 }

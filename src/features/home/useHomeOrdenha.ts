@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
 
 import { useLiveQuery } from '@/database';
-import type { Ordenha, PeriodoOrdenha } from '@/dtos';
-import { salvarOrdenha, todasOrdenhas } from './ordenhas';
+import type { PeriodoOrdenha } from '@/dtos';
+import { salvarOrdenha, todasOrdenhas, type OrdenhaDoTurno } from './ordenhas';
 
 const MINUTES_BEFORE_ORDENHA = 15;
 
@@ -40,16 +40,16 @@ function currentTime(): string {
 
 /** Registro mais recente de cada turno (a lista já vem do mais recente ao mais antigo). */
 function latestByPeriodo(
-  ordenhas: Ordenha[]
-): Partial<Record<PeriodoOrdenha, Ordenha>> {
-  const latest: Partial<Record<PeriodoOrdenha, Ordenha>> = {};
+  ordenhas: OrdenhaDoTurno[]
+): Partial<Record<PeriodoOrdenha, OrdenhaDoTurno>> {
+  const latest: Partial<Record<PeriodoOrdenha, OrdenhaDoTurno>> = {};
   for (const ordenha of ordenhas) {
     latest[ordenha.periodo] ??= ordenha;
   }
   return latest;
 }
 
-function toHorario(ordenha?: Ordenha): HorarioOrdenha {
+function toHorario(ordenha?: OrdenhaDoTurno): HorarioOrdenha {
   return {
     horario: ordenha?.horarioPrevisto || null,
     notificacao: ordenha?.horarioNotificacao || null,

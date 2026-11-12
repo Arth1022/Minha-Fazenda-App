@@ -1,6 +1,6 @@
 import { and, desc, eq, isNull } from 'drizzle-orm';
 
-import { db, ocorrenciasMaquina } from '@/database';
+import { atualizar, daFazenda, db, novoRegistro, ocorrenciasMaquina } from '@/database';
 import type { CategoriaProblema, OcorrenciaMaquina } from '@/dtos';
 import { usuarioAtual, type Usuario } from '@/services/usuario';
 import type { Posicao } from './usos';
@@ -21,7 +21,7 @@ export async function registrarProblema(dados: DadosProblema, agora = new Date()
   const operador = dados.operador ?? usuarioAtual();
   const [ocorrencia] = await db
     .insert(ocorrenciasMaquina)
-    .values({
+    .values(novoRegistro({
       maquinaId: dados.maquinaId,
       usoId: dados.usoId ?? null,
       operador: operador.nome,
@@ -33,7 +33,7 @@ export async function registrarProblema(dados: DadosProblema, agora = new Date()
       lat: dados.posicao?.lat ?? null,
       lng: dados.posicao?.lng ?? null,
       registradoEm: agora,
-    })
+    }))
     .returning();
   return ocorrencia;
 }
@@ -43,13 +43,16 @@ export function problemasAbertos(maquinaId: string) {
   return db
     .select()
     .from(ocorrenciasMaquina)
-    .where(and(eq(ocorrenciasMaquina.maquinaId, maquinaId), isNull(ocorrenciasMaquina.resolvidaEm)))
+    .where(and(daFazenda(ocorrenciasMaquina), eq(ocorrenciasMaquina.maquinaId, maquinaId), isNull(ocorrenciasMaquina.resolvidaEm)))
     .orderBy(desc(ocorrenciasMaquina.registradoEm));
 }
 
 /** Todos os problemas em aberto da frota (para a lista de máquinas). */
 export function problemasAbertosDaFrota() {
-  return db.select().from(ocorrenciasMaquina).where(isNull(ocorrenciasMaquina.resolvidaEm));
+  return db
+    .select()
+    .from(ocorrenciasMaquina)
+    .where(and(daFazenda(ocorrenciasMaquina), isNull(ocorrenciasMaquina.resolvidaEm)));
 }
 
 /** Problemas da máquina (abertos e resolvidos), do mais recente para o mais antigo. */
@@ -57,7 +60,7 @@ export function problemasDaMaquina(maquinaId: string, limite = 10) {
   return db
     .select()
     .from(ocorrenciasMaquina)
-    .where(eq(ocorrenciasMaquina.maquinaId, maquinaId))
+    .where(and(daFazenda(ocorrenciasMaquina), eq(ocorrenciasMaquina.maquinaId, maquinaId)))
     .orderBy(desc(ocorrenciasMaquina.registradoEm))
     .limit(limite);
 }
@@ -66,6 +69,6 @@ export function problemasDaMaquina(maquinaId: string, limite = 10) {
 export async function resolverProblema(id: string, agora = new Date()): Promise<void> {
   await db
     .update(ocorrenciasMaquina)
-    .set({ resolvidaEm: agora })
+    .set(atualizar({ resolvidaEm: agora }))
     .where(and(eq(ocorrenciasMaquina.id, id), isNull(ocorrenciasMaquina.resolvidaEm)));
 }

@@ -25,7 +25,8 @@ import {
   textoSementes,
   type EstadoEtapa,
 } from '../../services/plantio';
-import { AtribuirEtapaSheet, IniciaisPessoa } from '../AtribuirEtapaSheet';
+import { AvatarDoUsuario } from '@/services/usuario/AvatarDoUsuario';
+import { AtribuirEtapaSheet } from '../AtribuirEtapaSheet';
 import { BotaoMapa, CampoMapa, CoresTexto, LinkMapa } from '../elementos';
 import { BarraProgresso, CabecalhoPainel } from './elementosPainel';
 
@@ -165,7 +166,7 @@ export function LinhaDoTempoCiclo({
                   accessibilityRole="button"
                   accessibilityLabel={`Responsável: ${etapa.responsavelNome}`}
                   style={estilos.responsavel}>
-                  <IniciaisPessoa nome={etapa.responsavelNome} />
+                  <AvatarDoUsuario usuarioId={etapa.responsavelId ?? ''} nome={etapa.responsavelNome} />
                   <Text style={estilos.responsavelNome}>{etapa.responsavelNome}</Text>
                 </Pressable>
               ) : podeAtribuir && estado !== 'feita' ? (

@@ -2,6 +2,7 @@ import type { LocationObject } from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import { Platform } from 'react-native';
 
+import { restaurarContextoSalvo } from '@/features/conta';
 import { ACOES_AVISO, TAREFA_RASTRO, TAREFA_RESPOSTA_AVISO, type AcaoAviso } from './constantes';
 import { receberLocalizacoes, responderAviso } from './processar';
 
@@ -10,6 +11,8 @@ import { receberLocalizacoes, responderAviso } from './processar';
  * topo, ao carregar o app (importado no começo de app/_layout.tsx): quando o
  * sistema acorda o app só para a tarefa, nenhuma tela é montada.
  * Doc: https://docs.expo.dev/versions/v58.0.0/sdk/task-manager/
+ * Sem tela montada, quem está no celular e a fazenda ativa saem do que está
+ * guardado (`restaurarContextoSalvo`) antes de gravar.
  */
 
 const ACOES = new Set<string>(Object.values(ACOES_AVISO));
@@ -18,6 +21,7 @@ const ACOES = new Set<string>(Object.values(ACOES_AVISO));
 if (Platform.OS !== 'web') {
   TaskManager.defineTask<{ locations: LocationObject[] }>(TAREFA_RASTRO, async ({ data, error }) => {
     if (error || !data?.locations?.length) return;
+    if (!(await restaurarContextoSalvo().catch(() => false))) return;
     await receberLocalizacoes(data.locations).catch(() => undefined);
   });
 
@@ -32,6 +36,7 @@ if (Platform.OS !== 'web') {
     const usoId = resposta.notification?.request?.content?.data?.usoId;
     if (!acao || !ACOES.has(acao) || !usoId) return;
     const chave = `${resposta.notification?.request?.identifier ?? usoId}:${acao}`;
+    if (!(await restaurarContextoSalvo().catch(() => false))) return;
     await responderAviso(acao as AcaoAviso, usoId, chave).catch(() => undefined);
   });
 }

@@ -3,8 +3,10 @@ import { ActivityIndicator, StyleSheet, Text, View, useColorScheme } from 'react
 import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 
-import { useDatabaseMigrations } from '@/database';
+import { useBancoPronto } from '@/database';
 import { AgroColors, Spacing, Typography } from '@/constants/theme';
+import { AuthProvider } from '@/features/conta';
+import { FazendaAtivaProvider } from '@/features/fazenda';
 import { LeitorQrCodeProvider } from '@/services/qrcode';
 import { FazendaProvider } from './FazendaProvider';
 import { InicializacaoDoApp } from './InicializacaoDoApp';
@@ -15,17 +17,21 @@ interface AppProvidersProps {
 
 export function AppProviders({ children }: AppProvidersProps) {
   const colorScheme = useColorScheme();
-  const { success, error } = useDatabaseMigrations();
+  const { pronto, erro } = useBancoPronto();
 
   let content = (
-    <FazendaProvider>
-      <InicializacaoDoApp />
-      <LeitorQrCodeProvider>{children}</LeitorQrCodeProvider>
-    </FazendaProvider>
+    <AuthProvider>
+      <FazendaAtivaProvider>
+        <FazendaProvider>
+          <InicializacaoDoApp />
+          <LeitorQrCodeProvider>{children}</LeitorQrCodeProvider>
+        </FazendaProvider>
+      </FazendaAtivaProvider>
+    </AuthProvider>
   );
-  if (error) {
-    content = <DatabaseError message={error.message} />;
-  } else if (!success) {
+  if (erro) {
+    content = <DatabaseError message={erro.message} />;
+  } else if (!pronto) {
     content = <DatabaseLoading />;
   }
 
@@ -36,7 +42,7 @@ export function AppProviders({ children }: AppProvidersProps) {
   );
 }
 
-/** Exibido enquanto as migrations rodam (normalmente coberto pelo splash nativo). */
+/** Exibido enquanto o banco abre (normalmente coberto pelo splash nativo). */
 function DatabaseLoading() {
   return (
     <View style={styles.container}>

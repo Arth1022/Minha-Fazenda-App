@@ -1,5 +1,6 @@
-import { addDatabaseChangeListener } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
+
+import { powersync } from '@/features/sync/db';
 
 /** Espera para juntar as mudanças de uma transação (mover 18 animais = 36 linhas) numa leitura só. */
 const ESPERA_MS = 40;
@@ -12,10 +13,10 @@ export interface ConsultaAoVivo<T> {
 }
 
 /**
- * Como o `useLiveQuery` do Drizzle, que só reconsulta quando muda a tabela do
- * FROM: este refaz a consulta quando muda QUALQUER uma das `tabelas` (as dos
- * JOINs também) e junta as mudanças de uma mesma escrita numa reconsulta só.
- * `chave` identifica a consulta (ex.: o id da área): mudou, consulta de novo.
+ * Refaz a consulta quando muda QUALQUER uma das `tabelas` (as dos JOINs também,
+ * e também quando o sync desce dados novos) e junta as mudanças de uma mesma
+ * escrita numa reconsulta só. `chave` identifica a consulta (ex.: o id da
+ * área): mudou, consulta de novo.
  */
 export function useConsultaAoVivo<T>(
   consultar: () => PromiseLike<T>,
@@ -27,10 +28,8 @@ export function useConsultaAoVivo<T>(
 
   useEffect(() => {
     let ativo = true;
-    let agendada: ReturnType<typeof setTimeout> | null = null;
 
     const ler = () => {
-      agendada = null;
       consultar().then(
         (dados) => {
           if (ativo) setEstado({ dados, carregado: true });
@@ -48,13 +47,13 @@ export function useConsultaAoVivo<T>(
     };
 
     ler();
-    const inscricao = addDatabaseChangeListener(({ tableName }) => {
-      if (agendada === null && tabelas.includes(tableName)) agendada = setTimeout(ler, ESPERA_MS);
-    });
+    const parar = powersync.onChangeWithCallback(
+      { onChange: () => ler() },
+      { tables: [...tabelas], throttleMs: ESPERA_MS }
+    );
     return () => {
       ativo = false;
-      if (agendada !== null) clearTimeout(agendada);
-      inscricao.remove();
+      parar();
     };
     // A consulta e as tabelas são as de quem chamou; a `chave` diz quando refazer
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -30,6 +30,8 @@ export interface HeaderProps {
   onLeftPress?: () => void;
   /** Callback customizado para o botão direito */
   onRightPress?: () => void;
+  /** Conteúdo extra à direita (ex.: indicador do sync e avatar) */
+  direita?: React.ReactNode;
   /** Estilo customizado */
   style?: ViewStyle;
 }
@@ -49,6 +51,7 @@ export function Header({
   subBannerTitle,
   onLeftPress,
   onRightPress,
+  direita,
   style,
 }: HeaderProps) {
   const router = useRouter();
@@ -112,6 +115,7 @@ export function Header({
         </View>
 
         <View style={styles.rightRow}>
+          {direita}
           {showNotification ? (
             <Pressable
               onPress={onRightPress}

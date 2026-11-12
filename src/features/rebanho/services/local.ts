@@ -1,4 +1,4 @@
-import type { TipoTalhao } from '@/database/schema';
+import type { TipoTalhao } from '@/database';
 import { diasEntre } from '@/utils/date';
 
 /**
