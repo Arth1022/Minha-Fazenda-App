@@ -210,6 +210,7 @@ export const tratamentos = sqliteTable(
     indiceFazenda('tratamentos', table.fazendaId),
     index('tratamentos_animal_id_idx').on(table.animalId),
     index('tratamentos_grupo_aplicacao_id_idx').on(table.grupoAplicacaoId),
+    index('tratamentos_datas_idx').on(table.dataFim, table.dataInicio),
   ]
 );
 

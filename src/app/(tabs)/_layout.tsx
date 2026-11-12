@@ -10,6 +10,10 @@ import { AgroColors, MaxContentWidth, Shadows, Spacing } from '@/constants/theme
 import { AcoesMaquinaModal, useQrCodeMaquina } from '@/features/maquinas';
 import { LeituraBrincoModais, useLeituraBrinco, useQrCodeAnimal } from '@/features/rebanho';
 import { BannerAppDesatualizado } from '@/features/sync';
+import {
+  RelatarProblemaProvider,
+  useRelatarProblema,
+} from '@/features/tarefas/RelatarProblemaProvider';
 import { BotaoLerQrCode } from '@/services/qrcode';
 
 interface TabConfig {
@@ -115,10 +119,35 @@ function TabBar() {
 
 /** Altura da linha de abas (tabBarRow), sem a área segura de baixo */
 const TAB_BAR_HEIGHT = 66;
+/** Tamanho do botão flutuante de QR Code / Relatar problema */
+const FAB_SIZE = 52;
 
 /** QR Code que nenhum fluxo reconheceu: só mostra o que foi lido. */
 function mostrarQrCodeLido(valor: string) {
   Alert.alert('QR Code lido', valor);
+}
+
+function BotaoFlutuanteRelatarProblema({
+  right,
+  bottom,
+}: {
+  right: number;
+  bottom: number;
+}) {
+  const abrirRelato = useRelatarProblema();
+  return (
+    <Pressable
+      onPress={() => void abrirRelato()}
+      accessibilityRole="button"
+      accessibilityLabel="Relatar problema"
+      style={({ pressed }) => [
+        styles.relatarButton,
+        pressed && styles.relatarButtonPressed,
+        { right, bottom },
+      ]}>
+      <AppIcon name="alert" size={24} color={AgroColors.textInverse} />
+    </Pressable>
+  );
 }
 
 export default function TabsLayout() {
@@ -137,41 +166,49 @@ export default function TabsLayout() {
     mostrarQrCodeLido(valor);
   };
 
+  const qrBottom = insets.bottom + TAB_BAR_HEIGHT + Spacing.three;
+  const relatarBottom = qrBottom + FAB_SIZE + Spacing.sm;
+
   return (
-    <View style={styles.root}>
-      <SafeAreaView edges={['top']} style={styles.banner}>
-        <BannerAppDesatualizado />
-      </SafeAreaView>
-      <Tabs screenOptions={{ headerShown: false }} tabBar={() => <TabBar />}>
-        <Tabs.Screen name="index" options={{ title: 'Início' }} />
-        <Tabs.Screen name="mapa" options={{ title: 'Mapa' }} />
-        <Tabs.Screen name="rebanho" options={{ title: 'Rebanho' }} />
-        <Tabs.Screen name="estoque" options={{ title: 'Tarefas' }} />
-        <Tabs.Screen name="maquinas" options={{ title: 'Máquinas' }} />
-      </Tabs>
+    <RelatarProblemaProvider>
+      <View style={styles.root}>
+        <SafeAreaView edges={['top']} style={styles.banner}>
+          <BannerAppDesatualizado />
+        </SafeAreaView>
+        <Tabs screenOptions={{ headerShown: false }} tabBar={() => <TabBar />}>
+          <Tabs.Screen name="index" options={{ title: 'Início' }} />
+          <Tabs.Screen name="mapa" options={{ title: 'Mapa' }} />
+          <Tabs.Screen name="rebanho" options={{ title: 'Rebanho' }} />
+          <Tabs.Screen name="estoque" options={{ title: 'Tarefas' }} />
+          <Tabs.Screen name="maquinas" options={{ title: 'Máquinas' }} />
+        </Tabs>
 
-      {/* Leitor de QR Code: canto inferior direito, logo acima da barra de abas */}
-      <BotaoLerQrCode
-        onLido={aoLerQrCode}
-        onTextoLido={leituraBrinco.tratarTextos}
-        opcoes={{ titulo: 'Ler QR Code ou brinco', modoTexto: 'Número do brinco' }}
-        style={{
-          ...styles.qrButton,
-          right: margemLateral,
-          bottom: insets.bottom + TAB_BAR_HEIGHT + Spacing.three,
-        }}
-      />
+        {/* Relatar problema: sempre visível logo acima do leitor de QR Code */}
+        <BotaoFlutuanteRelatarProblema right={margemLateral} bottom={relatarBottom} />
 
-      <AcoesMaquinaModal maquinaId={qrMaquina.maquinaId} onClose={qrMaquina.fechar} />
+        {/* Leitor de QR Code: canto inferior direito, logo acima da barra de abas */}
+        <BotaoLerQrCode
+          onLido={aoLerQrCode}
+          onTextoLido={leituraBrinco.tratarTextos}
+          opcoes={{ titulo: 'Ler QR Code ou brinco', modoTexto: 'Número do brinco' }}
+          style={{
+            ...styles.qrButton,
+            right: margemLateral,
+            bottom: qrBottom,
+          }}
+        />
 
-      <LeituraBrincoModais
-        estado={leituraBrinco.estado}
-        onAbrir={leituraBrinco.abrirFicha}
-        onDigitar={leituraBrinco.digitar}
-        onBuscar={leituraBrinco.buscarDigitado}
-        onFechar={leituraBrinco.fechar}
-      />
-    </View>
+        <AcoesMaquinaModal maquinaId={qrMaquina.maquinaId} onClose={qrMaquina.fechar} />
+
+        <LeituraBrincoModais
+          estado={leituraBrinco.estado}
+          onAbrir={leituraBrinco.abrirFicha}
+          onDigitar={leituraBrinco.digitar}
+          onBuscar={leituraBrinco.buscarDigitado}
+          onFechar={leituraBrinco.fechar}
+        />
+      </View>
+    </RelatarProblemaProvider>
   );
 }
 
@@ -188,6 +225,22 @@ const styles = StyleSheet.create({
   },
   qrButton: {
     position: 'absolute',
+  },
+  relatarButton: {
+    position: 'absolute',
+    width: FAB_SIZE,
+    height: FAB_SIZE,
+    borderRadius: FAB_SIZE / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#C2410C',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    ...Shadows.fab,
+  },
+  relatarButtonPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.95 }],
   },
   outerBarWrapper: {
     width: '100%',

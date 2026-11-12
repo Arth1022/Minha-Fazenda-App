@@ -93,6 +93,25 @@ export const tarefaEventos = sqliteTable(
   (table) => [
     indiceFazenda('tarefa_eventos', table.fazendaId),
     index('tarefa_eventos_tarefa_ocorrido_idx').on(table.tarefaId, table.ocorridoEm),
+    index('tarefa_eventos_ocorrido_em_idx').on(table.ocorridoEm),
+  ]
+);
+
+/**
+ * Avisos gerais / mural da fazenda exibidos no painel inicial (Home).
+ */
+export const avisosFazenda = sqliteTable(
+  'avisos_fazenda',
+  {
+    id: colunaId(),
+    mensagem: text('mensagem').notNull(),
+    autorNome: text('autor_nome').notNull(),
+    ativo: integer('ativo', { mode: 'boolean' }).notNull().default(true),
+    ...colunasBase,
+  },
+  (table) => [
+    indiceFazenda('avisos_fazenda', table.fazendaId),
+    index('avisos_fazenda_ativo_created_idx').on(table.ativo, table.createdAt),
   ]
 );
 
@@ -112,3 +131,5 @@ export type TarefaOcorrencia = typeof tarefas.$inferSelect;
 export type NovaTarefa = typeof tarefas.$inferInsert;
 export type TarefaEvento = typeof tarefaEventos.$inferSelect;
 export type NovoTarefaEvento = typeof tarefaEventos.$inferInsert;
+export type AvisoFazenda = typeof avisosFazenda.$inferSelect;
+export type NovoAvisoFazenda = typeof avisosFazenda.$inferInsert;

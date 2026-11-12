@@ -51,10 +51,12 @@ export type AppIconName =
   | 'scanQr'
   | 'moreVertical'
   | 'ruler'
-  | 'calendar';
+  | 'calendar'
+  | 'megaphone';
 
 /** Ícones só de traços (Lucide), desenhados pela lista de caminhos. */
 const PATH_ICONS: Partial<Record<AppIconName, string[]>> = {
+  megaphone: ['m3 11 18-5v12L3 14v-3z', 'M11.6 16.8a3 3 0 1 1-5.8-1.6'],
   // Lucide "calendar" (o retângulo de cantos arredondados escrito como caminho)
   calendar: ['M8 2v4', 'M16 2v4', 'M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z', 'M3 10h18'],
   ruler: [

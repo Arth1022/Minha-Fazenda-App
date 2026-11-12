@@ -94,9 +94,10 @@
     "test:trajetos": "tsx --tsconfig tsconfig.test.json __tests__/trajetosMapa.test.ts",
     "test:tarefas": "tsx --tsconfig tsconfig.test.json __tests__/tarefasMapa.test.ts",
     "test:ocorrencias": "tsx --tsconfig tsconfig.test.json __tests__/ocorrencias.test.ts",
+    "test:home": "tsx --tsconfig tsconfig.test.json __tests__/home.test.ts",
     "test:contasync": "tsx --tsconfig tsconfig.test.json __tests__/contaSync.test.ts",
     "test:schema": "tsx --tsconfig tsconfig.test.json __tests__/schemaColunas.test.ts",
-    "test": "npm run test:regras && npm run test:db && npm run test:notificacoes && npm run test:doses && npm run test:cadastro && npm run test:talhoes && npm run test:maquinas && npm run test:auditoria && npm run test:agro && npm run test:areas && npm run test:rebanhomapa && npm run test:cerca && npm run test:plantio && npm run test:trajetos && npm run test:tarefas && npm run test:ocorrencias && npm run test:contasync && npm run test:schema"
+    "test": "npm run test:regras && npm run test:db && npm run test:notificacoes && npm run test:doses && npm run test:cadastro && npm run test:talhoes && npm run test:maquinas && npm run test:auditoria && npm run test:agro && npm run test:areas && npm run test:rebanhomapa && npm run test:cerca && npm run test:plantio && npm run test:trajetos && npm run test:tarefas && npm run test:ocorrencias && npm run test:home && npm run test:contasync && npm run test:schema"
   },
   "private": true
 }
