@@ -7,11 +7,14 @@ import {
   db,
   maquinas,
   novoRegistro,
+  ocorrenciasMaquina,
   talhoes,
   tarefaEventos,
   tarefas,
+  type CategoriaProblema,
   type CategoriaTarefa,
   type NovoTarefaEvento,
+  type OcorrenciaMaquina,
   type OrigemTarefa,
   type StatusTarefa,
   type Talhao,
@@ -71,6 +74,28 @@ export interface CriarOcorrenciaInput {
   fotos?: string[];
   autor?: Usuario;
   autorId?: string;
+  agora?: Date;
+}
+
+/** Problema relatado pela tela de Máquinas: vira um registro da máquina e uma tarefa. */
+export interface ProblemaMaquinaInput {
+  maquinaId: string;
+  categoria: CategoriaProblema;
+  /** "Dá para continuar usando?" — não: a máquina fica parada por problema */
+  podeUsar: boolean;
+  /** Título já montado pela tela (ex.: "Motor — Trator (TR-01)") */
+  titulo: string;
+  descricao?: string | null;
+  urgente?: boolean;
+  responsavelId?: string | null;
+  usoId?: string | null;
+  /** Foto guardada para o registro da máquina */
+  fotoUri?: string | null;
+  /** Outra cópia da mesma foto para a tarefa: o envio de mídia apaga o arquivo depois de subir */
+  fotoTarefaUri?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  autor?: Usuario;
   agora?: Date;
 }
 
@@ -163,11 +188,57 @@ export async function identificarAreaNoPonto(
   return null;
 }
 
+/** Dados do registro da máquina gravado na mesma transação da tarefa. */
+type RegistroProblema = Pick<ProblemaMaquinaInput, 'categoria' | 'podeUsar' | 'usoId' | 'fotoUri' | 'lat' | 'lng'>;
+
 /**
  * Cria uma ocorrência ou tarefa e registra o evento inicial 'criada' na mesma
  * transação (RN-T01, RN-T06, RF-T06, RF-T10, RF-T20).
  */
 export async function criarOcorrencia(input: CriarOcorrenciaInput): Promise<TarefaOcorrencia> {
+  return (await criarTarefa(input, null)).tarefa;
+}
+
+/**
+ * Problema na máquina (tela de Máquinas): grava o registro da máquina e a tarefa
+ * do conserto numa transação só, ligados por `ocorrencias_maquina.tarefa_id`.
+ * A situação da máquina vem do registro ("não dá para usar" = parada), por isso
+ * o status em `maquinas` não muda aqui.
+ */
+export async function registrarProblemaMaquina(
+  input: ProblemaMaquinaInput
+): Promise<{ tarefa: TarefaOcorrencia; ocorrencia: OcorrenciaMaquina }> {
+  const { tarefa, ocorrencia } = await criarTarefa(
+    {
+      titulo: input.titulo,
+      categoria: 'maquina',
+      descricao: input.descricao,
+      urgente: input.urgente,
+      responsavelId: input.responsavelId,
+      maquinaId: input.maquinaId,
+      maquinaParada: !input.podeUsar,
+      pontoLat: input.lat ?? null,
+      pontoLng: input.lng ?? null,
+      fotos: input.fotoTarefaUri ? [input.fotoTarefaUri] : [],
+      autor: input.autor,
+      agora: input.agora,
+    },
+    {
+      categoria: input.categoria,
+      podeUsar: input.podeUsar,
+      usoId: input.usoId,
+      fotoUri: input.fotoUri,
+      lat: input.lat,
+      lng: input.lng,
+    }
+  );
+  return { tarefa, ocorrencia: ocorrencia as OcorrenciaMaquina };
+}
+
+async function criarTarefa(
+  input: CriarOcorrenciaInput,
+  problema: RegistroProblema | null
+): Promise<{ tarefa: TarefaOcorrencia; ocorrencia: OcorrenciaMaquina | null }> {
   const agora = input.agora ?? new Date();
   const atual = usuarioAtual();
   const autor: Usuario =
@@ -297,7 +368,30 @@ export async function criarOcorrencia(input: CriarOcorrenciaInput): Promise<Tare
       })
     );
 
-    // Fechamento de ciclo de máquina: se "Máquina parada", coloca em manutenção na mesma transação
+    if (problema && maquinaId) {
+      const [ocorrencia] = await tx
+        .insert(ocorrenciasMaquina)
+        .values(
+          novoRegistro({
+            maquinaId,
+            usoId: problema.usoId ?? null,
+            operador: autor.nome,
+            operadorId: autor.id,
+            categoria: problema.categoria,
+            podeUsar: problema.podeUsar,
+            descricao: criada.descricao,
+            fotoUri: problema.fotoUri ?? null,
+            lat: problema.lat ?? null,
+            lng: problema.lng ?? null,
+            registradoEm: agora,
+            tarefaId: criada.id,
+          })
+        )
+        .returning();
+      return { tarefa: criada, ocorrencia };
+    }
+
+    // Tarefa antiga de "Máquina parada" (sem registro na máquina): coloca em manutenção
     if (maquinaId && maquinaParada) {
       await tx
         .update(maquinas)
@@ -305,7 +399,7 @@ export async function criarOcorrencia(input: CriarOcorrenciaInput): Promise<Tare
         .where(and(daFazenda(maquinas), eq(maquinas.id, maquinaId)));
     }
 
-    return criada;
+    return { tarefa: criada, ocorrencia: null };
   });
 }
 
@@ -480,8 +574,23 @@ export async function concluirOcorrencia(
       })
     );
 
-    // Se era uma ocorrência que parou a máquina e não restam outras paradas abertas, libera a máquina
-    if (tarefa.maquinaId && tarefa.maquinaParada) {
+    // Tarefa aberta por um problema da máquina: concluir resolve o problema (a situação vem dele)
+    const [problema] = tarefa.maquinaId
+      ? await tx
+          .select({ id: ocorrenciasMaquina.id })
+          .from(ocorrenciasMaquina)
+          .where(and(daFazenda(ocorrenciasMaquina), eq(ocorrenciasMaquina.tarefaId, tarefaId)))
+          .limit(1)
+      : [];
+    if (problema) {
+      await tx
+        .update(ocorrenciasMaquina)
+        .set(atualizar({ resolvidaEm: agora }))
+        .where(and(eq(ocorrenciasMaquina.tarefaId, tarefaId), isNull(ocorrenciasMaquina.resolvidaEm)));
+    }
+
+    // Tarefa antiga que parou a máquina: sem outras paradas abertas, libera a máquina
+    if (!problema && tarefa.maquinaId && tarefa.maquinaParada) {
       const [outraParada] = await tx
         .select({ id: tarefas.id })
         .from(tarefas)
@@ -504,6 +613,63 @@ export async function concluirOcorrencia(
     }
 
     return atualizada;
+  });
+}
+
+/**
+ * "Marcar como resolvido" na ficha da máquina: resolve o problema e conclui a
+ * tarefa ligada a ele (se ainda estiver aberta ou em andamento), numa transação.
+ * Tarefa cancelada não volta: o problema continua em aberto até alguém resolver (RN-T11).
+ */
+export async function resolverProblemaMaquina(
+  ocorrenciaId: string,
+  autor: Usuario = usuarioAtual(),
+  agora = new Date()
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [problema] = await tx
+      .update(ocorrenciasMaquina)
+      .set(atualizar({ resolvidaEm: agora }))
+      .where(
+        and(
+          daFazenda(ocorrenciasMaquina),
+          eq(ocorrenciasMaquina.id, ocorrenciaId),
+          isNull(ocorrenciasMaquina.resolvidaEm)
+        )
+      )
+      .returning({ tarefaId: ocorrenciasMaquina.tarefaId });
+    if (!problema?.tarefaId) return;
+
+    const [concluida] = await tx
+      .update(tarefas)
+      .set(
+        atualizar({
+          status: 'concluida' as const,
+          responsavelId: sql`coalesce(${tarefas.responsavelId}, ${autor.id})`,
+          syncStatus: 'pendente' as const,
+          concluidaEm: agora,
+        })
+      )
+      .where(
+        and(
+          daFazenda(tarefas),
+          eq(tarefas.id, problema.tarefaId),
+          inArray(tarefas.status, ['aberta', 'em_andamento'])
+        )
+      )
+      .returning({ id: tarefas.id });
+    if (!concluida) return;
+
+    await tx.insert(tarefaEventos).values(
+      novoRegistro({
+        tarefaId: concluida.id,
+        tipo: 'concluida' as const,
+        autorId: autor.id,
+        ocorridoEm: agora,
+        texto: 'Problema marcado como resolvido na ficha da máquina.',
+        dados: null,
+      })
+    );
   });
 }
 

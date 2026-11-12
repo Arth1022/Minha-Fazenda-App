@@ -238,11 +238,10 @@ export default function TarefasScreen() {
   const eu = useUsuarioAtual();
   const ehAdmin = podeAtribuirTarefas(eu);
   const relatarProblema = useRelatarProblema();
-  // Outras telas (mapa, ficha do animal, máquina) pedem o relato por parâmetro de rota
-  const { relatarAreaId, relatarAnimalId, relatarMaquinaId } = useLocalSearchParams<{
+  // Outras telas (mapa, ficha do animal) pedem o relato por parâmetro de rota
+  const { relatarAreaId, relatarAnimalId } = useLocalSearchParams<{
     relatarAreaId?: string;
     relatarAnimalId?: string;
-    relatarMaquinaId?: string;
   }>();
   const { data: animaisAtivos } = useLiveQuery(listarAnimais());
   const { dados: colaboradores } = useConsultaAoVivo<Usuario[]>(
@@ -280,18 +279,10 @@ export default function TarefasScreen() {
   }, []);
 
   useEffect(() => {
-    if (!relatarAreaId && !relatarAnimalId && !relatarMaquinaId) return;
-    router.setParams({
-      relatarAreaId: undefined,
-      relatarAnimalId: undefined,
-      relatarMaquinaId: undefined,
-    });
-    relatarProblema({
-      areaId: relatarAreaId,
-      animalId: relatarAnimalId,
-      maquinaId: relatarMaquinaId,
-    });
-  }, [relatarAreaId, relatarAnimalId, relatarMaquinaId, relatarProblema]);
+    if (!relatarAreaId && !relatarAnimalId) return;
+    router.setParams({ relatarAreaId: undefined, relatarAnimalId: undefined });
+    relatarProblema({ areaId: relatarAreaId, animalId: relatarAnimalId });
+  }, [relatarAreaId, relatarAnimalId, relatarProblema]);
 
   const chaveConsulta = `${abaAtiva}:${eu.id}`;
   const { dados: listaTarefas, carregado } = useConsultaAoVivo<TarefaOcorrencia[]>(

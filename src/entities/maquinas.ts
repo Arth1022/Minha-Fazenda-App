@@ -261,6 +261,8 @@ export type CategoriaProblema = (typeof CATEGORIAS_PROBLEMA)[number];
 /**
  * Problemas relatados na máquina. Em aberto (`resolvidaEm` null), mudam a situação
  * dela: "não dá para usar" deixa parada por problema; "dá" deixa em atenção.
+ * Cada problema abre uma tarefa (`tarefaId`): concluir a tarefa resolve o problema
+ * e resolver o problema conclui a tarefa.
  */
 export const ocorrenciasMaquina = sqliteTable(
   'ocorrencias_maquina',
@@ -278,9 +280,16 @@ export const ocorrenciasMaquina = sqliteTable(
     lng: real('lng'),
     registradoEm: dataHora('registrado_em').notNull(),
     resolvidaEm: dataHora('resolvida_em'),
+    /** Tarefa aberta para o conserto (→ tarefas.id); null nos problemas de antes do vínculo */
+    tarefaId: text('tarefa_id'),
     ...colunasBase,
   },
-  (table) => [indiceFazenda('ocorrencias_maquina', table.fazendaId), index('ocorrencias_maquina_maquina_idx').on(table.maquinaId, table.resolvidaEm)]
+  (table) => [
+    indiceFazenda('ocorrencias_maquina', table.fazendaId),
+    index('ocorrencias_maquina_maquina_idx').on(table.maquinaId, table.resolvidaEm),
+    // Concluir a tarefa acha o problema por aqui
+    index('ocorrencias_maquina_tarefa_idx').on(table.tarefaId),
+  ]
 );
 
 /** Anotações livres da máquina (revisões, defeitos, observações). */

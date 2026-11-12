@@ -17,7 +17,7 @@ export interface ProblemasSecaoProps {
 function confirmarResolvido(problema: OcorrenciaMaquina) {
   Alert.alert(
     'Problema resolvido?',
-    `${CATEGORIA_PROBLEMA_LABEL[problema.categoria]}: a máquina volta a ficar liberada. O registro do problema fica no histórico.`,
+    `${CATEGORIA_PROBLEMA_LABEL[problema.categoria]}: a máquina volta a ficar liberada e a tarefa do conserto é concluída. O registro do problema fica no histórico.`,
     [
       { text: 'Cancelar', style: 'cancel' },
       { text: 'Resolvido', onPress: () => resolverProblema(problema.id).catch(() => undefined) },

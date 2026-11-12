@@ -68,7 +68,7 @@ Este é o schema que o celular sincroniza com o Postgres. Cada tabela abaixo pre
 | [`paradas_uso`](#paradas_uso) | domínio | 10 | Pausas e respostas "Continua" durante um uso. |
 | [`abastecimentos`](#abastecimentos) | domínio | 18 | Abastecimentos (consumo de tanque cheio a tanque cheio). |
 | [`leituras_horimetro`](#leituras_horimetro) | domínio | 15 | Leituras do horímetro, sempre digitadas. |
-| [`ocorrencias_maquina`](#ocorrencias_maquina) | domínio | 18 | Problemas relatados na máquina (`resolvida_em` nulo = em aberto). |
+| [`ocorrencias_maquina`](#ocorrencias_maquina) | domínio | 19 | Problemas relatados na máquina (`resolvida_em` nulo = em aberto). |
 | [`anotacoes_maquina`](#anotacoes_maquina) | domínio | 9 | Anotações livres da máquina. |
 | [`talhoes`](#talhoes) | domínio | 21 | Áreas do mapa (pasto, lavoura, reserva, outro) com geometria GeoJSON. |
 | [`marcadores_mapa`](#marcadores_mapa) | domínio | 13 | Pontos de atenção no mapa (praga, daninha, erosão). |
@@ -662,10 +662,10 @@ Leituras do horímetro, sempre digitadas.
 
 ### ocorrencias_maquina
 
-Problemas relatados na máquina (`resolvida_em` nulo = em aberto).
+Problemas relatados na máquina (`resolvida_em` nulo = em aberto). Cada problema abre uma tarefa (`tarefa_id`): concluir a tarefa preenche `resolvida_em`, e resolver o problema conclui a tarefa.
 
 - Tipo: **domínio** — `BaseFazendaEntity`, Sync Stream por `fazenda_id`
-- Índices no celular: `ocorrencias_maquina_fazenda_idx` (fazenda_id), `ocorrencias_maquina_maquina_idx` (maquina_id, resolvida_em)
+- Índices no celular: `ocorrencias_maquina_fazenda_idx` (fazenda_id), `ocorrencias_maquina_maquina_idx` (maquina_id, resolvida_em), `ocorrencias_maquina_tarefa_idx` (tarefa_id)
 
 | Coluna | Postgres | Java | Nulo? | Padrão no app | Valores / referência |
 |---|---|---|---|---|---|
@@ -682,6 +682,7 @@ Problemas relatados na máquina (`resolvida_em` nulo = em aberto).
 | `lng` | numeric | BigDecimal | sim |  |  |
 | `registrado_em` | timestamptz | OffsetDateTime | não |  |  |
 | `resolvida_em` | timestamptz | OffsetDateTime | sim |  |  |
+| `tarefa_id` | uuid | UUID | sim |  | → tarefas.id (null nos problemas de antes do vínculo) |
 | `fazenda_id` | uuid | UUID | não |  | → fazendas.id |
 | `created_by` | uuid | UUID | sim |  | → usuarios.id |
 | `created_at` | timestamptz | OffsetDateTime | sim |  |  |

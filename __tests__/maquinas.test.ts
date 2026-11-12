@@ -43,6 +43,13 @@ import { leiturasDaMaquina } from '@/features/maquinas/data/horimetro';
 import { problemasAbertos, registrarProblema, resolverProblema } from '@/features/maquinas/data/ocorrencias';
 import { condicaoDaMaquina } from '@/features/maquinas/services/registros';
 import {
+  cancelarOcorrencia,
+  concluirOcorrencia,
+  iniciarOcorrencia,
+  listarEventosDaTarefa,
+  listarFotosDaTarefa,
+} from '@/services/ocorrenciaService';
+import {
   abastecimentos,
   db,
   initTestDatabase,
@@ -50,9 +57,12 @@ import {
   paradasUso,
   pontosGps,
   novoRegistro,
+  ocorrenciasMaquina,
   talhoes,
+  tarefas,
   usosMaquina,
   fecharTestDatabase,
+  USUARIO_TESTE,
 } from './support/database';
 
 function check(condition: boolean, message: string) {
@@ -402,8 +412,76 @@ async function auditoria(tratorId: string, outroTratorId: string) {
     condicaoDaMaquina(trator, await problemasAbertos(tratorId)) === 'paradaPorProblema' && problema.descricao === 'vazando',
     'problema "não dá para usar" deixa a máquina parada por problema'
   );
+  const tarefaDoProblema = problema.tarefaId
+    ? (await db.select().from(tarefas).where(eq(tarefas.id, problema.tarefaId)))[0]
+    : undefined;
+  check(
+    tarefaDoProblema?.categoria === 'maquina' &&
+      tarefaDoProblema.maquinaId === tratorId &&
+      tarefaDoProblema.maquinaParada &&
+      tarefaDoProblema.urgente &&
+      tarefaDoProblema.status === 'aberta' &&
+      tarefaDoProblema.titulo === `Hidráulico — ${trator.nome} (${trator.codigo})` &&
+      tarefaDoProblema.descricao === 'vazando',
+    `problema da máquina abre uma tarefa ligada a ele (${tarefaDoProblema?.titulo})`
+  );
+  check(trator.status === 'ativa', 'problema da máquina não mexe no status: a situação vem do registro');
+
   await resolverProblema(problema.id);
   check(condicaoDaMaquina(trator, await problemasAbertos(tratorId)) === 'ok', 'problema resolvido libera a máquina (o registro fica)');
+  const tarefaResolvida = (await db.select().from(tarefas).where(eq(tarefas.id, problema.tarefaId!)))[0];
+  const eventosResolvida = await listarEventosDaTarefa(problema.tarefaId!);
+  check(
+    tarefaResolvida.status === 'concluida' &&
+      tarefaResolvida.concluidaEm !== null &&
+      tarefaResolvida.responsavelId === USUARIO_TESTE.id &&
+      eventosResolvida.map((e) => e.tipo).join(',') === 'criada,concluida',
+    'resolver na ficha da máquina conclui a tarefa do conserto (com evento)'
+  );
+
+  // Concluir a tarefa em Tarefas resolve o problema da máquina
+  const pneu = await registrarProblema({
+    maquinaId: tratorId,
+    categoria: 'pneu',
+    podeUsar: true,
+    responsavelId: USUARIO_TESTE.id,
+    fotoUri: 'file:///fotos/maquina.jpg',
+    fotoTarefaUri: 'file:///fotos/tarefa.jpg',
+  });
+  const tarefaPneu = (await db.select().from(tarefas).where(eq(tarefas.id, pneu.tarefaId!)))[0];
+  check(
+    condicaoDaMaquina(trator, await problemasAbertos(tratorId)) === 'atencao' &&
+      !tarefaPneu.urgente &&
+      !tarefaPneu.maquinaParada &&
+      tarefaPneu.responsavelId === USUARIO_TESTE.id &&
+      pneu.fotoUri === 'file:///fotos/maquina.jpg' &&
+      (await listarFotosDaTarefa(tarefaPneu.id)).join() === 'file:///fotos/tarefa.jpg',
+    '"dá para usar" abre tarefa normal, com responsável e a cópia da foto'
+  );
+  await iniciarOcorrencia(tarefaPneu.id);
+  await concluirOcorrencia(tarefaPneu.id, { observacao: 'Pneu trocado' });
+  const pneuDepois = (await db.select().from(ocorrenciasMaquina).where(eq(ocorrenciasMaquina.id, pneu.id)))[0];
+  const tratorDepois = (await db.select().from(maquinas).where(eq(maquinas.id, tratorId)))[0];
+  check(
+    pneuDepois.resolvidaEm !== null &&
+      condicaoDaMaquina(tratorDepois, await problemasAbertos(tratorId)) === 'ok' &&
+      tratorDepois.status === 'ativa',
+    'concluir a tarefa em Tarefas resolve o problema da máquina'
+  );
+
+  // Cancelar a tarefa não libera a máquina (RN-T11): o problema segue até alguém resolver
+  const motor = await registrarProblema({ maquinaId: tratorId, categoria: 'motor', podeUsar: false });
+  await cancelarOcorrencia(motor.tarefaId!, 'Relatado em duplicidade');
+  check(
+    condicaoDaMaquina(trator, await problemasAbertos(tratorId)) === 'paradaPorProblema',
+    'cancelar a tarefa mantém o problema da máquina em aberto'
+  );
+  await resolverProblema(motor.id);
+  const tarefaMotor = (await db.select().from(tarefas).where(eq(tarefas.id, motor.tarefaId!)))[0];
+  check(
+    condicaoDaMaquina(trator, await problemasAbertos(tratorId)) === 'ok' && tarefaMotor.status === 'cancelada',
+    'resolver depois do cancelamento libera a máquina sem reabrir a tarefa'
+  );
 
 }
 

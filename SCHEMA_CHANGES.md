@@ -37,7 +37,7 @@ Nulo? abaixo é o que o app grava hoje (não = o app sempre preenche). Coluna no
 | SC-021 | 2026-11-11 | paradas_uso | + tabela `paradas_uso` (10 colunas) | ver SC-021 | ver SC-021 | front | proposto |
 | SC-022 | 2026-11-11 | abastecimentos | + tabela `abastecimentos` (18 colunas) | ver SC-022 | ver SC-022 | front | proposto |
 | SC-023 | 2026-11-11 | leituras_horimetro | + tabela `leituras_horimetro` (15 colunas) | ver SC-023 | ver SC-023 | front | proposto |
-| SC-024 | 2026-11-11 | ocorrencias_maquina | + tabela `ocorrencias_maquina` (18 colunas) | ver SC-024 | ver SC-024 | front | proposto |
+| SC-024 | 2026-11-11 | ocorrencias_maquina | + tabela `ocorrencias_maquina` (19 colunas) | ver SC-024 | ver SC-024 | front | proposto |
 | SC-025 | 2026-11-11 | anotacoes_maquina | + tabela `anotacoes_maquina` (9 colunas) | ver SC-025 | ver SC-025 | front | proposto |
 | SC-026 | 2026-11-11 | talhoes | + tabela `talhoes` (21 colunas) | ver SC-026 | ver SC-026 | front | proposto |
 | SC-027 | 2026-11-11 | marcadores_mapa | + tabela `marcadores_mapa` (13 colunas) | ver SC-027 | ver SC-027 | front | proposto |
@@ -537,6 +537,7 @@ Nulo? abaixo é o que o app grava hoje (não = o app sempre preenche). Coluna no
 | `lng` | numeric | sim |
 | `registrado_em` | timestamptz | não |
 | `resolvida_em` | timestamptz | sim |
+| `tarefa_id` | uuid | sim |
 | `fazenda_id` | uuid | não |
 | `created_by` | uuid | sim |
 | `created_at` | timestamptz | sim |

@@ -14,7 +14,6 @@ import {
 import { AppIcon, BottomSheet, Button } from '@/components/ui';
 import { AgroColors, Radius, Spacing, Typography } from '@/constants/theme';
 import { CATEGORIAS_TAREFA, useConsultaAoVivo, useLiveQuery, type CategoriaTarefa } from '@/database';
-import { listarMaquinas } from '@/features/maquinas/data/maquinas';
 import { listarAnimais } from '@/features/rebanho/data/animais';
 import { escolherFoto, guardarFoto, type OrigemFoto } from '@/services/fotos';
 import {
@@ -39,8 +38,10 @@ import { NotaVozField } from './NotaVozField';
 export interface PedidoRelato {
   areaId?: string;
   animalId?: string;
-  maquinaId?: string;
 }
+
+/** Problema de máquina é relatado pela tela de Máquinas (vira registro da máquina e tarefa). */
+const CATEGORIAS_RELATO = CATEGORIAS_TAREFA.filter((c) => c !== 'maquina');
 
 type AbrirRelato = (pedido?: PedidoRelato) => void;
 
@@ -56,8 +57,8 @@ const OPCOES_BOTAO_FOTO: { label: string; origem: OrigemFoto; variant: 'outline'
 
 /**
  * Formulário "Relatar problema" disponível em qualquer aba. O formulário (e as
- * consultas de áreas, animais, máquinas e equipe) só fica montado enquanto a
- * folha está aberta, para não manter consultas ao vivo no banco à toa.
+ * consultas de áreas, animais e equipe) só fica montado enquanto a folha está
+ * aberta, para não manter consultas ao vivo no banco à toa.
  */
 export function RelatarProblemaProvider({ children }: { children: React.ReactNode }) {
   const [pedido, setPedido] = useState<(PedidoRelato & { chave: number }) | null>(null);
@@ -92,7 +93,7 @@ export function RelatarProblemaProvider({ children }: { children: React.ReactNod
   );
 }
 
-/** Abre o formulário "Relatar problema", opcionalmente já com área, animal ou máquina. */
+/** Abre o formulário "Relatar problema", opcionalmente já com área ou animal. */
 export function useRelatarProblema(): AbrirRelato {
   const abrir = useContext(RelatarProblemaContext);
   if (!abrir) throw new Error('useRelatarProblema precisa estar dentro de RelatarProblemaProvider');
@@ -114,7 +115,6 @@ function FormularioRelato({ pedido, visivel, onFechar }: FormularioRelatoProps) 
   const ehAdmin = podeAtribuirTarefas(eu);
   const { data: talhoes } = useLiveQuery(listarTalhoesAtivos());
   const { data: animaisAtivos } = useLiveQuery(listarAnimais());
-  const { data: listaMaquinas } = useLiveQuery(listarMaquinas());
   const { dados: colaboradores } = useConsultaAoVivo<Usuario[]>(
     listarColaboradores,
     TABELAS_MEMBROS,
@@ -123,12 +123,8 @@ function FormularioRelato({ pedido, visivel, onFechar }: FormularioRelatoProps) 
   );
   const temEquipe = colaboradores.length > 1;
 
-  const [categoria, setCategoria] = useState<CategoriaTarefa>(
-    pedido.animalId ? 'animal' : pedido.maquinaId ? 'maquina' : 'cerca'
-  );
+  const [categoria, setCategoria] = useState<CategoriaTarefa>(pedido.animalId ? 'animal' : 'cerca');
   const [animalId, setAnimalId] = useState<string | null>(pedido.animalId ?? null);
-  const [maquinaId, setMaquinaId] = useState<string | null>(pedido.maquinaId ?? null);
-  const [maquinaParada, setMaquinaParada] = useState(false);
   const [areaId, setAreaId] = useState<string | null>(pedido.areaId ?? null);
   const [pontoGps, setPontoGps] = useState<{ lat: number; lng: number } | null>(null);
   /** Título digitado pela pessoa; enquanto for null, vale o título sugerido */
@@ -178,12 +174,8 @@ function FormularioRelato({ pedido, visivel, onFechar }: FormularioRelatoProps) 
       const a = animaisAtivos.find((x) => x.id === animalId);
       if (a) return rotuloAnimal(a);
     }
-    if (categoria === 'maquina' && maquinaId) {
-      const m = listaMaquinas.find((x) => x.id === maquinaId);
-      if (m) return `${m.nome} (${m.codigo})`;
-    }
     return area?.nome ?? null;
-  }, [categoria, animalId, maquinaId, animaisAtivos, listaMaquinas, area?.nome]);
+  }, [categoria, animalId, animaisAtivos, area?.nome]);
 
   const titulo = tituloManual ?? gerarTituloOcorrencia(categoria, rotuloVinculo);
 
@@ -203,14 +195,6 @@ function FormularioRelato({ pedido, visivel, onFechar }: FormularioRelatoProps) 
     [animaisAtivos]
   );
 
-  const opcoesMaquina = useMemo<ChipOption<string>[]>(
-    () => [
-      { label: 'Sem máquina específica', value: 'nenhuma' },
-      ...listaMaquinas.map((m) => ({ label: `${m.nome} (${m.codigo})`, value: m.id })),
-    ],
-    [listaMaquinas]
-  );
-
   const opcoesResponsavel = useMemo<ChipOption<string>[]>(
     () => [
       { label: 'Sem responsável', value: 'nenhum' },
@@ -222,11 +206,6 @@ function FormularioRelato({ pedido, visivel, onFechar }: FormularioRelatoProps) 
     [colaboradores, eu.id]
   );
 
-  const selecionarCategoria = (cat: CategoriaTarefa) => {
-    setCategoria(cat);
-    if (cat !== 'maquina') setMaquinaParada(false);
-  };
-
   const selecionarArea = (valor: string) => {
     if (valor === 'nenhuma') {
       setAreaId(null);
@@ -236,12 +215,6 @@ function FormularioRelato({ pedido, visivel, onFechar }: FormularioRelatoProps) 
     if (!escolhida) return;
     setAreaId(escolhida.id);
     setPontoGps({ lat: escolhida.centroLat, lng: escolhida.centroLng });
-  };
-
-  const selecionarMaquina = (valor: string) => {
-    const id = valor === 'nenhuma' ? null : valor;
-    setMaquinaId(id);
-    if (!id) setMaquinaParada(false);
   };
 
   const adicionarFoto = async (origem: OrigemFoto) => {
@@ -272,8 +245,6 @@ function FormularioRelato({ pedido, visivel, onFechar }: FormularioRelatoProps) 
         responsavelId,
         areaId,
         animalId: categoria === 'animal' ? animalId : null,
-        maquinaId: categoria === 'maquina' ? maquinaId : null,
-        maquinaParada: categoria === 'maquina' && Boolean(maquinaId) && maquinaParada,
         audioUri,
         // Sem GPS, o serviço marca o centro da área escolhida
         pontoLat: pontoGps?.lat ?? null,
@@ -305,12 +276,12 @@ function FormularioRelato({ pedido, visivel, onFechar }: FormularioRelatoProps) 
       <View style={styles.corpo}>
         <Text style={styles.secaoLabel}>Categoria *</Text>
         <View style={styles.gridCategorias}>
-          {CATEGORIAS_TAREFA.map((cat) => {
+          {CATEGORIAS_RELATO.map((cat) => {
             const selecionada = categoria === cat;
             return (
               <Pressable
                 key={cat}
-                onPress={() => selecionarCategoria(cat)}
+                onPress={() => setCategoria(cat)}
                 accessibilityRole="button"
                 accessibilityState={{ selected: selecionada }}
                 style={[styles.itemCategoria, selecionada && styles.itemCategoriaAtiva]}>
@@ -334,25 +305,6 @@ function FormularioRelato({ pedido, visivel, onFechar }: FormularioRelatoProps) 
             value={animalId ?? 'nenhum'}
             onChange={(valor) => setAnimalId(valor === 'nenhum' ? null : valor)}
           />
-        ) : null}
-
-        {categoria === 'maquina' && listaMaquinas.length > 0 ? (
-          <>
-            <ChipSelector
-              label="Máquina / Implemento"
-              options={opcoesMaquina}
-              value={maquinaId ?? 'nenhuma'}
-              onChange={selecionarMaquina}
-            />
-            {maquinaId ? (
-              <SwitchField
-                label="Máquina parada"
-                helperText="Atualiza o status da máquina para Em manutenção no banco local"
-                value={maquinaParada}
-                onChange={setMaquinaParada}
-              />
-            ) : null}
-          </>
         ) : null}
 
         {talhoes.length > 0 ? (
