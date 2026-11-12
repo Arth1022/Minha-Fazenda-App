@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 
 import { AppIcon, Button, EmptyState, FichaTopo, Header, ScreenContainer } from '@/components/ui';
 import { AgroColors } from '@/constants/theme';
@@ -98,6 +98,11 @@ export default function MaquinaDetalheScreen() {
           subtitulo={subtitulo}
           acoes={[
             { icone: 'scanQr', label: 'Ver QR Code da máquina', onPress: () => setQrVisivel(true) },
+            {
+              icone: 'alert',
+              label: 'Relatar problema',
+              onPress: () => router.push({ pathname: '/estoque', params: { relatarMaquinaId: maquina.id } }),
+            },
             { icone: 'edit', label: 'Editar máquina', onPress: () => setEditando(true) },
           ]}
           abas={ABAS}

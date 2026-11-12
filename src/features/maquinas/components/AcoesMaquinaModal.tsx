@@ -74,6 +74,10 @@ function Conteudo({ maquina, situacao, fluxos, onClose }: ConteudoProps) {
     onClose();
     router.push({ pathname: '/maquina/[id]', params: { id: maquina.id } });
   };
+  const relatarProblema = () => {
+    onClose();
+    router.push({ pathname: '/estoque', params: { relatarMaquinaId: maquina.id } });
+  };
   const verUso = () => {
     onClose();
     router.push('/maquina/em-uso');
@@ -137,7 +141,7 @@ function Conteudo({ maquina, situacao, fluxos, onClose }: ConteudoProps) {
           {maquina.possuiHorimetro ? (
             <Button label="Horímetro" variant="outline" onPress={() => abrir('horimetro')} style={styles.metade} />
           ) : null}
-          <Button label="Problema" variant="outline" onPress={() => abrir('problema')} style={styles.metade} />
+          <Button label="Problema" variant="outline" onPress={relatarProblema} style={styles.metade} />
           <Button label="Ver ficha" variant="outline" onPress={verFicha} style={styles.metade} />
         </View>
         {meuUso ? <Button label="Ver uso em andamento" variant="ghost" onPress={verUso} /> : null}

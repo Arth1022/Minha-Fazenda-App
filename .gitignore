@@ -40,19 +40,30 @@ ios/Pods/
 ios/*.xcworkspace
 ios/*.xcodeproj/project.xcworkspace
 ios/*.xcodeproj/xcuserdata
+*.ipa
 
 # Metro & Bundler
 .metro-health-check*
 
-# Debug & logs
+# Debug, tests & logs
 npm-debug.*
 yarn-debug.*
 yarn-error.*
 *.log
+coverage/
 
-# macOS
+# OS & Certs
 .DS_Store
+Thumbs.db
+Desktop.ini
 *.pem
+
+# Local SQLite dumps
+*.db
+*.sqlite
+*.sqlite3
+*.db-wal
+*.db-shm
 
 # Local env files
 .env*.local
@@ -69,8 +80,10 @@ yarn-error.*
 !.vscode/settings.json
 !.vscode/extensions.json
 
-# Graphify output
+# Graphify & AI local state
 graphify-out/
+.gemini/
+.claude/settings.local.json
+*.local.md
 .env.production
 .env.staging
-package-lock.json

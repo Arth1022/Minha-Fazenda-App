@@ -9,7 +9,10 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/images/icon.png",
-      "bundleIdentifier": "com.minhafazenda.app"
+      "bundleIdentifier": "com.minhafazenda.app",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "O Minha Fazenda usa o microfone para gravar notas de voz nas ocorrências."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -24,7 +27,8 @@
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_BACKGROUND_LOCATION",
         "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_LOCATION"
+        "android.permission.FOREGROUND_SERVICE_LOCATION",
+        "android.permission.RECORD_AUDIO"
       ],
       "package": "com.minhafazenda.app"
     },
@@ -84,7 +88,13 @@
         }
       ],
       "@rnmapbox/maps",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "O Minha Fazenda usa o microfone para gravar notas de voz nas ocorrências."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

@@ -52,6 +52,12 @@ export function CamadasSheet({ visible, camadas, onChange, onClose, onRedesenhar
             onChange={(rebanho) => onChange({ ...camadas, rebanho })}
           />
           <SwitchField
+            label="Ocorrências abertas"
+            helperText="Problemas relatados no campo pendentes de solução"
+            value={camadas.ocorrencias}
+            onChange={(ocorrencias) => onChange({ ...camadas, ocorrencias })}
+          />
+          <SwitchField
             label="Pontos de atenção"
             helperText="Pragas, plantas daninhas e erosão marcadas no campo"
             value={camadas.pontos}

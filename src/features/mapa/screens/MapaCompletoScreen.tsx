@@ -15,7 +15,21 @@ import { router, useLocalSearchParams } from 'expo-router';
 
 import { AppIcon, ConfirmacaoSheet, type ItemConfirmacao } from '@/components/ui';
 import { AgroColors, MaxContentWidth, Shadows, Spacing } from '@/constants/theme';
-import { useConsultaAoVivo, useLiveQuery, type PontoRastro, type Talhao } from '@/database';
+import {
+  useConsultaAoVivo,
+  useLiveQuery,
+  type PontoRastro,
+  type Talhao,
+  type TarefaOcorrencia,
+} from '@/database';
+import { ICONE_CATEGORIA_TAREFA } from '@/features/tarefas/TarefasScreen';
+import {
+  concluirOcorrencia,
+  listarOcorrenciasNoMapa,
+  ROTULO_CATEGORIA_TAREFA,
+  TABELAS_OCORRENCIAS,
+  type OcorrenciaNoMapa,
+} from '@/services/ocorrenciaService';
 import {
   iniciarRastro,
   reabrirUso,
@@ -57,6 +71,7 @@ import {
   COR_POR_TIPO_MARCADOR,
   ROTULO_TIPO_MARCADOR,
 } from '../components/CamadaMarcadoresMapa';
+import { CamadaOcorrenciasMapa } from '../components/CamadaOcorrenciasMapa';
 import { CamadasSheet } from '../components/CamadasSheet';
 import { CamadaTalhoesSalvos } from '../components/CamadaTalhoesSalvos';
 import { CamadaTrajetos, type MarcaDeMaquina, type TrajetoNoMapa } from '../components/CamadaTrajetos';
@@ -163,8 +178,15 @@ export default function MapaCompletoScreen() {
   const [vistaInicial, setVistaInicial] = useState<VistaMapa | null>(null);
   const [camadas, setCamadas] = useState<CamadasMapa>(lerCamadas);
   const [camadasVisivel, setCamadasVisivel] = useState(false);
+  const { dados: ocorrenciasMapa } = useConsultaAoVivo<OcorrenciaNoMapa[]>(
+    () => (camadas.ocorrencias ? listarOcorrenciasNoMapa() : Promise.resolve([])),
+    TABELAS_OCORRENCIAS,
+    camadas.ocorrencias ? 'ocorrencias-mapa' : 'ocorrencias-mapa:off',
+    [],
+  );
   const [selecionadoId, setSelecionadoId] = useState<string | null>(talhaoInicialId ?? null);
   const [marcadorId, setMarcadorId] = useState<string | null>(null);
+  const [ocorrenciaId, setOcorrenciaId] = useState<string | null>(null);
   const [modoMarcador, setModoMarcador] = useState(false);
   const [talhaoMarcadorId, setTalhaoMarcadorId] = useState<string | null>(null);
   const [coordenadaMarcador, setCoordenadaMarcador] = useState<Coordenada | null>(null);
@@ -236,6 +258,7 @@ export default function MapaCompletoScreen() {
       setSessaoId(null);
       setTrajetos(null);
       setMarcadorId(null);
+      setOcorrenciaId(null);
       setModoMarcador(false);
       setAlvo(novoAlvo);
       limpar();
@@ -282,6 +305,13 @@ export default function MapaCompletoScreen() {
         ? null
         : (marcadores.find((m) => m.id === marcadorId) ?? null),
     [modoDesenho, modoMarcador, camadas.pontos, marcadores, marcadorId],
+  );
+  const ocorrenciaSelecionada = useMemo(
+    () =>
+      modoDesenho || modoMarcador || !camadas.ocorrencias
+        ? null
+        : (ocorrenciasMapa.find((oc) => oc.id === ocorrenciaId) ?? null),
+    [modoDesenho, modoMarcador, camadas.ocorrencias, ocorrenciasMapa, ocorrenciaId],
   );
   const pastos = useMemo(() => talhoes.filter((t) => t.tipo === 'pasto'), [talhoes]);
   const editando = talhoes.find((t) => t.id === editandoId) ?? null;
@@ -454,6 +484,7 @@ export default function MapaCompletoScreen() {
         return;
       }
       setMarcadorId(null);
+      setOcorrenciaId(null);
       setAnimalEmDestaque(null);
       setSelecionadoId((atual) => (atual === id ? null : id));
     },
@@ -468,9 +499,20 @@ export default function MapaCompletoScreen() {
       }
       if (modoDesenho) return;
       setSelecionadoId(null);
+      setOcorrenciaId(null);
       setMarcadorId((atual) => (atual === id ? null : id));
     },
     [modoMarcador, modoDesenho, aoTocarMapa],
+  );
+
+  const selecionarOcorrencia = useCallback(
+    (id: string) => {
+      if (modoMarcador || modoDesenho) return;
+      setSelecionadoId(null);
+      setMarcadorId(null);
+      setOcorrenciaId((atual) => (atual === id ? null : id));
+    },
+    [modoMarcador, modoDesenho],
   );
 
   const centralizarNoGps = async () => {
@@ -707,7 +749,13 @@ export default function MapaCompletoScreen() {
   const desenhandoDivisa = alvo.tipo === 'divisa';
   const rascunhoDoQue = rascunho && alvo.tipo !== 'contorno' ? alvo.tipo : null;
   const mostrarNovaArea =
-    admin && fazenda !== null && !modoDesenho && !modoMarcador && !selecionado && !marcadorSelecionado;
+    admin &&
+    fazenda !== null &&
+    !modoDesenho &&
+    !modoMarcador &&
+    !selecionado &&
+    !marcadorSelecionado &&
+    !ocorrenciaSelecionada;
 
   return (
     <View style={estilos.raiz}>
@@ -761,6 +809,13 @@ export default function MapaCompletoScreen() {
               marcadores={marcadores}
               selecionadoId={marcadorSelecionado?.id ?? null}
               onPressMarcador={selecionarMarcador}
+            />
+          ) : null}
+          {camadas.ocorrencias ? (
+            <CamadaOcorrenciasMapa
+              ocorrencias={ocorrenciasMapa}
+              selecionadaId={ocorrenciaSelecionada?.id ?? null}
+              onPressOcorrencia={selecionarOcorrencia}
             />
           ) : null}
           <CamadaDesenho pontos={pontos} erroTopologico={erroTopologico} />
@@ -901,6 +956,11 @@ export default function MapaCompletoScreen() {
           onAbrirUso={setSessaoId}
           podeCriarCultura={admin}
           abrirLinhaDoTempo={abrirCiclo && selecionado.id === talhaoInicialId}
+          onRelatarProblema={() => {
+            const id = selecionado.id;
+            setSelecionadoId(null);
+            router.push({ pathname: '/estoque', params: { relatarAreaId: id } });
+          }}
         />
       ) : trajetos ? (
         <ListaTrajetos itens={itensDaLista} periodo={trajetos.periodo} base={base} onAbrir={setSessaoId} />
@@ -923,7 +983,7 @@ export default function MapaCompletoScreen() {
             <Text style={estilos.novaAreaTexto}>Nova área</Text>
           </Pressable>
         </View>
-      ) : modoMarcador || modoDesenho || marcadorSelecionado || !fazenda ? (
+      ) : modoMarcador || modoDesenho || marcadorSelecionado || ocorrenciaSelecionada || !fazenda ? (
         <View style={[estilos.rodape, { bottom: base }]} pointerEvents="box-none">
           <View style={estilos.cartaoRodape}>
             {modoMarcador ? (
@@ -963,6 +1023,63 @@ export default function MapaCompletoScreen() {
                     icone="check"
                     desabilitado={!podeConcluir}
                     onPress={concluir}
+                    style={estilos.acao}
+                  />
+                </View>
+              </>
+            ) : ocorrenciaSelecionada ? (
+              <>
+                <View style={estilos.cabecalhoMarcador}>
+                  <View
+                    style={[
+                      estilos.pontoCor,
+                      {
+                        backgroundColor: ocorrenciaSelecionada.urgente
+                          ? AgroColors.danger
+                          : AgroColors.warning,
+                      },
+                    ]}
+                  />
+                  <AppIcon
+                    name={ICONE_CATEGORIA_TAREFA[ocorrenciaSelecionada.categoria]}
+                    size={18}
+                    color={CoresTexto.escuro}
+                  />
+                  <Text style={estilos.cartaoTitulo} numberOfLines={1}>
+                    {ocorrenciaSelecionada.titulo}
+                  </Text>
+                  <Pressable
+                    onPress={() => setOcorrenciaId(null)}
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel="Fechar ocorrência"
+                    style={estilos.fecharMarcador}>
+                    <AppIcon name="x" size={20} color={CoresTexto.suave} />
+                  </Pressable>
+                </View>
+                <Text style={estilos.cartaoTexto}>
+                  {ocorrenciaSelecionada.urgente ? 'URGENTE · ' : ''}
+                  {ROTULO_CATEGORIA_TAREFA[ocorrenciaSelecionada.categoria]}
+                  {ocorrenciaSelecionada.descricao ? ` · ${ocorrenciaSelecionada.descricao}` : ''}
+                </Text>
+                <View style={estilos.acoes}>
+                  <BotaoMapa
+                    rotulo="Ver em Tarefas"
+                    variante="contorno"
+                    onPress={() => {
+                      setOcorrenciaId(null);
+                      router.push('/estoque');
+                    }}
+                    style={estilos.acao}
+                  />
+                  <BotaoMapa
+                    rotulo="Concluir"
+                    icone="check"
+                    onPress={async () => {
+                      const id = ocorrenciaSelecionada.id;
+                      setOcorrenciaId(null);
+                      await concluirOcorrencia(id);
+                    }}
                     style={estilos.acao}
                   />
                 </View>

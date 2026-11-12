@@ -26,7 +26,7 @@ const LEFT_TABS: TabConfig[] = [
 ];
 
 const RIGHT_TABS: TabConfig[] = [
-  { href: '/estoque', label: 'Estoque', icon: 'package' },
+  { href: '/estoque', label: 'Tarefas', icon: 'check' },
   { href: '/maquinas', label: 'Máquinas', icon: 'tractor' },
 ];
 
@@ -146,7 +146,7 @@ export default function TabsLayout() {
         <Tabs.Screen name="index" options={{ title: 'Início' }} />
         <Tabs.Screen name="mapa" options={{ title: 'Mapa' }} />
         <Tabs.Screen name="rebanho" options={{ title: 'Rebanho' }} />
-        <Tabs.Screen name="estoque" options={{ title: 'Estoque' }} />
+        <Tabs.Screen name="estoque" options={{ title: 'Tarefas' }} />
         <Tabs.Screen name="maquinas" options={{ title: 'Máquinas' }} />
       </Tabs>
 

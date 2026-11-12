@@ -8,6 +8,7 @@ export * from './maquinas';
 export * from './notificacoes';
 export * from './ordenha';
 export * from './rebanho';
+export * from './tarefas';
 export { TABELAS_LOCAIS, TABELAS_SO_LEITURA, tabelas } from './tabelas';
 export * from './versao';
 export { newId } from './id';

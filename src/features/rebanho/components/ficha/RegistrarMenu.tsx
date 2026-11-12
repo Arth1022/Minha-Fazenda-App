@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppIcon, type AppIconName, BottomSheet, IconeRedondo, type TomFicha } from '@/components/ui';
 import { AgroColors, IconSize, Radius, Spacing, Typography } from '@/constants/theme';
 
-export type TipoRegistro = 'tratamento' | 'pesagem' | 'cobertura' | 'parto' | 'saida';
+export type TipoRegistro = 'tratamento' | 'pesagem' | 'cobertura' | 'parto' | 'saida' | 'ocorrencia';
 
 interface OpcaoRegistro {
   tipo: TipoRegistro;
@@ -17,6 +17,13 @@ interface OpcaoRegistro {
 }
 
 const OPCOES: OpcaoRegistro[] = [
+  {
+    tipo: 'ocorrencia',
+    titulo: 'Relatar problema',
+    descricao: 'Incidente, cerca ou nota de voz',
+    icone: 'alert',
+    tom: 'saude',
+  },
   {
     tipo: 'tratamento',
     titulo: 'Tratamento ou vacina',

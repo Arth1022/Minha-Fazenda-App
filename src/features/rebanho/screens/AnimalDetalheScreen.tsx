@@ -120,6 +120,7 @@ export default function AnimalDetalheScreen() {
   const escolherRegistro = (tipo: TipoRegistro) => {
     setMenuVisible(false);
     if (tipo === 'tratamento') setTratamentoVisible(true);
+    else if (tipo === 'ocorrencia') router.push({ pathname: '/estoque', params: { relatarAnimalId: id } });
     else setRegistro(tipo);
   };
 

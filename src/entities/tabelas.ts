@@ -4,6 +4,7 @@ import * as maquinas from './maquinas';
 import * as notificacoes from './notificacoes';
 import * as ordenha from './ordenha';
 import * as rebanho from './rebanho';
+import * as tarefas from './tarefas';
 
 /**
  * Todas as tabelas e relações do banco local, para o Drizzle (consultas
@@ -61,6 +62,11 @@ export const tabelas = {
   etapasCicloRelations: mapa.etapasCicloRelations,
   movimentacoesRelations: mapa.movimentacoesRelations,
   marcadoresMapaRelations: mapa.marcadoresMapaRelations,
+
+  tarefas: tarefas.tarefas,
+  tarefaEventos: tarefas.tarefaEventos,
+  tarefasRelations: tarefas.tarefasRelations,
+  tarefaEventosRelations: tarefas.tarefaEventosRelations,
 };
 
 /** Só no celular: nunca entram na fila de upload nem descem do servidor. */
