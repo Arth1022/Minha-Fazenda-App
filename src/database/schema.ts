@@ -1234,6 +1234,10 @@ export const tarefas = sqliteTable(
     criadoPor: criadoPor(),
     prazo: integer('prazo', { mode: 'timestamp_ms' }),
     areaId: text('area_id').references(() => talhoes.id, { onDelete: 'set null' }),
+    animalId: text('animal_id').references(() => animais.id, { onDelete: 'set null' }),
+    maquinaId: text('maquina_id').references(() => maquinas.id, { onDelete: 'set null' }),
+    maquinaParada: integer('maquina_parada', { mode: 'boolean' }).notNull().default(false),
+    audioUri: text('audio_uri'),
     pontoLat: real('ponto_lat'),
     pontoLng: real('ponto_lng'),
     syncStatus: text('sync_status', { enum: SYNC_STATUS_TAREFA })
@@ -1252,6 +1256,8 @@ export const tarefas = sqliteTable(
       table.urgente,
       table.prazo
     ),
+    index('tarefas_animal_id_idx').on(table.animalId),
+    index('tarefas_maquina_id_idx').on(table.maquinaId),
   ]
 );
 
@@ -1278,6 +1284,8 @@ export const tarefaEventos = sqliteTable(
 
 export const tarefasRelations = relations(tarefas, ({ one, many }) => ({
   area: one(talhoes, { fields: [tarefas.areaId], references: [talhoes.id] }),
+  animal: one(animais, { fields: [tarefas.animalId], references: [animais.id] }),
+  maquina: one(maquinas, { fields: [tarefas.maquinaId], references: [maquinas.id] }),
   eventos: many(tarefaEventos),
 }));
 

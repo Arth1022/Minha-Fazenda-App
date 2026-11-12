@@ -1,16 +1,26 @@
+import { eq } from 'drizzle-orm';
+
+import { animais, db, maquinas, tarefas } from '@/database';
+import { cadastrarMaquina, maquinaPorId } from '@/features/maquinas/data/maquinas';
+import { cadastrarAnimal } from '@/features/rebanho/data/animais';
 import {
   atribuirOcorrencia,
   cancelarOcorrencia,
   concluirOcorrencia,
   criarOcorrencia,
   garantirSeedOcorrencias,
+  identificarAreaNoPonto,
   iniciarOcorrencia,
   listarEventosDaTarefa,
+  listarFotosDaTarefa,
   listarMinhasTarefas,
+  listarOcorrenciasNoMapa,
   listarTodasTarefas,
   pegarTarefa,
+  resolverQrCodeParaOcorrencia,
   soltarTarefa,
 } from '@/services/ocorrenciaService';
+import { criarTalhao } from '@/services/talhaoService';
 import { listarColaboradores, usuarioAtual } from '@/services/usuario';
 import { initTestDatabase } from './support/database';
 
@@ -184,6 +194,218 @@ async function runOcorrenciasTest() {
   check(
     todasDoSeed.length === 3,
     'garantirSeedOcorrencias popula 3 ocorrências de exemplo quando o banco está vazio'
+  );
+
+  // 6. Fase 2 — GPS, identificação automática de área pelo polígono e título padrão
+  await initTestDatabase();
+  const pasto2 = await criarTalhao({
+    nome: 'Pasto 2',
+    tipo: 'pasto',
+    coordenadas: [
+      [-47.1, -22.9],
+      [-47.09, -22.9],
+      [-47.09, -22.89],
+      [-47.1, -22.89],
+    ],
+  });
+
+  const areaDetectada = await identificarAreaNoPonto(-22.895, -47.095);
+  check(
+    areaDetectada !== null && areaDetectada.id === pasto2.id && areaDetectada.nome === 'Pasto 2',
+    'identificarAreaNoPonto encontra o polígono (Pasto 2) onde caiu a coordenada GPS'
+  );
+
+  const ocorrenciaComGps = await criarOcorrencia({
+    categoria: 'cerca',
+    pontoLat: -22.895,
+    pontoLng: -47.095,
+    urgente: true,
+    fotos: [
+      'file:///data/user/0/app/fotos/foto_1.jpg',
+      'file:///data/user/0/app/fotos/foto_2.jpg',
+      'data:image/jpeg;base64,/9j/4AAQSkZJRg==', // deve ser ignorada (nunca salvar base64 no SQLite)
+    ],
+  });
+
+  check(
+    ocorrenciaComGps.areaId === pasto2.id && ocorrenciaComGps.titulo === 'Cerca — Pasto 2',
+    'criarOcorrencia com GPS dentro do polígono preenche areaId e gera título padrão "Cerca — Pasto 2"'
+  );
+
+  const ocorrenciaPorTalhaoSelecionado = await criarOcorrencia({
+    categoria: 'pasto',
+    areaId: pasto2.id,
+  });
+  check(
+    ocorrenciaPorTalhaoSelecionado.titulo === 'Pasto/Lavoura — Pasto 2' &&
+      ocorrenciaPorTalhaoSelecionado.pontoLat === pasto2.centroLat &&
+      ocorrenciaPorTalhaoSelecionado.pontoLng === pasto2.centroLng,
+    'selecionar talhão manualmente gera título padrão e usa centro do talhão no mapa quando sem GPS'
+  );
+  await concluirOcorrencia(ocorrenciaPorTalhaoSelecionado.id);
+
+  // 7. Fase 2 — Fotos locais: múltiplos caminhos preservados na ordem correta
+  await concluirOcorrencia(ocorrenciaComGps.id, {
+    observacao: 'Cerca esticada.',
+    fotos: ['file:///data/user/0/app/fotos/foto_3_conclusao.jpg'],
+  });
+
+  const fotosSalvas = await listarFotosDaTarefa(ocorrenciaComGps.id);
+  check(
+    fotosSalvas.length === 3 &&
+      fotosSalvas[0] === 'file:///data/user/0/app/fotos/foto_1.jpg' &&
+      fotosSalvas[1] === 'file:///data/user/0/app/fotos/foto_2.jpg' &&
+      fotosSalvas[2] === 'file:///data/user/0/app/fotos/foto_3_conclusao.jpg',
+    'salvar múltiplos caminhos de fotos preserva os registros na ordem exata e bloqueia base64'
+  );
+
+  // 8. Fase 2 — Marcadores no Mapa: exclui concluídas, canceladas e sem coordenadas
+  const abertaMapaNormal = await criarOcorrencia({
+    titulo: 'Bebedouro vazando',
+    categoria: 'agua',
+    urgente: false,
+    pontoLat: -22.896,
+    pontoLng: -47.096,
+  });
+  const emAndamentoMapaUrgente = await criarOcorrencia({
+    titulo: 'Animal preso na cerca',
+    categoria: 'animal',
+    urgente: true,
+    pontoLat: -22.894,
+    pontoLng: -47.094,
+  });
+  await iniciarOcorrencia(emAndamentoMapaUrgente.id, eu);
+
+  const paraCancelarNoMapa = await criarOcorrencia({
+    titulo: 'Ocorrência cancelada no mapa',
+    categoria: 'pasto',
+    pontoLat: -22.893,
+    pontoLng: -47.093,
+  });
+  await cancelarOcorrencia(paraCancelarNoMapa.id, 'Alarme falso', eu);
+
+  await criarOcorrencia({
+    titulo: 'Ocorrência sem GPS',
+    categoria: 'maquina',
+  });
+
+  const noMapa = await listarOcorrenciasNoMapa();
+  check(
+    noMapa.length === 2 &&
+      noMapa[0].id === emAndamentoMapaUrgente.id &&
+      noMapa[1].id === abertaMapaNormal.id &&
+      !noMapa.some((o) => o.id === ocorrenciaComGps.id || o.id === paraCancelarNoMapa.id),
+    'listarOcorrenciasNoMapa exclui concluídas/canceladas/sem GPS e destaca urgentes primeiro'
+  );
+
+  // 9. Fase 3 — Teste de ciclo de máquina: QR Code, nota de voz e "Máquina parada"
+  const trator = await cadastrarMaquina({
+    nome: 'Trator Valtra A950',
+    tipo: 'trator',
+    codigo: 'TR-99',
+  });
+  check(trator.status === 'ativa', 'máquina recém-cadastrada inicia com status "ativa"');
+
+  const qrMaquina = await resolverQrCodeParaOcorrencia('TR-99');
+  check(
+    qrMaquina !== null &&
+      qrMaquina.tipo === 'maquina' &&
+      qrMaquina.maquinaId === trator.id &&
+      qrMaquina.categoria === 'maquina',
+    'resolverQrCodeParaOcorrencia identifica QR Code de trator e retorna maquinaId'
+  );
+
+  const ocorrenciaMaquinaParada = await criarOcorrencia({
+    categoria: 'maquina',
+    maquinaId: trator.id,
+    maquinaParada: true,
+    audioUri: 'file:///data/user/0/app/audios/voz-15s-1.m4a',
+    descricao: 'Mangueira hidráulica rompida.',
+  });
+
+  const tratorAposAbertura = await maquinaPorId(trator.id);
+  check(
+    ocorrenciaMaquinaParada.maquinaId === trator.id &&
+      ocorrenciaMaquinaParada.maquinaParada === true &&
+      ocorrenciaMaquinaParada.audioUri === 'file:///data/user/0/app/audios/voz-15s-1.m4a' &&
+      ocorrenciaMaquinaParada.titulo === 'Máquina — Trator Valtra A950 (TR-99)' &&
+      tratorAposAbertura?.status === 'manutencao',
+    'abrir ocorrência com máquina parada atualiza status na tabela de máquinas para "manutencao" e salva nota de voz local'
+  );
+
+  await concluirOcorrencia(ocorrenciaMaquinaParada.id, {
+    autor: eu,
+    observacao: 'Mangueira substituída.',
+  });
+  const tratorAposConclusao = await maquinaPorId(trator.id);
+  check(
+    tratorAposConclusao?.status === 'ativa',
+    'concluir ocorrência de máquina parada restaura status da máquina para "ativa"'
+  );
+
+  // RN-T11: Cancelar ocorrência de máquina parada mantém a máquina em manutenção até liberação explícita
+  const outraOcorrenciaParada = await criarOcorrencia({
+    categoria: 'maquina',
+    maquinaId: trator.id,
+    maquinaParada: true,
+    descricao: 'Vazamento suspeito',
+  });
+  await cancelarOcorrencia(outraOcorrenciaParada.id, 'Engano, mangueira seca', eu);
+  const tratorAposCancelamento = await maquinaPorId(trator.id);
+  check(
+    tratorAposCancelamento?.status === 'manutencao',
+    'cancelar ocorrência de máquina parada mantém a máquina em manutenção (RN-T11)'
+  );
+  // Libera a máquina de volta para ativa no banco
+  db.update(maquinas).set({ status: 'ativa' }).where(eq(maquinas.id, trator.id)).run();
+
+  // 10. Fase 3 — Teste de vínculo: QR Code de animal e integridade referencial
+  const vaca = await cadastrarAnimal({
+    brinco: '104',
+    nome: 'Estrela',
+    sexo: 'F',
+  });
+
+  const qrAnimal = await resolverQrCodeParaOcorrencia('104');
+  check(
+    qrAnimal !== null &&
+      qrAnimal.tipo === 'animal' &&
+      qrAnimal.animalId === vaca.id &&
+      qrAnimal.categoria === 'animal',
+    'resolverQrCodeParaOcorrencia identifica QR Code de animal e retorna animalId'
+  );
+
+  const erroAnimalInexistente = await rejeita(() =>
+    criarOcorrencia({
+      categoria: 'animal',
+      animalId: 'animal-inexistente-999',
+    })
+  );
+  check(
+    erroAnimalInexistente !== null,
+    'mantém integridade referencial bloqueando vínculo com animal_id inexistente'
+  );
+
+  const ocorrenciaAnimal = await criarOcorrencia({
+    categoria: 'animal',
+    animalId: vaca.id,
+    urgente: true,
+  });
+  check(
+    ocorrenciaAnimal.animalId === vaca.id &&
+      ocorrenciaAnimal.titulo === 'Animal — Estrela (#104)',
+    'ocorrência vinculada ao animal preenche animal_id e título padrão do brinco'
+  );
+
+  // Integridade referencial ON DELETE SET NULL quando registro do animal é removido
+  db.delete(animais).where(eq(animais.id, vaca.id)).run();
+  const [ocorrenciaAposDelete] = await db
+    .select()
+    .from(tarefas)
+    .where(eq(tarefas.id, ocorrenciaAnimal.id));
+  check(
+    ocorrenciaAposDelete !== undefined && ocorrenciaAposDelete.animalId === null,
+    'integridade referencial ON DELETE SET NULL preserva ocorrência e limpa animal_id ao remover animal'
   );
 
   console.log('\n🎉 TODOS OS TESTES DE OCORRÊNCIAS PASSARAM COM 100% DE SUCESSO!\n');

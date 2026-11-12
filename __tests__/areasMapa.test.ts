@@ -193,7 +193,7 @@ function permissoesECamadas() {
   check(!podeEditarGeometria({ id: 'c2', nome: 'Sem papel' }), 'usuário sem papel é tratado como colaborador');
 
   check(JSON.stringify(lerCamadas()) === JSON.stringify(CAMADAS_PADRAO), 'camadas começam no padrão (satélite, tudo ligado)');
-  salvarCamadas({ estilo: 'mapa', areas: false, pontos: true, rebanho: false });
+  salvarCamadas({ estilo: 'mapa', areas: false, pontos: true, ocorrencias: true, rebanho: false });
   const salvas = lerCamadas();
   check(
     salvas.estilo === 'mapa' && !salvas.areas && salvas.pontos && !salvas.rebanho,

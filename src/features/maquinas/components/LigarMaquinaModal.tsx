@@ -76,9 +76,11 @@ function Formulario({
       assumir: usoDeOutraPessoa !== null,
     });
 
+  const estaParada = condicao === 'paradaPorProblema' || condicao === 'manutencao';
+
   const rotulo = usoDeOutraPessoa
     ? 'Assumir e ligar'
-    : condicao === 'paradaPorProblema'
+    : estaParada
       ? 'Ligar mesmo assim'
       : 'Ligar';
 
@@ -98,8 +100,14 @@ function Formulario({
             message={`Em uso por ${usoDeOutraPessoa.operador ?? 'outra pessoa'} desde ${horaCurta(usoDeOutraPessoa.inicio)}. Assumir encerra o uso dela agora.`}
           />
         ) : null}
-        {condicao === 'paradaPorProblema' ? (
-          <InfoBanner message="Há um problema em aberto que impede o uso. Se ligar mesmo assim, fica registrado." />
+        {estaParada ? (
+          <InfoBanner
+            message={
+              condicao === 'manutencao'
+                ? 'Esta máquina está em manutenção por ocorrência aberta. Se ligar mesmo assim, o uso será registrado.'
+                : 'Há um problema em aberto que impede o uso. Se ligar mesmo assim, fica registrado.'
+            }
+          />
         ) : null}
 
         {implementos.length > 0 ? (

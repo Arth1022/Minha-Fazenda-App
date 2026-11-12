@@ -1,20 +1,31 @@
-import { and, asc, desc, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, sql, type SQL } from 'drizzle-orm';
 
 import {
+  animais,
   db,
+  maquinas,
+  talhoes,
   tarefaEventos,
   tarefas,
   type CategoriaTarefa,
   type NovoTarefaEvento,
   type OrigemTarefa,
   type StatusTarefa,
+  type Talhao,
   type TarefaEvento,
   type TarefaOcorrencia,
 } from '@/database';
+import { buscarMaquinaPorReferencia } from '@/features/maquinas/data/maquinas';
+import { lerQrMaquina } from '@/features/maquinas/services/qrCode';
+import { buscarAnimalPorReferencia } from '@/features/rebanho/data/animais';
+import { lerQrAnimal } from '@/features/rebanho/services/qrCode';
 import { podeAtribuirTarefas, usuarioAtual, type Usuario } from '@/services/usuario';
+import { pontoDentroDoPoligono, type Coordenada } from '@/utils/geoMath';
 
 /** A lista lê só `tarefas` (status e responsável são cache dela): `tarefa_eventos` não precisa reconsultar. */
 export const TABELAS_OCORRENCIAS = ['tarefas'] as const;
+
+export const LIMITE_FOTOS_OCORRENCIA = 3;
 
 export const ROTULO_CATEGORIA_TAREFA: Record<CategoriaTarefa, string> = {
   cerca: 'Cerca',
@@ -41,8 +52,16 @@ export interface CriarOcorrenciaInput {
   responsavelId?: string | null;
   prazo?: Date | null;
   areaId?: string | null;
+  animalId?: string | null;
+  maquinaId?: string | null;
+  /** Quando true em ocorrência de máquina, atualiza o status da máquina para 'manutencao' */
+  maquinaParada?: boolean;
+  /** Caminho local do arquivo de nota de voz salvo no diretório do app (até 60s) */
+  audioUri?: string | null;
   pontoLat?: number | null;
   pontoLng?: number | null;
+  /** Caminhos locais das fotos já salvas no filesystem (máx. 3; nunca base64) */
+  fotos?: string[];
   autorId?: string;
   agora?: Date;
 }
@@ -53,16 +72,201 @@ export interface FiltrosTodasTarefas {
   semResponsavel?: boolean;
   responsavelId?: string;
   areaId?: string;
+  animalId?: string;
+  maquinaId?: string;
+}
+
+export type AlvoQrOcorrencia =
+  | { tipo: 'animal'; animalId: string; identificacao: string; categoria: 'animal' }
+  | { tipo: 'maquina'; maquinaId: string; identificacao: string; categoria: 'maquina' };
+
+function formatarIdentificacaoAnimal(animal: { nome: string | null; brinco: string }): string {
+  const num = animal.brinco.replace(/^#/, '');
+  return animal.nome ? `${animal.nome} (#${num})` : `Brinco #${num}`;
+}
+
+/**
+ * Resolve o conteúdo de um QR Code de animal ou máquina para pré-preencher a ocorrência.
+ */
+export async function resolverQrCodeParaOcorrencia(
+  valorQr: string
+): Promise<AlvoQrOcorrencia | null> {
+  const refMaq = lerQrMaquina(valorQr);
+  if (refMaq) {
+    const maq = await buscarMaquinaPorReferencia(refMaq);
+    if (maq) {
+      return {
+        tipo: 'maquina',
+        maquinaId: maq.id,
+        identificacao: `${maq.nome} (${maq.codigo})`,
+        categoria: 'maquina',
+      };
+    }
+  }
+
+  const refAnimal = lerQrAnimal(valorQr);
+  if (refAnimal) {
+    const animal =
+      (await buscarAnimalPorReferencia(refAnimal)) ??
+      (refAnimal.tipo === 'brinco'
+        ? await buscarAnimalPorReferencia({
+            tipo: 'brinco',
+            brinco: refAnimal.brinco.replace(/^#/, ''),
+          })
+        : undefined);
+    if (animal) {
+      return {
+        tipo: 'animal',
+        animalId: animal.id,
+        identificacao: formatarIdentificacaoAnimal(animal),
+        categoria: 'animal',
+      };
+    }
+  }
+
+  return null;
+}
+
+function limparAudioUri(uri?: string | null): string | null {
+  const limpo = uri?.trim();
+  if (!limpo || limpo.startsWith('data:')) return null;
+  return limpo;
+}
+
+function limparFotos(fotos?: string[]): string[] {
+  if (!fotos || fotos.length === 0) return [];
+  return fotos
+    .map((f) => f.trim())
+    .filter((f) => f.length > 0 && !f.startsWith('data:'))
+    .slice(0, LIMITE_FOTOS_OCORRENCIA);
+}
+
+/**
+ * Gera o título padrão da ocorrência (ex.: "Cerca — Pasto 2" ou "Cerca") (RF-T10).
+ */
+export function gerarTituloOcorrencia(
+  categoria: CategoriaTarefa,
+  areaNome?: string | null
+): string {
+  const rotulo = ROTULO_CATEGORIA_TAREFA[categoria];
+  const nome = areaNome?.trim();
+  return nome ? `${rotulo} — ${nome}` : rotulo;
+}
+
+/**
+ * Identifica em qual área ativa o ponto GPS (lat, lng) cai, filtrando primeiro
+ * pelo índice de BBOX no SQLite e depois conferindo o polígono (RF-T06, RN-T12).
+ */
+export async function identificarAreaNoPonto(
+  lat: number,
+  lng: number
+): Promise<Pick<Talhao, 'id' | 'nome'> | null> {
+  const candidatos = await db
+    .select({
+      id: talhoes.id,
+      nome: talhoes.nome,
+      geometriaJson: talhoes.geometriaJson,
+    })
+    .from(talhoes)
+    .where(
+      and(
+        ne(talhoes.syncStatus, 'deleted'),
+        lte(talhoes.minLat, lat),
+        gte(talhoes.maxLat, lat),
+        lte(talhoes.minLng, lng),
+        gte(talhoes.maxLng, lng)
+      )
+    );
+
+  const ponto: Coordenada = [lng, lat];
+  for (const area of candidatos) {
+    const anel = (area.geometriaJson.coordinates[0] ?? []) as Coordenada[];
+    if (anel.length >= 3 && pontoDentroDoPoligono(ponto, anel)) {
+      return { id: area.id, nome: area.nome };
+    }
+  }
+  return null;
 }
 
 /**
  * Cria uma ocorrência ou tarefa e registra o evento inicial 'criada' na mesma
- * transação (RN-T01, RN-T06, RF-T20).
+ * transação (RN-T01, RN-T06, RF-T06, RF-T10, RF-T20).
  */
 export async function criarOcorrencia(input: CriarOcorrenciaInput): Promise<TarefaOcorrencia> {
   const agora = input.agora ?? new Date();
   const autorId = input.autorId ?? usuarioAtual().id;
-  const titulo = input.titulo?.trim() || ROTULO_CATEGORIA_TAREFA[input.categoria];
+  const fotos = limparFotos(input.fotos);
+  const audioUri = limparAudioUri(input.audioUri);
+  const animalId = input.animalId ?? null;
+  const maquinaId = input.maquinaId ?? null;
+  const maquinaParada = Boolean(maquinaId && input.maquinaParada);
+
+  let areaId = input.areaId ?? null;
+  let contextoNome: string | null = null;
+  let pontoLat = input.pontoLat ?? null;
+  let pontoLng = input.pontoLng ?? null;
+  const tituloFornecido = input.titulo?.trim();
+
+  if (animalId) {
+    const [animal] = await db
+      .select({ id: animais.id, brinco: animais.brinco, nome: animais.nome })
+      .from(animais)
+      .where(eq(animais.id, animalId))
+      .limit(1);
+    if (!animal) throw new Error('Animal vinculado não encontrado no rebanho.');
+    contextoNome = formatarIdentificacaoAnimal(animal);
+  }
+
+  if (maquinaId) {
+    const [maquina] = await db
+      .select({ id: maquinas.id, nome: maquinas.nome, codigo: maquinas.codigo })
+      .from(maquinas)
+      .where(eq(maquinas.id, maquinaId))
+      .limit(1);
+    if (!maquina) throw new Error('Máquina vinculada não encontrada na frota.');
+    contextoNome = `${maquina.nome} (${maquina.codigo})`;
+  }
+
+  if (areaId && ((!tituloFornecido && !contextoNome) || pontoLat === null || pontoLng === null)) {
+    const [area] = await db
+      .select({
+        nome: talhoes.nome,
+        centroLat: talhoes.centroLat,
+        centroLng: talhoes.centroLng,
+      })
+      .from(talhoes)
+      .where(eq(talhoes.id, areaId))
+      .limit(1);
+    if (area) {
+      if (!contextoNome) contextoNome = area.nome;
+      if (pontoLat === null || pontoLng === null) {
+        pontoLat = area.centroLat;
+        pontoLng = area.centroLng;
+      }
+    }
+  } else if (
+    areaId === null &&
+    input.areaId === undefined &&
+    typeof pontoLat === 'number' &&
+    typeof pontoLng === 'number'
+  ) {
+    const detectada = await identificarAreaNoPonto(pontoLat, pontoLng);
+    if (detectada) {
+      areaId = detectada.id;
+      if (!contextoNome) contextoNome = detectada.nome;
+    }
+  }
+
+  const titulo = tituloFornecido || gerarTituloOcorrencia(input.categoria, contextoNome);
+  const dadosEvento: Record<string, unknown> = {};
+  if (input.responsavelId) dadosEvento.responsavelId = input.responsavelId;
+  if (fotos.length > 0) dadosEvento.fotos = fotos;
+  if (audioUri) dadosEvento.audioUri = audioUri;
+  if (animalId) dadosEvento.animalId = animalId;
+  if (maquinaId) {
+    dadosEvento.maquinaId = maquinaId;
+    dadosEvento.maquinaParada = maquinaParada;
+  }
 
   return db.transaction((tx) => {
     const criada = tx
@@ -72,14 +276,18 @@ export async function criarOcorrencia(input: CriarOcorrenciaInput): Promise<Tare
         categoria: input.categoria,
         origem: input.origem ?? 'ocorrencia',
         descricao: input.descricao?.trim() || null,
-        urgente: input.urgente ?? false,
+        urgente: input.urgente ?? maquinaParada,
         status: 'aberta',
         responsavelId: input.responsavelId ?? null,
         criadoPor: autorId,
         prazo: input.prazo ?? null,
-        areaId: input.areaId ?? null,
-        pontoLat: input.pontoLat ?? null,
-        pontoLng: input.pontoLng ?? null,
+        areaId,
+        animalId,
+        maquinaId,
+        maquinaParada,
+        audioUri,
+        pontoLat,
+        pontoLng,
         syncStatus: 'pendente',
         createdAt: agora,
         updatedAt: agora,
@@ -94,15 +302,44 @@ export async function criarOcorrencia(input: CriarOcorrenciaInput): Promise<Tare
         autorId,
         ocorridoEm: agora,
         texto: criada.descricao,
-        dados: input.responsavelId ? { responsavelId: input.responsavelId } : null,
+        dados: Object.keys(dadosEvento).length > 0 ? dadosEvento : null,
       })
       .run();
+
+    // Fechamento de ciclo de máquina: se "Máquina parada", coloca em manutenção na mesma transação
+    if (maquinaId && maquinaParada) {
+      tx.update(maquinas)
+        .set({ status: 'manutencao', updatedAt: agora })
+        .where(eq(maquinas.id, maquinaId))
+        .run();
+    }
+
     return criada;
   });
 }
 
-async function buscarTarefaOuFalhar(tarefaId: string): Promise<TarefaOcorrencia> {
-  const [tarefa] = await db.select().from(tarefas).where(eq(tarefas.id, tarefaId)).limit(1);
+interface TarefaValidacao {
+  id: string;
+  status: StatusTarefa;
+  responsavelId: string | null;
+  criadoPor: string | null;
+  maquinaId: string | null;
+  maquinaParada: boolean;
+}
+
+async function buscarTarefaOuFalhar(tarefaId: string): Promise<TarefaValidacao> {
+  const [tarefa] = await db
+    .select({
+      id: tarefas.id,
+      status: tarefas.status,
+      responsavelId: tarefas.responsavelId,
+      criadoPor: tarefas.criadoPor,
+      maquinaId: tarefas.maquinaId,
+      maquinaParada: tarefas.maquinaParada,
+    })
+    .from(tarefas)
+    .where(eq(tarefas.id, tarefaId))
+    .limit(1);
   if (!tarefa) throw new Error('Tarefa não encontrada.');
   return tarefa;
 }
@@ -201,12 +438,13 @@ export async function iniciarOcorrencia(
   );
 }
 
-/** Conclui a tarefa com observação opcional (RF-T16, RF-T17, RN-T03). */
+/** Conclui a tarefa com observação e fotos opcionais (RF-T16, RF-T17, RN-T03). */
 export async function concluirOcorrencia(
   tarefaId: string,
-  opcoes?: { observacao?: string; autor?: Usuario; agora?: Date }
+  opcoes?: { observacao?: string; fotos?: string[]; autor?: Usuario; agora?: Date }
 ): Promise<TarefaOcorrencia> {
   const autor = opcoes?.autor ?? usuarioAtual();
+  const agora = opcoes?.agora ?? new Date();
   const tarefa = await buscarTarefaOuFalhar(tarefaId);
   if (tarefa.status !== 'aberta' && tarefa.status !== 'em_andamento') {
     throw new Error('Tarefa já está encerrada.');
@@ -214,12 +452,55 @@ export async function concluirOcorrencia(
   if (tarefa.responsavelId && tarefa.responsavelId !== autor.id && autor.papel !== 'admin') {
     throw new Error('Só o responsável ou o admin pode concluir a tarefa.');
   }
-  return transicionar(
-    tarefaId,
-    { status: 'concluida', responsavelId: tarefa.responsavelId ?? autor.id },
-    { tipo: 'concluida', autorId: autor.id, texto: opcoes?.observacao?.trim() || null },
-    opcoes?.agora ?? new Date()
-  );
+  const fotos = limparFotos(opcoes?.fotos);
+  return db.transaction((tx) => {
+    const atualizada = tx
+      .update(tarefas)
+      .set({
+        status: 'concluida',
+        responsavelId: tarefa.responsavelId ?? autor.id,
+        syncStatus: 'pendente',
+        updatedAt: agora,
+      })
+      .where(eq(tarefas.id, tarefaId))
+      .returning()
+      .get();
+
+    tx.insert(tarefaEventos)
+      .values({
+        tarefaId,
+        tipo: 'concluida',
+        autorId: autor.id,
+        ocorridoEm: agora,
+        texto: opcoes?.observacao?.trim() || null,
+        dados: fotos.length > 0 ? { fotos } : null,
+      })
+      .run();
+
+    // Se era uma ocorrência que parou a máquina e não restam outras paradas abertas, libera a máquina
+    if (tarefa.maquinaId && tarefa.maquinaParada) {
+      const outraParada = tx
+        .select({ id: tarefas.id })
+        .from(tarefas)
+        .where(
+          and(
+            eq(tarefas.maquinaId, tarefa.maquinaId),
+            eq(tarefas.maquinaParada, true),
+            inArray(tarefas.status, ['aberta', 'em_andamento'])
+          )
+        )
+        .limit(1)
+        .get();
+      if (!outraParada) {
+        tx.update(maquinas)
+          .set({ status: 'ativa', updatedAt: agora })
+          .where(eq(maquinas.id, tarefa.maquinaId))
+          .run();
+      }
+    }
+
+    return atualizada;
+  });
 }
 
 /** Cancela tarefa aberta ou em andamento; o motivo é obrigatório (RF-T19, RN-T08). */
@@ -250,6 +531,29 @@ export async function listarEventosDaTarefa(tarefaId: string): Promise<TarefaEve
     .from(tarefaEventos)
     .where(eq(tarefaEventos.tarefaId, tarefaId))
     .orderBy(asc(tarefaEventos.ocorridoEm));
+}
+
+/**
+ * Devolve os caminhos locais de fotos anexadas à tarefa na ordem exata em que
+ * foram registradas nos eventos (RF-T04, RF-T17).
+ */
+export async function listarFotosDaTarefa(tarefaId: string): Promise<string[]> {
+  const eventos = await db
+    .select({ dados: tarefaEventos.dados })
+    .from(tarefaEventos)
+    .where(and(eq(tarefaEventos.tarefaId, tarefaId), isNotNull(tarefaEventos.dados)))
+    .orderBy(asc(tarefaEventos.ocorridoEm));
+
+  const resultado: string[] = [];
+  for (const ev of eventos) {
+    const fotos = ev.dados?.fotos;
+    if (Array.isArray(fotos)) {
+      for (const f of fotos) {
+        if (typeof f === 'string' && f.length > 0) resultado.push(f);
+      }
+    }
+  }
+  return resultado;
 }
 
 /** Urgentes primeiro, depois prazo mais próximo (sem prazo por último, nativo do SQLite). */
@@ -286,12 +590,46 @@ export async function listarTodasTarefas(
   if (filtros?.semResponsavel) condicoes.push(isNull(tarefas.responsavelId));
   else if (filtros?.responsavelId) condicoes.push(eq(tarefas.responsavelId, filtros.responsavelId));
   if (filtros?.areaId) condicoes.push(eq(tarefas.areaId, filtros.areaId));
+  if (filtros?.animalId) condicoes.push(eq(tarefas.animalId, filtros.animalId));
+  if (filtros?.maquinaId) condicoes.push(eq(tarefas.maquinaId, filtros.maquinaId));
 
   return db
     .select()
     .from(tarefas)
     .where(condicoes.length > 0 ? and(...condicoes) : undefined)
     .orderBy(...ORDEM_PADRAO_TAREFAS);
+}
+
+export type OcorrenciaNoMapa = Pick<
+  TarefaOcorrencia,
+  'id' | 'titulo' | 'categoria' | 'urgente' | 'status' | 'descricao' | 'pontoLat' | 'pontoLng'
+>;
+
+/**
+ * Ocorrências ativas georreferenciadas para a camada "Ocorrências" do mapa:
+ * exclui concluídas e canceladas (RF-T30, RF-T31).
+ */
+export async function listarOcorrenciasNoMapa(): Promise<OcorrenciaNoMapa[]> {
+  return db
+    .select({
+      id: tarefas.id,
+      titulo: tarefas.titulo,
+      categoria: tarefas.categoria,
+      urgente: tarefas.urgente,
+      status: tarefas.status,
+      descricao: tarefas.descricao,
+      pontoLat: tarefas.pontoLat,
+      pontoLng: tarefas.pontoLng,
+    })
+    .from(tarefas)
+    .where(
+      and(
+        inArray(tarefas.status, ['aberta', 'em_andamento']),
+        isNotNull(tarefas.pontoLat),
+        isNotNull(tarefas.pontoLng)
+      )
+    )
+    .orderBy(desc(tarefas.urgente), desc(tarefas.createdAt));
 }
 
 const DIA_MS = 24 * 60 * 60 * 1000;

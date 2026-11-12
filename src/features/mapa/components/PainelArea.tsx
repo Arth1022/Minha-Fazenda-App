@@ -68,6 +68,8 @@ export interface PainelAreaProps {
   podeCriarCultura: boolean;
   /** Lavoura: abre direto na linha do tempo do ciclo (toque no aviso de uma etapa) */
   abrirLinhaDoTempo?: boolean;
+  /** Abre o relato de ocorrência já vinculado a esta área */
+  onRelatarProblema?: () => void;
 }
 
 /**
@@ -91,6 +93,7 @@ export function PainelArea({
   onAbrirUso,
   podeCriarCultura,
   abrirLinhaDoTempo = false,
+  onRelatarProblema,
 }: PainelAreaProps) {
   const insets = useSafeAreaInsets();
   const alturaTeclado = useAlturaTeclado();
@@ -138,8 +141,18 @@ export function PainelArea({
         onPress={() => onVista('maquinas')}
       />
     );
+  const linhaOcorrencia = !onRelatarProblema ? null : (
+    <LinhaNavegacao
+      icone="wrench"
+      rotulo="Relatar problema nesta área"
+      valor={null}
+      onPress={onRelatarProblema}
+    />
+  );
+
   const linhasDoFim = (
     <>
+      {linhaOcorrencia}
       {linhaMaquinas}
       {linhaCerca}
     </>
