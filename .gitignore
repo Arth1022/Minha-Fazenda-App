@@ -71,3 +71,6 @@ yarn-error.*
 
 # Graphify output
 graphify-out/
+.env.production
+.env.staging
+package-lock.json
