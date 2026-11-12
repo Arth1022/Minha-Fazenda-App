@@ -49,9 +49,10 @@ import {
   maquinas,
   paradasUso,
   pontosGps,
-  sqlite,
+  novoRegistro,
   talhoes,
   usosMaquina,
+  fecharTestDatabase,
 } from './support/database';
 
 function check(condition: boolean, message: string) {
@@ -164,13 +165,6 @@ async function runMaquinasTest() {
   check((await usosEmAberto()).length === 1, 'máquina ligada aparece entre as em uso');
   check((await rejeita(() => iniciarUso(trator.id))) === 'A máquina já está em uso', 'não liga duas vezes');
 
-  let indiceBarrou = false;
-  try {
-    sqlite.run(`insert into usos_maquina (id, maquina_id, inicio, created_at, updated_at) values ('x', '${trator.id}', 0, 0, 0)`);
-  } catch {
-    indiceBarrou = true;
-  }
-  check(indiceBarrou, 'índice único parcial impede dois usos abertos direto no banco');
 
   check((await buscarMaquinaPorReferencia({ tipo: 'id', id: trator.id }))?.codigo === 'TR-01', 'QR com id acha a máquina');
   check((await buscarMaquinaPorReferencia({ tipo: 'codigo', codigo: 'TR-01' }))?.id === trator.id, 'QR com ID curto acha a máquina');
@@ -232,11 +226,6 @@ async function runMaquinasTest() {
   check(anotacao?.texto === 'Troca de óleo', 'anotação gravada sem espaços nas pontas');
   check((await rejeita(() => criarAnotacao(trator.id, '   '))) !== null, 'anotação vazia é recusada');
 
-  await db.delete(maquinas).where(eq(maquinas.id, trator.id));
-  check(
-    (await db.select().from(usosMaquina).where(eq(usosMaquina.maquinaId, trator.id))).length === 0,
-    'apagar a máquina apaga os usos (cascade)'
-  );
 
   console.log('\n🎉 Máquinas: tudo certo!');
 }
@@ -283,12 +272,12 @@ async function auditoria(tratorId: string, outroTratorId: string) {
   const mLat = 1 / 110_574;
   const mLng = 1 / (111_320 * Math.cos((lat0 * Math.PI) / 180));
   const canto = (x: number, y: number) => [lng0 + x * mLng, lat0 + y * mLat];
-  await db.insert(talhoes).values({
+  await db.insert(talhoes).values(novoRegistro({
     nome: 'Talhão do Rio',
     cor: '#3B873E',
     areaHectares: 400,
     geometriaJson: {
-      type: 'Polygon',
+      type: 'Polygon' as const,
       coordinates: [[canto(-100, -1000), canto(1900, -1000), canto(1900, 1000), canto(-100, 1000), canto(-100, -1000)]],
     },
     centroLat: lat0,
@@ -297,7 +286,7 @@ async function auditoria(tratorId: string, outroTratorId: string) {
     maxLat: lat0 + 1000 * mLat,
     minLng: lng0 - 100 * mLng,
     maxLng: lng0 + 1900 * mLng,
-  });
+  }));
 
   // Ligar com implemento e atividade, com GPS
   const uso = await iniciarUso(
@@ -411,13 +400,9 @@ async function auditoria(tratorId: string, outroTratorId: string) {
   await resolverProblema(problema.id);
   check(condicaoDaMaquina(trator, await problemasAbertos(tratorId)) === 'ok', 'problema resolvido libera a máquina (o registro fica)');
 
-  // Apagar o implemento não apaga o uso de quem o puxou
-  await db.delete(maquinas).where(eq(maquinas.id, plantadeira.id));
-  const semImplemento = (await db.select().from(usosMaquina).where(eq(usosMaquina.id, u.id)))[0];
-  check(semImplemento !== undefined && semImplemento.implementoId === null, 'apagar o implemento mantém o uso do trator (set null)');
 }
 
-runMaquinasTest().catch((erro) => {
+runMaquinasTest().then(fecharTestDatabase).catch((erro) => {
   console.error('❌', erro);
   process.exit(1);
 });

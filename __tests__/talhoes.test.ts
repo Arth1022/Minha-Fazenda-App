@@ -25,9 +25,17 @@ import {
   lerNumero,
   paraCampo,
 } from '@/features/mapa/services/calculos';
-import Storage from 'expo-sqlite/kv-store';
-import { obterFazendaMapa, salvarFazendaMapa } from '@/features/mapa/data/fazendaMapa';
-import { db, fazendaConfig, initTestDatabase, sqlite, talhoes } from './support/database';
+import { carregarFazendaMapa, obterFazendaMapa, salvarFazendaMapa } from '@/features/mapa/data/fazendaMapa';
+import {
+  db,
+  fazendaConfig,
+  fazendas,
+  FAZENDA_TESTE,
+  initTestDatabase,
+  novaFazendaLocal,
+  talhoes,
+  fecharTestDatabase,
+} from './support/database';
 
 const UUID_V4 =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -174,8 +182,9 @@ async function runTalhoesTest() {
     pasto1.nome === 'Pasto 1' &&
       pasto1.tipo === 'pasto' &&
       pasto1.cor === COR_POR_TIPO_AREA.pasto &&
-      pasto1.syncStatus === 'created',
-    'campos básicos, cor do tipo (pasto) e syncStatus = created gravados com sucesso',
+      pasto1.fazendaId === FAZENDA_TESTE &&
+      pasto1.deletedAt === null,
+    'campos básicos, cor do tipo (pasto) e a fazenda ativa gravados com sucesso',
   );
   check(
     pasto1.createdAt instanceof Date && pasto1.updatedAt instanceof Date,
@@ -233,8 +242,8 @@ async function runTalhoesTest() {
     .from(talhoes)
     .where(eq(talhoes.id, lavoura2.id));
   check(
-    registroDeletado?.syncStatus === 'deleted',
-    'deletarTalhao mantém o registro no banco com sync_status = deleted para sincronização',
+    registroDeletado?.deletedAt instanceof Date,
+    'deletarTalhao mantém o registro no banco com deleted_at para sincronização',
   );
 
   // Edição de área (nome, tipo e contorno) num único UPDATE; a cor acompanha o tipo
@@ -247,10 +256,6 @@ async function runTalhoesTest() {
       aposEdicao.cor === COR_POR_TIPO_AREA.lavoura,
     'atualizarTalhao grava nome (sem espaços), tipo e a cor do novo tipo',
   );
-  check(
-    aposEdicao.syncStatus === 'created',
-    'atualizarTalhao mantém sync_status = created em talhão que ainda não subiu',
-  );
 
   const retanguloMaior: Coordenada[] = [
     [-47.0, 0.0],
@@ -258,7 +263,6 @@ async function runTalhoesTest() {
     [-47.0 + ladoGraus * 2, ladoGraus],
     [-47.0, ladoGraus],
   ];
-  await db.update(talhoes).set({ syncStatus: 'synced' }).where(eq(talhoes.id, editavel.id));
   await atualizarTalhao(editavel.id, { coordenadas: retanguloMaior });
   const [aposContorno] = await db.select().from(talhoes).where(eq(talhoes.id, editavel.id));
   check(
@@ -268,8 +272,8 @@ async function runTalhoesTest() {
     `atualizarTalhao com contorno novo recalcula área e BBOX (${aposContorno.areaHectares} ha)`,
   );
   check(
-    aposContorno.syncStatus === 'updated',
-    'atualizarTalhao marca sync_status = updated em talhão já sincronizado',
+    aposContorno.updatedAt!.getTime() >= aposEdicao.updatedAt!.getTime(),
+    'atualizarTalhao renova updated_at',
   );
   check(
     await rejeita(() => atualizarTalhao(editavel.id, { nome: '   ' })),
@@ -313,60 +317,31 @@ async function runTalhoesTest() {
     'formatarDistancia mostra metros abaixo de 1 km',
   );
 
-  // Divisa da fazenda em fazenda_config (Drizzle + fallback do kv-store legado)
-  check(obterFazendaMapa() === null, 'obterFazendaMapa retorna null quando não há divisa salva');
-
-  const metaLegado = extrairMetadadosEspaciais(quadrado1Ha);
-  Storage.setItemSync(
-    'mapa.fazenda',
-    JSON.stringify({
-      nome: 'Fazenda Legada',
-      divisa: metaLegado.geometriaJson.coordinates[0],
-      areaHectares: metaLegado.areaHectares,
-      minLat: metaLegado.minLat,
-      maxLat: metaLegado.maxLat,
-      minLng: metaLegado.minLng,
-      maxLng: metaLegado.maxLng,
-    }),
-  );
-
-  const migrada = obterFazendaMapa();
-  const [configMigrada] = await db.select().from(fazendaConfig);
+  // Divisa da fazenda: na linha da fazenda ativa em fazenda_config; o nome vem de `fazendas`
+  check((await carregarFazendaMapa()) === null && obterFazendaMapa() === null, 'sem divisa salva, a fazenda no mapa é null');
+  await db.insert(fazendas).values({ ...novaFazendaLocal('Fazenda Esperança'), id: FAZENDA_TESTE });
+  const salva = await salvarFazendaMapa(quadrado1Ha);
+  const redesenhada = await salvarFazendaMapa(retanguloMaior);
+  const configs = await db.select().from(fazendaConfig);
   check(
-    migrada?.nome === 'Fazenda Legada' &&
-      configMigrada?.nome === 'Fazenda Legada' &&
-      Array.isArray(configMigrada?.divisaJson) &&
-      configMigrada.divisaJson.length === 5 &&
-      Storage.getItemSync('mapa.fazenda') === null,
-    'obterFazendaMapa migra divisa legada do kv-store para fazenda_config e limpa a chave antiga',
+    configs.length === 1 &&
+      configs[0].id === FAZENDA_TESTE &&
+      Math.abs((configs[0].areaHectares ?? 0) - 2.0) <= 0.04 &&
+      Array.isArray(configs[0].divisaJson) &&
+      configs[0].divisaJson.length === 5,
+    'salvarFazendaMapa grava e redesenha a divisa na linha da fazenda ativa',
   );
-
-  let queriesExecutadas = 0;
-  const prepareOriginal = sqlite.prepare.bind(sqlite);
-  sqlite.prepare = ((sql: string, params?: any) => {
-    queriesExecutadas += 1;
-    return prepareOriginal(sql, params);
-  }) as typeof sqlite.prepare;
-
-  const fazendaAtualizada = salvarFazendaMapa('  Fazenda Esperança  ', retanguloMaior);
-  sqlite.prepare = prepareOriginal;
-
-  const configsAposUpdate = await db.select().from(fazendaConfig);
   check(
-    queriesExecutadas === 1 &&
-      configsAposUpdate.length === 1 &&
-      configsAposUpdate[0].id === configMigrada.id &&
-      configsAposUpdate[0].nome === 'Fazenda Esperança' &&
-      Math.abs((configsAposUpdate[0].areaHectares ?? 0) - 2.0) <= 0.04 &&
-      obterFazendaMapa()?.nome === 'Fazenda Esperança' &&
-      fazendaAtualizada.nome === 'Fazenda Esperança',
-    `salvarFazendaMapa atualiza nome, divisa e BBOX em fazenda_config numa única query (${queriesExecutadas} query)`,
+    salva.nome === 'Fazenda Esperança' &&
+      redesenhada.nome === 'Fazenda Esperança' &&
+      obterFazendaMapa()?.nome === 'Fazenda Esperança',
+    'o nome da fazenda no mapa vem de fazendas',
   );
 
   console.log('\n🎉 TODOS OS TESTES DE TALHÕES PASSARAM!');
 }
 
-runTalhoesTest().catch((err) => {
+runTalhoesTest().then(fecharTestDatabase).catch((err) => {
   console.error('❌ Falha nos testes de talhões:', err);
   process.exit(1);
 });

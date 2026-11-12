@@ -1,6 +1,6 @@
 import { and, asc, count, eq, inArray, ne, sql } from 'drizzle-orm';
 
-import { animais, db, lotes, talhoes, type Lote } from '@/database';
+import { animais, apagar, atualizar, daFazenda, db, lotes, naoApagado, novoRegistro, talhoes, type Lote } from '@/database';
 
 /**
  * Lotes (M2): agrupamento opcional de animais (RF-016). Um animal está em no
@@ -22,14 +22,11 @@ function limpar(dados: DadosLote) {
 
 /** Nome repetido confunde na hora de mover: recusa, sem diferenciar maiúsculas. */
 async function conferirNomeLivre(nome: string, ignorarId?: string) {
+  const mesmoNome = sql`lower(${lotes.nome}) = lower(${nome})`;
   const [igual] = await db
     .select({ id: lotes.id })
     .from(lotes)
-    .where(
-      ignorarId
-        ? and(sql`lower(${lotes.nome}) = lower(${nome})`, ne(lotes.id, ignorarId))
-        : sql`lower(${lotes.nome}) = lower(${nome})`
-    )
+    .where(ignorarId ? and(daFazenda(lotes), mesmoNome, ne(lotes.id, ignorarId)) : and(daFazenda(lotes), mesmoNome))
     .limit(1);
   if (igual) throw new Error(`Já existe um lote chamado "${nome}".`);
 }
@@ -37,33 +34,36 @@ async function conferirNomeLivre(nome: string, ignorarId?: string) {
 export async function criarLote(dados: DadosLote): Promise<Lote> {
   const limpo = limpar(dados);
   await conferirNomeLivre(limpo.nome);
-  const [criado] = await db.insert(lotes).values(limpo).returning();
+  const [criado] = await db.insert(lotes).values(novoRegistro(limpo)).returning();
   return criado;
 }
 
 export async function atualizarLote(id: string, dados: DadosLote): Promise<void> {
   const limpo = limpar(dados);
   await conferirNomeLivre(limpo.nome, id);
-  await db.update(lotes).set(limpo).where(eq(lotes.id, id));
+  await db.update(lotes).set(atualizar(limpo)).where(eq(lotes.id, id));
 }
 
 /** Os animais ficam sem lote (o histórico de movimentações continua). */
 export async function excluirLote(id: string): Promise<void> {
-  db.transaction((tx) => {
-    tx.update(animais).set({ loteId: null }).where(eq(animais.loteId, id)).run();
-    tx.delete(lotes).where(eq(lotes.id, id)).run();
+  await db.transaction(async (tx) => {
+    await tx
+      .update(animais)
+      .set(atualizar({ loteId: null }))
+      .where(and(daFazenda(animais), eq(animais.loteId, id)));
+    await apagar(tx, lotes, id);
   });
 }
 
 /** Põe os animais no lote (ou tira, com `loteId` null). Quem estava em outro lote sai dele. */
 export async function definirLote(animalIds: readonly string[], loteId: string | null): Promise<void> {
   const ids = [...new Set(animalIds)];
-  db.transaction((tx) => {
+  await db.transaction(async (tx) => {
     for (let i = 0; i < ids.length; i += POR_VEZ) {
-      tx.update(animais)
-        .set({ loteId })
-        .where(inArray(animais.id, ids.slice(i, i + POR_VEZ)))
-        .run();
+      await tx
+        .update(animais)
+        .set(atualizar({ loteId }))
+        .where(inArray(animais.id, ids.slice(i, i + POR_VEZ)));
     }
   });
 }
@@ -77,15 +77,21 @@ export async function salvarAnimaisDoLote(loteId: string, animalIds: readonly st
   const atuais = await db
     .select({ id: animais.id })
     .from(animais)
-    .where(and(eq(animais.loteId, loteId), eq(animais.status, 'ativo')));
+    .where(and(daFazenda(animais), eq(animais.loteId, loteId), eq(animais.status, 'ativo')));
   const saem = atuais.map((a) => a.id).filter((id) => !marcados.has(id));
-  db.transaction((tx) => {
+  await db.transaction(async (tx) => {
     for (let i = 0; i < saem.length; i += POR_VEZ) {
-      tx.update(animais).set({ loteId: null }).where(inArray(animais.id, saem.slice(i, i + POR_VEZ))).run();
+      await tx
+        .update(animais)
+        .set(atualizar({ loteId: null }))
+        .where(inArray(animais.id, saem.slice(i, i + POR_VEZ)));
     }
     const entram = [...marcados];
     for (let i = 0; i < entram.length; i += POR_VEZ) {
-      tx.update(animais).set({ loteId }).where(inArray(animais.id, entram.slice(i, i + POR_VEZ))).run();
+      await tx
+        .update(animais)
+        .set(atualizar({ loteId }))
+        .where(inArray(animais.id, entram.slice(i, i + POR_VEZ)));
     }
   });
 }
@@ -104,9 +110,10 @@ export function listarLotes() {
       animais: count(animais.id),
     })
     .from(lotes)
-    .leftJoin(animais, and(eq(animais.loteId, lotes.id), eq(animais.status, 'ativo')))
+    .leftJoin(animais, and(eq(animais.loteId, lotes.id), eq(animais.status, 'ativo'), naoApagado(animais)))
     // Pasto excluído não conta: o lote aparece sem local
-    .leftJoin(talhoes, and(eq(talhoes.id, lotes.areaId), ne(talhoes.syncStatus, 'deleted')))
+    .leftJoin(talhoes, and(eq(talhoes.id, lotes.areaId), naoApagado(talhoes)))
+    .where(daFazenda(lotes))
     .groupBy(lotes.id)
     .orderBy(asc(lotes.nome));
 }

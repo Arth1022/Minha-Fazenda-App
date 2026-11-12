@@ -1,5 +1,5 @@
 // As features importam `expo-notifications`, `react-native` e `@/database`; o
-// tsconfig.test.json aponta esses caminhos para ./support (fakes em memória e sql.js).
+// tsconfig.test.json aponta esses caminhos para ./support (fakes em memória e PowerSync em Node).
 import { eq } from 'drizzle-orm';
 
 import type { Lembrete } from '@/dtos';
@@ -22,7 +22,7 @@ import {
 import { gatilhoDoAgendado, montarGatilho } from '@/services/notificacoes/gatilhos';
 import { horarioDoAviso } from '@/services/notificacoes/lembretes';
 import { fake, IosAuthorizationStatus } from './support/expo-notifications';
-import { animais, db, initTestDatabase, notificacoesAgendadas } from './support/database';
+import { animais, db, initTestDatabase, notificacoesAgendadas, fecharTestDatabase } from './support/database';
 
 function check(condition: boolean, message: string) {
   if (!condition) throw new Error(message);
@@ -217,7 +217,7 @@ async function runNotificacoesTest() {
   console.log('\n🎉 Notificações OK.');
 }
 
-runNotificacoesTest().catch((error) => {
+runNotificacoesTest().then(fecharTestDatabase).catch((error) => {
   console.error('\n❌ Falha no teste de notificações:', error);
   process.exit(1);
 });

@@ -1,6 +1,6 @@
-import { and, asc, count, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 
-import { animais, db, lotes, movimentacoes, talhoes } from '@/database';
+import { animais, atualizar, daFazenda, db, lotes, movimentacoes, naoApagado, novoRegistro, talhoes } from '@/database';
 import { usuarioAtual, type Usuario } from '@/services/usuario';
 
 /**
@@ -51,13 +51,13 @@ export async function moverAnimais(dados: DadosMover): Promise<ResultadoMover> {
   const quando = dados.quando ?? new Date();
   const usuario = dados.usuario ?? usuarioAtual();
 
-  return db.transaction((tx) => {
+  return db.transaction(async (tx) => {
     if (destinoId !== null) {
-      const destino = tx
+      const [destino] = await tx
         .select({ tipo: talhoes.tipo })
         .from(talhoes)
-        .where(and(eq(talhoes.id, destinoId), ne(talhoes.syncStatus, 'deleted')))
-        .get();
+        .where(and(daFazenda(talhoes), eq(talhoes.id, destinoId)))
+        .limit(1);
       if (!destino) throw new Error('Pasto não encontrado.');
       if (destino.tipo !== 'pasto') throw new Error('Só área do tipo Pasto recebe animais.');
     }
@@ -65,45 +65,44 @@ export async function moverAnimais(dados: DadosMover): Promise<ResultadoMover> {
     // Onde cada animal do rebanho está agora (pelo índice da movimentação aberta)
     const mover: string[] = [];
     for (const parte of emPartes(ids)) {
-      const linhas = tx
+      const linhas = await tx
         .select({ id: animais.id, areaId: movimentacoes.areaId })
         .from(animais)
         .leftJoin(
           movimentacoes,
-          and(eq(movimentacoes.animalId, animais.id), isNull(movimentacoes.saidaEm))
+          and(eq(movimentacoes.animalId, animais.id), isNull(movimentacoes.saidaEm), naoApagado(movimentacoes))
         )
-        .where(and(inArray(animais.id, parte), eq(animais.status, 'ativo')))
-        .all();
+        .where(and(daFazenda(animais), inArray(animais.id, parte), eq(animais.status, 'ativo')));
       for (const linha of linhas) if ((linha.areaId ?? null) !== destinoId) mover.push(linha.id);
     }
 
     for (const parte of emPartes(mover)) {
-      tx.update(movimentacoes)
-        .set({ saidaEm: quando })
-        .where(and(inArray(movimentacoes.animalId, parte), isNull(movimentacoes.saidaEm)))
-        .run();
+      await tx
+        .update(movimentacoes)
+        .set(atualizar({ saidaEm: quando }))
+        .where(and(daFazenda(movimentacoes), inArray(movimentacoes.animalId, parte), isNull(movimentacoes.saidaEm)));
       if (destinoId !== null) {
-        tx.insert(movimentacoes)
-          .values(
-            parte.map((animalId) => ({
+        await tx.insert(movimentacoes).values(
+          parte.map((animalId) =>
+            novoRegistro({
               animalId,
               areaId: destinoId,
               loteId: dados.loteId ?? null,
               entradaEm: quando,
               registradoPor: usuario.nome,
               registradoPorId: usuario.id,
-            }))
+            })
           )
-          .run();
+        );
       }
     }
 
     // O lote movido inteiro fica naquele pasto, mesmo que todos já estivessem lá
     if (dados.loteId) {
-      tx.update(lotes)
-        .set({ areaId: destinoId, areaDesde: destinoId !== null ? quando : null })
-        .where(eq(lotes.id, dados.loteId))
-        .run();
+      await tx
+        .update(lotes)
+        .set(atualizar({ areaId: destinoId, areaDesde: destinoId !== null ? quando : null }))
+        .where(eq(lotes.id, dados.loteId));
     }
 
     return { movidos: mover.length, ignorados: ids.length - mover.length };
@@ -119,7 +118,7 @@ export async function moverLote(
   const membros = await db
     .select({ id: animais.id })
     .from(animais)
-    .where(and(eq(animais.loteId, loteId), eq(animais.status, 'ativo')));
+    .where(and(daFazenda(animais), eq(animais.loteId, loteId), eq(animais.status, 'ativo')));
   return moverAnimais({ animalIds: membros.map((m) => m.id), destinoId, loteId, ...opcoes });
 }
 
@@ -128,24 +127,28 @@ export async function contarAnimaisNaArea(areaId: string): Promise<number> {
   const [linha] = await db
     .select({ total: count() })
     .from(movimentacoes)
-    .where(and(eq(movimentacoes.areaId, areaId), isNull(movimentacoes.saidaEm)));
+    .where(and(daFazenda(movimentacoes), eq(movimentacoes.areaId, areaId), isNull(movimentacoes.saidaEm)));
   return linha?.total ?? 0;
 }
 
 /**
  * Ocupação de todas as áreas que já tiveram animais: cabeças agora, desde
  * quando (entrada mais antiga dos presentes) e a última saída. Uma leitura só
- * do índice (area_id, saida_em, entrada_em). Datas em milissegundos.
+ * do índice (area_id, saida_em, entrada_em). Datas em milissegundos (no banco
+ * são texto ISO: min/max comparam como data e viram ms aqui).
  */
 export function ocupacaoDasAreas() {
   return db
     .select({
       areaId: movimentacoes.areaId,
       cabecas: sql<number>`sum(case when ${movimentacoes.saidaEm} is null then 1 else 0 end)`.mapWith(Number),
-      desdeMs: sql<number | null>`min(case when ${movimentacoes.saidaEm} is null then ${movimentacoes.entradaEm} end)`,
-      ultimaSaidaMs: sql<number | null>`max(${movimentacoes.saidaEm})`,
+      desdeMs: sql<number | null>`min(case when ${movimentacoes.saidaEm} is null then ${movimentacoes.entradaEm} end)`.mapWith(
+        (iso: string) => Date.parse(iso)
+      ),
+      ultimaSaidaMs: sql<number | null>`max(${movimentacoes.saidaEm})`.mapWith((iso: string) => Date.parse(iso)),
     })
     .from(movimentacoes)
+    .where(daFazenda(movimentacoes))
     .groupBy(movimentacoes.areaId);
 }
 export const TABELAS_OCUPACAO = ['movimentacoes'] as const;
@@ -162,9 +165,9 @@ export function animaisNaArea(areaId: string) {
       entradaEm: movimentacoes.entradaEm,
     })
     .from(movimentacoes)
-    .innerJoin(animais, eq(animais.id, movimentacoes.animalId))
-    .leftJoin(lotes, eq(lotes.id, animais.loteId))
-    .where(and(eq(movimentacoes.areaId, areaId), isNull(movimentacoes.saidaEm)))
+    .innerJoin(animais, and(eq(animais.id, movimentacoes.animalId), naoApagado(animais)))
+    .leftJoin(lotes, and(eq(lotes.id, animais.loteId), naoApagado(lotes)))
+    .where(and(daFazenda(movimentacoes), eq(movimentacoes.areaId, areaId), isNull(movimentacoes.saidaEm)))
     .orderBy(asc(ORDEM_ANIMAL));
 }
 export const TABELAS_ANIMAIS_NA_AREA = ['movimentacoes', 'animais', 'lotes'] as const;
@@ -186,14 +189,14 @@ export function animaisComLocal(filtro: { loteId?: string } = {}) {
     .from(animais)
     .leftJoin(
       movimentacoes,
-      and(eq(movimentacoes.animalId, animais.id), isNull(movimentacoes.saidaEm))
+      and(eq(movimentacoes.animalId, animais.id), isNull(movimentacoes.saidaEm), naoApagado(movimentacoes))
     )
-    .leftJoin(talhoes, eq(talhoes.id, movimentacoes.areaId))
-    .leftJoin(lotes, eq(lotes.id, animais.loteId))
+    .leftJoin(talhoes, and(eq(talhoes.id, movimentacoes.areaId), naoApagado(talhoes)))
+    .leftJoin(lotes, and(eq(lotes.id, animais.loteId), naoApagado(lotes)))
     .where(
       filtro.loteId
-        ? and(eq(animais.status, 'ativo'), eq(animais.loteId, filtro.loteId))
-        : eq(animais.status, 'ativo')
+        ? and(daFazenda(animais), eq(animais.status, 'ativo'), eq(animais.loteId, filtro.loteId))
+        : and(daFazenda(animais), eq(animais.status, 'ativo'))
     )
     .orderBy(asc(ORDEM_ANIMAL));
 }
@@ -215,7 +218,7 @@ export function historicoDoAnimal(animalId: string) {
     .from(movimentacoes)
     .innerJoin(talhoes, eq(talhoes.id, movimentacoes.areaId))
     .leftJoin(lotes, eq(lotes.id, movimentacoes.loteId))
-    .where(eq(movimentacoes.animalId, animalId))
+    .where(and(daFazenda(movimentacoes), eq(movimentacoes.animalId, animalId)))
     .orderBy(desc(movimentacoes.entradaEm));
 }
 export const TABELAS_HISTORICO_ANIMAL = ['movimentacoes', 'talhoes', 'lotes'] as const;
@@ -236,7 +239,7 @@ export function historicoDaArea(areaId: string, limite = 300) {
     .from(movimentacoes)
     .innerJoin(animais, eq(animais.id, movimentacoes.animalId))
     .leftJoin(lotes, eq(lotes.id, movimentacoes.loteId))
-    .where(eq(movimentacoes.areaId, areaId))
+    .where(and(daFazenda(movimentacoes), eq(movimentacoes.areaId, areaId)))
     .orderBy(desc(movimentacoes.entradaEm))
     .limit(limite);
 }

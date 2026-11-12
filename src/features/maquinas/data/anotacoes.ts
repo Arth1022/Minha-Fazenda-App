@@ -1,15 +1,14 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 
-import { anotacoesMaquina, db } from '@/database';
+import { anotacoesMaquina, daFazenda, db, novoRegistro } from '@/database';
 import type { AnotacaoMaquina } from '@/dtos';
-import { usuarioAtual } from '@/services/usuario';
 
 /** Anotações da máquina, da mais recente para a mais antiga. */
 export function anotacoesDaMaquina(maquinaId: string) {
   return db
     .select()
     .from(anotacoesMaquina)
-    .where(eq(anotacoesMaquina.maquinaId, maquinaId))
+    .where(and(daFazenda(anotacoesMaquina), eq(anotacoesMaquina.maquinaId, maquinaId)))
     .orderBy(desc(anotacoesMaquina.createdAt));
 }
 
@@ -23,7 +22,7 @@ export async function criarAnotacao(
   if (!limpo) throw new Error('Escreva a anotação');
   const [anotacao] = await db
     .insert(anotacoesMaquina)
-    .values({ maquinaId, texto: limpo, usoId, criadoPor: usuarioAtual().nome })
+    .values(novoRegistro({ maquinaId, texto: limpo, usoId }))
     .returning();
   return anotacao;
 }

@@ -2,8 +2,11 @@ import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, sql, type
 
 import {
   animais,
+  atualizar,
+  daFazenda,
   db,
   maquinas,
+  novoRegistro,
   talhoes,
   tarefaEventos,
   tarefas,
@@ -170,7 +173,7 @@ export async function identificarAreaNoPonto(
     .from(talhoes)
     .where(
       and(
-        ne(talhoes.syncStatus, 'deleted'),
+        daFazenda(talhoes),
         lte(talhoes.minLat, lat),
         gte(talhoes.maxLat, lat),
         lte(talhoes.minLng, lng),
@@ -211,7 +214,7 @@ export async function criarOcorrencia(input: CriarOcorrenciaInput): Promise<Tare
     const [animal] = await db
       .select({ id: animais.id, brinco: animais.brinco, nome: animais.nome })
       .from(animais)
-      .where(eq(animais.id, animalId))
+      .where(and(daFazenda(animais), eq(animais.id, animalId)))
       .limit(1);
     if (!animal) throw new Error('Animal vinculado não encontrado no rebanho.');
     contextoNome = formatarIdentificacaoAnimal(animal);
@@ -221,7 +224,7 @@ export async function criarOcorrencia(input: CriarOcorrenciaInput): Promise<Tare
     const [maquina] = await db
       .select({ id: maquinas.id, nome: maquinas.nome, codigo: maquinas.codigo })
       .from(maquinas)
-      .where(eq(maquinas.id, maquinaId))
+      .where(and(daFazenda(maquinas), eq(maquinas.id, maquinaId)))
       .limit(1);
     if (!maquina) throw new Error('Máquina vinculada não encontrada na frota.');
     contextoNome = `${maquina.nome} (${maquina.codigo})`;
@@ -235,7 +238,7 @@ export async function criarOcorrencia(input: CriarOcorrenciaInput): Promise<Tare
         centroLng: talhoes.centroLng,
       })
       .from(talhoes)
-      .where(eq(talhoes.id, areaId))
+      .where(and(daFazenda(talhoes), eq(talhoes.id, areaId)))
       .limit(1);
     if (area) {
       if (!contextoNome) contextoNome = area.nome;
@@ -268,50 +271,48 @@ export async function criarOcorrencia(input: CriarOcorrenciaInput): Promise<Tare
     dadosEvento.maquinaParada = maquinaParada;
   }
 
-  return db.transaction((tx) => {
-    const criada = tx
+  return db.transaction(async (tx) => {
+    const [criada] = await tx
       .insert(tarefas)
-      .values({
-        titulo,
-        categoria: input.categoria,
-        origem: input.origem ?? 'ocorrencia',
-        descricao: input.descricao?.trim() || null,
-        urgente: input.urgente ?? maquinaParada,
-        status: 'aberta',
-        responsavelId: input.responsavelId ?? null,
-        criadoPor: autorId,
-        prazo: input.prazo ?? null,
-        areaId,
-        animalId,
-        maquinaId,
-        maquinaParada,
-        audioUri,
-        pontoLat,
-        pontoLng,
-        syncStatus: 'pendente',
-        createdAt: agora,
-        updatedAt: agora,
-      })
-      .returning()
-      .get();
+      .values(
+        novoRegistro({
+          titulo,
+          categoria: input.categoria,
+          origem: input.origem ?? 'ocorrencia',
+          descricao: input.descricao?.trim() || null,
+          urgente: input.urgente ?? maquinaParada,
+          status: 'aberta' as const,
+          responsavelId: input.responsavelId ?? null,
+          prazo: input.prazo ?? null,
+          areaId,
+          animalId,
+          maquinaId,
+          maquinaParada,
+          audioUri,
+          pontoLat,
+          pontoLng,
+          syncStatus: 'pendente' as const,
+        })
+      )
+      .returning();
 
-    tx.insert(tarefaEventos)
-      .values({
+    await tx.insert(tarefaEventos).values(
+      novoRegistro({
         tarefaId: criada.id,
-        tipo: 'criada',
+        tipo: 'criada' as const,
         autorId,
         ocorridoEm: agora,
         texto: criada.descricao,
         dados: Object.keys(dadosEvento).length > 0 ? dadosEvento : null,
       })
-      .run();
+    );
 
     // Fechamento de ciclo de máquina: se "Máquina parada", coloca em manutenção na mesma transação
     if (maquinaId && maquinaParada) {
-      tx.update(maquinas)
-        .set({ status: 'manutencao', updatedAt: agora })
-        .where(eq(maquinas.id, maquinaId))
-        .run();
+      await tx
+        .update(maquinas)
+        .set(atualizar({ status: 'manutencao' }))
+        .where(and(daFazenda(maquinas), eq(maquinas.id, maquinaId)));
     }
 
     return criada;
@@ -322,7 +323,7 @@ interface TarefaValidacao {
   id: string;
   status: StatusTarefa;
   responsavelId: string | null;
-  criadoPor: string | null;
+  createdBy: string | null;
   maquinaId: string | null;
   maquinaParada: boolean;
 }
@@ -333,12 +334,12 @@ async function buscarTarefaOuFalhar(tarefaId: string): Promise<TarefaValidacao> 
       id: tarefas.id,
       status: tarefas.status,
       responsavelId: tarefas.responsavelId,
-      criadoPor: tarefas.criadoPor,
+      createdBy: tarefas.createdBy,
       maquinaId: tarefas.maquinaId,
       maquinaParada: tarefas.maquinaParada,
     })
     .from(tarefas)
-    .where(eq(tarefas.id, tarefaId))
+    .where(and(daFazenda(tarefas), eq(tarefas.id, tarefaId)))
     .limit(1);
   if (!tarefa) throw new Error('Tarefa não encontrada.');
   return tarefa;
@@ -348,22 +349,25 @@ async function buscarTarefaOuFalhar(tarefaId: string): Promise<TarefaValidacao> 
  * Toda mudança de estado: atualiza o cache em `tarefas` e acrescenta o evento
  * em `tarefa_eventos` na mesma transação (nunca um sem o outro).
  */
-function transicionar(
+async function transicionar(
   tarefaId: string,
   campos: Partial<Pick<TarefaOcorrencia, 'status' | 'responsavelId'>>,
   evento: Pick<NovoTarefaEvento, 'tipo' | 'autorId' | 'texto' | 'dados'>,
   agora: Date
-): TarefaOcorrencia {
-  return db.transaction((tx) => {
-    const atualizada = tx
+): Promise<TarefaOcorrencia> {
+  return db.transaction(async (tx) => {
+    const [atualizada] = await tx
       .update(tarefas)
-      .set({ ...campos, syncStatus: 'pendente', updatedAt: agora })
-      .where(eq(tarefas.id, tarefaId))
-      .returning()
-      .get();
-    tx.insert(tarefaEventos)
-      .values({ ...evento, tarefaId, ocorridoEm: agora })
-      .run();
+      .set(atualizar({ ...campos, syncStatus: 'pendente' }))
+      .where(and(daFazenda(tarefas), eq(tarefas.id, tarefaId)))
+      .returning();
+    await tx.insert(tarefaEventos).values(
+      novoRegistro({
+        ...evento,
+        tarefaId,
+        ocorridoEm: agora,
+      })
+    );
     return atualizada;
   });
 }
@@ -427,7 +431,7 @@ export async function iniciarOcorrencia(
 ): Promise<TarefaOcorrencia> {
   const tarefa = await buscarTarefaOuFalhar(tarefaId);
   if (tarefa.status !== 'aberta') throw new Error('Apenas tarefas abertas podem ser iniciadas.');
-  if (tarefa.responsavelId && tarefa.responsavelId !== autor.id && autor.papel !== 'admin') {
+  if (tarefa.responsavelId && tarefa.responsavelId !== autor.id && !podeAtribuirTarefas(autor)) {
     throw new Error('Só o responsável ou o admin pode iniciar a tarefa.');
   }
   return transicionar(
@@ -449,53 +453,55 @@ export async function concluirOcorrencia(
   if (tarefa.status !== 'aberta' && tarefa.status !== 'em_andamento') {
     throw new Error('Tarefa já está encerrada.');
   }
-  if (tarefa.responsavelId && tarefa.responsavelId !== autor.id && autor.papel !== 'admin') {
+  if (tarefa.responsavelId && tarefa.responsavelId !== autor.id && !podeAtribuirTarefas(autor)) {
     throw new Error('Só o responsável ou o admin pode concluir a tarefa.');
   }
   const fotos = limparFotos(opcoes?.fotos);
-  return db.transaction((tx) => {
-    const atualizada = tx
+  return db.transaction(async (tx) => {
+    const [atualizada] = await tx
       .update(tarefas)
-      .set({
-        status: 'concluida',
-        responsavelId: tarefa.responsavelId ?? autor.id,
-        syncStatus: 'pendente',
-        updatedAt: agora,
-      })
-      .where(eq(tarefas.id, tarefaId))
-      .returning()
-      .get();
+      .set(
+        atualizar({
+          status: 'concluida',
+          responsavelId: tarefa.responsavelId ?? autor.id,
+          syncStatus: 'pendente',
+          concluidaEm: agora,
+        })
+      )
+      .where(and(daFazenda(tarefas), eq(tarefas.id, tarefaId)))
+      .returning();
 
-    tx.insert(tarefaEventos)
-      .values({
+    await tx.insert(tarefaEventos).values(
+      novoRegistro({
         tarefaId,
-        tipo: 'concluida',
+        tipo: 'concluida' as const,
         autorId: autor.id,
         ocorridoEm: agora,
         texto: opcoes?.observacao?.trim() || null,
         dados: fotos.length > 0 ? { fotos } : null,
       })
-      .run();
+    );
 
     // Se era uma ocorrência que parou a máquina e não restam outras paradas abertas, libera a máquina
     if (tarefa.maquinaId && tarefa.maquinaParada) {
-      const outraParada = tx
+      const [outraParada] = await tx
         .select({ id: tarefas.id })
         .from(tarefas)
         .where(
           and(
+            daFazenda(tarefas),
             eq(tarefas.maquinaId, tarefa.maquinaId),
             eq(tarefas.maquinaParada, true),
-            inArray(tarefas.status, ['aberta', 'em_andamento'])
+            inArray(tarefas.status, ['aberta', 'em_andamento']),
+            ne(tarefas.id, tarefaId)
           )
         )
-        .limit(1)
-        .get();
+        .limit(1);
       if (!outraParada) {
-        tx.update(maquinas)
-          .set({ status: 'ativa', updatedAt: agora })
-          .where(eq(maquinas.id, tarefa.maquinaId))
-          .run();
+        await tx
+          .update(maquinas)
+          .set(atualizar({ status: 'ativa' }))
+          .where(and(daFazenda(maquinas), eq(maquinas.id, tarefa.maquinaId)));
       }
     }
 
@@ -517,8 +523,8 @@ export async function cancelarOcorrencia(
   if (tarefa.status !== 'aberta' && tarefa.status !== 'em_andamento') {
     throw new Error('Apenas tarefas abertas ou em andamento podem ser canceladas.');
   }
-  const relatouAberta = tarefa.status === 'aberta' && tarefa.criadoPor === autor.id;
-  if (autor.papel !== 'admin' && !relatouAberta) {
+  const relatouAberta = tarefa.status === 'aberta' && tarefa.createdBy === autor.id;
+  if (!podeAtribuirTarefas(autor) && !relatouAberta) {
     throw new Error('Só o admin ou quem relatou enquanto aberta pode cancelar a tarefa.');
   }
   return transicionar(tarefaId, { status: 'cancelada' }, { tipo: 'cancelada', autorId: autor.id, texto: motivoLimpo }, agora);
@@ -529,7 +535,7 @@ export async function listarEventosDaTarefa(tarefaId: string): Promise<TarefaEve
   return db
     .select()
     .from(tarefaEventos)
-    .where(eq(tarefaEventos.tarefaId, tarefaId))
+    .where(and(daFazenda(tarefaEventos), eq(tarefaEventos.tarefaId, tarefaId)))
     .orderBy(asc(tarefaEventos.ocorridoEm));
 }
 
@@ -541,7 +547,13 @@ export async function listarFotosDaTarefa(tarefaId: string): Promise<string[]> {
   const eventos = await db
     .select({ dados: tarefaEventos.dados })
     .from(tarefaEventos)
-    .where(and(eq(tarefaEventos.tarefaId, tarefaId), isNotNull(tarefaEventos.dados)))
+    .where(
+      and(
+        daFazenda(tarefaEventos),
+        eq(tarefaEventos.tarefaId, tarefaId),
+        isNotNull(tarefaEventos.dados)
+      )
+    )
     .orderBy(asc(tarefaEventos.ocorridoEm));
 
   const resultado: string[] = [];
@@ -573,6 +585,7 @@ export async function listarMinhasTarefas(
     .from(tarefas)
     .where(
       and(
+        daFazenda(tarefas),
         eq(tarefas.responsavelId, responsavelId),
         inArray(tarefas.status, ['aberta', 'em_andamento'])
       )
@@ -584,7 +597,7 @@ export async function listarMinhasTarefas(
 export async function listarTodasTarefas(
   filtros?: FiltrosTodasTarefas
 ): Promise<TarefaOcorrencia[]> {
-  const condicoes: SQL[] = [];
+  const condicoes: SQL[] = [daFazenda(tarefas)];
   if (filtros?.status) condicoes.push(eq(tarefas.status, filtros.status));
   if (filtros?.categoria) condicoes.push(eq(tarefas.categoria, filtros.categoria));
   if (filtros?.semResponsavel) condicoes.push(isNull(tarefas.responsavelId));
@@ -596,7 +609,7 @@ export async function listarTodasTarefas(
   return db
     .select()
     .from(tarefas)
-    .where(condicoes.length > 0 ? and(...condicoes) : undefined)
+    .where(and(...condicoes))
     .orderBy(...ORDEM_PADRAO_TAREFAS);
 }
 
@@ -624,6 +637,7 @@ export async function listarOcorrenciasNoMapa(): Promise<OcorrenciaNoMapa[]> {
     .from(tarefas)
     .where(
       and(
+        daFazenda(tarefas),
         inArray(tarefas.status, ['aberta', 'em_andamento']),
         isNotNull(tarefas.pontoLat),
         isNotNull(tarefas.pontoLng)
@@ -636,7 +650,7 @@ const DIA_MS = 24 * 60 * 60 * 1000;
 
 /** Cria 3 ocorrências de exemplo se a tabela estiver vazia (tela já nasce utilizável offline). */
 export async function garantirSeedOcorrencias(): Promise<void> {
-  const [existe] = await db.select({ id: tarefas.id }).from(tarefas).limit(1);
+  const [existe] = await db.select({ id: tarefas.id }).from(tarefas).where(daFazenda(tarefas)).limit(1);
   if (existe) return;
 
   const eu = usuarioAtual();

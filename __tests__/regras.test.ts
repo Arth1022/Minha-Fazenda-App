@@ -56,8 +56,6 @@ function tratamento(parcial: Partial<Tratamento>): Tratamento {
     dose: null,
     dataInicio: dia(1, 10),
     dataFim: null,
-    diasConfirmados: [],
-    proximaDoseEm: null,
     diasSemana: [1, 2, 3, 4, 5, 6, 7],
     horario: null,
     intervaloHoras: null,
@@ -68,7 +66,9 @@ function tratamento(parcial: Partial<Tratamento>): Tratamento {
     observacoes: null,
     grupoAplicacaoId: null,
     comprovanteUri: null,
-    criadoPor: null,
+    fazendaId: 'f',
+    createdBy: null,
+    deletedAt: null,
     createdAt: HOJE,
     updatedAt: HOJE,
     ...parcial,
@@ -76,7 +76,7 @@ function tratamento(parcial: Partial<Tratamento>): Tratamento {
 }
 
 function pesagem(data: Date, pesoKg: number): Pesagem {
-  return { id: String(data.getTime()), animalId: 'a', data, pesoKg, metodo: 'balanca', criadoPor: null, createdAt: data, updatedAt: data };
+  return { id: String(data.getTime()), animalId: 'a', data, pesoKg, metodo: 'balanca', fazendaId: 'f', createdBy: null, deletedAt: null, createdAt: data, updatedAt: data };
 }
 
 console.log('=========================================================');
@@ -325,7 +325,9 @@ function cobertura(parcial: Partial<Reproducao>): Reproducao {
     dataDiagnostico: null,
     metodoDiagnostico: null,
     dataAborto: null,
-    criadoPor: null,
+    fazendaId: 'f',
+    createdBy: null,
+    deletedAt: null,
     createdAt: HOJE,
     updatedAt: HOJE,
     ...parcial,

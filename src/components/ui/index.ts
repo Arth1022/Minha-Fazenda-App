@@ -8,7 +8,7 @@ export {
   FloatingActionButton,
   type FloatingActionButtonProps,
 } from './FloatingActionButton';
-export { Header, type HeaderProps } from './Header';
+export { Header, HeaderDireitaProvider, type HeaderProps } from './Header';
 export {
   InfoBanner,
   type InfoBannerProps,

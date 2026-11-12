@@ -1,6 +1,6 @@
 import { and, desc, eq, gt } from 'drizzle-orm';
 
-import { animais, controlesLeiteiros, db, mastites, secagens } from '@/database';
+import { animais, atualizar, controlesLeiteiros, daFazenda, db, mastites, novoRegistro, secagens } from '@/database';
 import type { NovaMastite, NovoControleLeiteiro } from '@/dtos';
 
 /** Controles leiteiros da vaca, do mais recente para o mais antigo. */
@@ -8,16 +8,24 @@ export function controlesDoAnimal(animalId: string) {
   return db
     .select()
     .from(controlesLeiteiros)
-    .where(eq(controlesLeiteiros.animalId, animalId))
+    .where(and(daFazenda(controlesLeiteiros), eq(controlesLeiteiros.animalId, animalId)))
     .orderBy(desc(controlesLeiteiros.data));
 }
 
 export function secagensDoAnimal(animalId: string) {
-  return db.select().from(secagens).where(eq(secagens.animalId, animalId)).orderBy(desc(secagens.data));
+  return db
+    .select()
+    .from(secagens)
+    .where(and(daFazenda(secagens), eq(secagens.animalId, animalId)))
+    .orderBy(desc(secagens.data));
 }
 
 export function mastitesDoAnimal(animalId: string) {
-  return db.select().from(mastites).where(eq(mastites.animalId, animalId)).orderBy(desc(mastites.data));
+  return db
+    .select()
+    .from(mastites)
+    .where(and(daFazenda(mastites), eq(mastites.animalId, animalId)))
+    .orderBy(desc(mastites.data));
 }
 
 /**
@@ -26,26 +34,25 @@ export function mastitesDoAnimal(animalId: string) {
  */
 export async function registrarControleLeiteiro({ animalId, data, litros }: NovoControleLeiteiro): Promise<void> {
   if (!(Number.isFinite(litros) && litros >= 0)) throw new Error('Informe os litros do dia');
-  db.transaction((tx) => {
-    tx.insert(controlesLeiteiros).values({ animalId, data, litros }).run();
+  await db.transaction(async (tx) => {
+    await tx.insert(controlesLeiteiros).values(novoRegistro({ animalId, data, litros }));
     // Lançamento atrasado (há controle mais novo da vaca): não mexe no cadastro
-    const maisNovo = tx
+    const [maisNovo] = await tx
       .select({ id: controlesLeiteiros.id })
       .from(controlesLeiteiros)
-      .where(and(eq(controlesLeiteiros.animalId, animalId), gt(controlesLeiteiros.data, data)))
-      .limit(1)
-      .get();
+      .where(and(daFazenda(controlesLeiteiros), eq(controlesLeiteiros.animalId, animalId), gt(controlesLeiteiros.data, data)))
+      .limit(1);
     if (!maisNovo) {
-      tx.update(animais).set({ producaoLeiteL: litros }).where(eq(animais.id, animalId)).run();
+      await tx.update(animais).set(atualizar({ producaoLeiteL: litros })).where(eq(animais.id, animalId));
     }
   });
 }
 
 export async function registrarSecagem(animalId: string, data: Date): Promise<void> {
-  await db.insert(secagens).values({ animalId, data });
+  await db.insert(secagens).values(novoRegistro({ animalId, data }));
 }
 
 export async function registrarMastite(mastite: NovaMastite): Promise<void> {
   if (!mastite.tetos || mastite.tetos.length === 0) throw new Error('Marque ao menos um teto');
-  await db.insert(mastites).values(mastite);
+  await db.insert(mastites).values(novoRegistro(mastite));
 }

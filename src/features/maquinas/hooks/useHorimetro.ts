@@ -24,7 +24,7 @@ export function useHorimetro(maquina: Pick<Maquina, 'id' | 'horimetroInicial' | 
   const referencia = useMemo(() => {
     if (ultima) return { valorH: ultima.valorH, em: ultima.lidoEm };
     if (maquina && maquina.horimetroInicial !== null) {
-      return { valorH: maquina.horimetroInicial, em: maquina.createdAt };
+      return { valorH: maquina.horimetroInicial, em: maquina.createdAt ?? NUNCA };
     }
     return null;
   }, [ultima, maquina]);

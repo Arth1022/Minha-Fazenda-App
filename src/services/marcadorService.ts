@@ -1,8 +1,11 @@
 import { and, asc, count, eq } from 'drizzle-orm';
 
 import {
+  atualizar,
+  daFazenda,
   db,
   marcadoresMapa,
+  novoRegistro,
   type MarcadorMapa,
   type TipoMarcadorMapa,
 } from '@/database';
@@ -48,7 +51,7 @@ export async function criarMarcador(dados: DadosCriarMarcador): Promise<Marcador
 
   const [criado] = await db
     .insert(marcadoresMapa)
-    .values({
+    .values(novoRegistro({
       talhaoId: talhaoId ?? null,
       tipo: dados.tipo,
       titulo: tituloLimpo,
@@ -56,7 +59,7 @@ export async function criarMarcador(dados: DadosCriarMarcador): Promise<Marcador
       lat: dados.lat,
       lng: dados.lng,
       resolvido: false,
-    })
+    }))
     .returning();
 
   return criado;
@@ -67,7 +70,7 @@ export function listarMarcadoresAtivos() {
   return db
     .select()
     .from(marcadoresMapa)
-    .where(eq(marcadoresMapa.resolvido, false))
+    .where(and(daFazenda(marcadoresMapa), eq(marcadoresMapa.resolvido, false)))
     .orderBy(asc(marcadoresMapa.createdAt));
 }
 
@@ -75,7 +78,7 @@ export function listarMarcadoresAtivos() {
 export async function resolverMarcador(id: string): Promise<void> {
   await db
     .update(marcadoresMapa)
-    .set({ resolvido: true, updatedAt: new Date() })
+    .set(atualizar({ resolvido: true }))
     .where(eq(marcadoresMapa.id, id));
 }
 
@@ -84,6 +87,6 @@ export async function contarPontosAbertos(talhaoId: string): Promise<number> {
   const [linha] = await db
     .select({ total: count() })
     .from(marcadoresMapa)
-    .where(and(eq(marcadoresMapa.talhaoId, talhaoId), eq(marcadoresMapa.resolvido, false)));
+    .where(and(daFazenda(marcadoresMapa), eq(marcadoresMapa.talhaoId, talhaoId), eq(marcadoresMapa.resolvido, false)));
   return linha?.total ?? 0;
 }

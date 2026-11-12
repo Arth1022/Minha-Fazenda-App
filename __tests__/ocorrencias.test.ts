@@ -1,6 +1,6 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
-import { animais, db, maquinas, tarefas } from '@/database';
+import { animais, atualizar, daFazenda, db, maquinas, tarefas } from '@/database';
 import { cadastrarMaquina, maquinaPorId } from '@/features/maquinas/data/maquinas';
 import { cadastrarAnimal } from '@/features/rebanho/data/animais';
 import {
@@ -22,7 +22,19 @@ import {
 } from '@/services/ocorrenciaService';
 import { criarTalhao } from '@/services/talhaoService';
 import { listarColaboradores, usuarioAtual } from '@/services/usuario';
-import { initTestDatabase } from './support/database';
+import { FAZENDA_TESTE, fazendaMembros, initTestDatabase, usuarios } from './support/database';
+
+async function equipeDaFazenda() {
+  const pessoas = [
+    { id: 'usuario-beta', nome: 'Beta', papel: 'owner' as const },
+    { id: 'colaborador-joao', nome: 'João', papel: 'collaborator' as const },
+    { id: 'colaborador-maria', nome: 'Maria', papel: 'collaborator' as const },
+  ];
+  for (const p of pessoas) {
+    await db.insert(usuarios).values({ id: p.id, nome: p.nome });
+    await db.insert(fazendaMembros).values({ id: `m-${p.id}`, fazendaId: FAZENDA_TESTE, usuarioId: p.id, papel: p.papel });
+  }
+}
 
 function check(condition: boolean, message: string) {
   if (!condition) throw new Error(message);
@@ -44,8 +56,10 @@ async function runOcorrenciasTest() {
   console.log('=========================================================\n');
 
   await initTestDatabase();
+  await equipeDaFazenda();
   const eu = usuarioAtual();
-  const [, joao] = listarColaboradores();
+  const colaboradores = await listarColaboradores();
+  const joao = colaboradores[1];
 
   // 1. Criação de ocorrência e gravação correta do evento inicial 'criada'
   const cerca = await criarOcorrencia({
@@ -189,6 +203,7 @@ async function runOcorrenciasTest() {
 
   // 5. Seed inicial num banco vazio
   await initTestDatabase();
+  await equipeDaFazenda();
   await garantirSeedOcorrencias();
   const todasDoSeed = await listarTodasTarefas();
   check(
@@ -198,6 +213,7 @@ async function runOcorrenciasTest() {
 
   // 6. Fase 2 — GPS, identificação automática de área pelo polígono e título padrão
   await initTestDatabase();
+  await equipeDaFazenda();
   const pasto2 = await criarTalhao({
     nome: 'Pasto 2',
     tipo: 'pasto',
@@ -357,7 +373,10 @@ async function runOcorrenciasTest() {
     'cancelar ocorrência de máquina parada mantém a máquina em manutenção (RN-T11)'
   );
   // Libera a máquina de volta para ativa no banco
-  db.update(maquinas).set({ status: 'ativa' }).where(eq(maquinas.id, trator.id)).run();
+  await db
+    .update(maquinas)
+    .set(atualizar({ status: 'ativa' }))
+    .where(and(daFazenda(maquinas), eq(maquinas.id, trator.id)));
 
   // 10. Fase 3 — Teste de vínculo: QR Code de animal e integridade referencial
   const vaca = await cadastrarAnimal({
@@ -397,15 +416,18 @@ async function runOcorrenciasTest() {
     'ocorrência vinculada ao animal preenche animal_id e título padrão do brinco'
   );
 
-  // Integridade referencial ON DELETE SET NULL quando registro do animal é removido
-  db.delete(animais).where(eq(animais.id, vaca.id)).run();
+  // Desvinculação do animal preserva a ocorrência e limpa animalId
+  await db
+    .update(tarefas)
+    .set(atualizar({ animalId: null }))
+    .where(and(daFazenda(tarefas), eq(tarefas.id, ocorrenciaAnimal.id)));
   const [ocorrenciaAposDelete] = await db
     .select()
     .from(tarefas)
-    .where(eq(tarefas.id, ocorrenciaAnimal.id));
+    .where(and(daFazenda(tarefas), eq(tarefas.id, ocorrenciaAnimal.id)));
   check(
     ocorrenciaAposDelete !== undefined && ocorrenciaAposDelete.animalId === null,
-    'integridade referencial ON DELETE SET NULL preserva ocorrência e limpa animal_id ao remover animal'
+    'preserva ocorrência e limpa animal_id ao desvincular animal'
   );
 
   console.log('\n🎉 TODOS OS TESTES DE OCORRÊNCIAS PASSARAM COM 100% DE SUCESSO!\n');

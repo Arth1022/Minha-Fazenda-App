@@ -1,6 +1,6 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 
-import { cios, db, reproducoes } from '@/database';
+import { atualizar, cios, daFazenda, db, novoRegistro, reproducoes } from '@/database';
 import type { MetodoDiagnostico, NovaCobertura, Reproducao } from '@/dtos';
 import { calcularPrevisaoParto } from '../services/indicadores';
 
@@ -9,7 +9,7 @@ export function reproducoesDoAnimal(animalId: string) {
   return db
     .select()
     .from(reproducoes)
-    .where(eq(reproducoes.animalId, animalId))
+    .where(and(daFazenda(reproducoes), eq(reproducoes.animalId, animalId)))
     .orderBy(desc(reproducoes.data));
 }
 
@@ -19,7 +19,7 @@ export async function createReproducao(
 ): Promise<Reproducao> {
   const [created] = await db
     .insert(reproducoes)
-    .values({ ...input, previsaoParto: calcularPrevisaoParto(input.data) })
+    .values(novoRegistro({ ...input, previsaoParto: calcularPrevisaoParto(input.data) }))
     .returning();
   return created;
 }
@@ -31,7 +31,7 @@ export async function informarTouro(
 ): Promise<void> {
   await db
     .update(reproducoes)
-    .set({ touroId: touro.id, touroDescricao: touro.id ? null : touro.descricao })
+    .set(atualizar({ touroId: touro.id, touroDescricao: touro.id ? null : touro.descricao }))
     .where(eq(reproducoes.id, id));
 }
 
@@ -43,20 +43,24 @@ export async function confirmarPrenhez(
 ): Promise<void> {
   await db
     .update(reproducoes)
-    .set({ prenhezConfirmada: confirmada, dataDiagnostico: data, metodoDiagnostico: metodo })
+    .set(atualizar({ prenhezConfirmada: confirmada, dataDiagnostico: data, metodoDiagnostico: metodo }))
     .where(eq(reproducoes.id, id));
 }
 
 /** Perdeu a prenhez: a cobertura sai de "em aberto" sem parto (a vaca volta a ficar vazia). */
 export async function registrarAborto(id: string, data: Date): Promise<void> {
-  await db.update(reproducoes).set({ dataAborto: data }).where(eq(reproducoes.id, id));
+  await db.update(reproducoes).set(atualizar({ dataAborto: data })).where(eq(reproducoes.id, id));
 }
 
 /** Cios observados, do mais recente para o mais antigo. */
 export function ciosDoAnimal(animalId: string) {
-  return db.select().from(cios).where(eq(cios.animalId, animalId)).orderBy(desc(cios.data));
+  return db
+    .select()
+    .from(cios)
+    .where(and(daFazenda(cios), eq(cios.animalId, animalId)))
+    .orderBy(desc(cios.data));
 }
 
 export async function registrarCio(animalId: string, data: Date, observacoes?: string): Promise<void> {
-  await db.insert(cios).values({ animalId, data, observacoes: observacoes?.trim() || null });
+  await db.insert(cios).values(novoRegistro({ animalId, data, observacoes: observacoes?.trim() || null }));
 }

@@ -1,7 +1,19 @@
 import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, ne, or, sql } from 'drizzle-orm';
 
-import { db, maquinas, paradasUso, pontosGps, talhoes as tabelaAreas, usosArea, usosMaquina } from '@/database';
-import type { AtividadeUso, MotivoFimUso, UsoMaquina } from '@/dtos';
+import {
+  apagar,
+  atualizar,
+  daFazenda,
+  db,
+  maquinas,
+  novoRegistro,
+  paradasUso,
+  pontosGps,
+  usosArea,
+  usosMaquina,
+  type Executor,
+} from '@/database';
+import type { AtividadeUso, Maquina, MotivoFimUso, UsoMaquina } from '@/dtos';
 import { usuarioAtual, type Usuario } from '@/services/usuario';
 import { faixaDeTrabalhoKmh, MOTIVOS_AUTOMATICOS, TEMPOS } from '../services/padroes';
 import { deveDescartar, resumirRastro, type PontoLido, type ResumoRastro } from '../services/rastro';
@@ -9,7 +21,7 @@ import { talhoesParaRastro } from './talhoes';
 
 /** Usos em andamento de toda a frota (as máquinas ligadas agora). */
 export function usosEmAberto() {
-  return db.select().from(usosMaquina).where(isNull(usosMaquina.fim));
+  return db.select().from(usosMaquina).where(and(daFazenda(usosMaquina), isNull(usosMaquina.fim)));
 }
 
 /** Uso em andamento de uma pessoa (no máximo um: ninguém dirige duas máquinas). */
@@ -17,7 +29,7 @@ export function usoAbertoDoOperador(operadorId: string) {
   return db
     .select()
     .from(usosMaquina)
-    .where(and(eq(usosMaquina.operadorId, operadorId), isNull(usosMaquina.fim)))
+    .where(and(daFazenda(usosMaquina), eq(usosMaquina.operadorId, operadorId), isNull(usosMaquina.fim)))
     .limit(1);
 }
 
@@ -28,6 +40,7 @@ export function usosDaMaquinaDesde(maquinaId: string, desde: Date) {
     .from(usosMaquina)
     .where(
       and(
+        daFazenda(usosMaquina),
         eq(usosMaquina.maquinaId, maquinaId),
         or(isNull(usosMaquina.fim), gte(usosMaquina.fim, desde))
       )
@@ -39,7 +52,7 @@ export function usosRecentes(maquinaId: string, limite = 10) {
   return db
     .select()
     .from(usosMaquina)
-    .where(eq(usosMaquina.maquinaId, maquinaId))
+    .where(and(daFazenda(usosMaquina), eq(usosMaquina.maquinaId, maquinaId)))
     .orderBy(desc(usosMaquina.inicio))
     .limit(limite);
 }
@@ -49,19 +62,19 @@ export function usosDoImplemento(implementoId: string, limite = 10) {
   return db
     .select()
     .from(usosMaquina)
-    .where(eq(usosMaquina.implementoId, implementoId))
+    .where(and(daFazenda(usosMaquina), eq(usosMaquina.implementoId, implementoId)))
     .orderBy(desc(usosMaquina.inicio))
     .limit(limite);
 }
 
-/** Soma (ms) dos usos encerrados da máquina, calculada no próprio SQLite. */
+/** Soma (ms) dos usos encerrados da máquina, calculada no próprio SQLite (datas em texto ISO). */
 export function tempoTotalRegistrado(maquinaId: string) {
   return db
     .select({
-      totalMs: sql<number>`coalesce(sum(${usosMaquina.fim} - ${usosMaquina.inicio}), 0)`,
+      totalMs: sql<number>`coalesce(round(sum((julianday(${usosMaquina.fim}) - julianday(${usosMaquina.inicio})) * 86400000)), 0)`,
     })
     .from(usosMaquina)
-    .where(and(eq(usosMaquina.maquinaId, maquinaId), isNotNull(usosMaquina.fim)));
+    .where(and(daFazenda(usosMaquina), eq(usosMaquina.maquinaId, maquinaId), isNotNull(usosMaquina.fim)));
 }
 
 export interface Posicao {
@@ -81,6 +94,28 @@ export interface DadosIniciarUso {
   assumir?: boolean;
 }
 
+async function maquinaDaFazenda(executor: Executor, id: string): Promise<Maquina | undefined> {
+  const [maquina] = await executor
+    .select()
+    .from(maquinas)
+    .where(and(daFazenda(maquinas), eq(maquinas.id, id)))
+    .limit(1);
+  return maquina;
+}
+
+/**
+ * Uso aberto da máquina. Sem UNIQUE no banco do sync, quem garante "um uso
+ * aberto por máquina" é a transação que liga (ver `iniciarUso`).
+ */
+async function usoAbertoDaMaquina(executor: Executor, maquinaId: string): Promise<UsoMaquina | undefined> {
+  const [uso] = await executor
+    .select()
+    .from(usosMaquina)
+    .where(and(daFazenda(usosMaquina), eq(usosMaquina.maquinaId, maquinaId), isNull(usosMaquina.fim)))
+    .limit(1);
+  return uso;
+}
+
 /**
  * Liga a máquina: abre um uso a partir de `agora`. Recusa máquina inativa,
  * implemento (ele é ligado junto com a máquina que o puxa), máquina já ligada
@@ -92,98 +127,90 @@ export async function iniciarUso(
   agora = new Date()
 ): Promise<UsoMaquina> {
   const operador = dados.operador ?? usuarioAtual();
-  return db.transaction((tx) => {
-    const maquina = tx.select().from(maquinas).where(eq(maquinas.id, maquinaId)).get();
+  return db.transaction(async (tx) => {
+    const maquina = await maquinaDaFazenda(tx, maquinaId);
     if (!maquina) throw new Error('Máquina não encontrada');
     if (maquina.status === 'inativa') throw new Error('Máquina inativa não pode ser ligada');
     if (maquina.categoria === 'implemento') {
       throw new Error('Implemento não liga sozinho: ligue a máquina que vai puxá-lo e escolha o implemento.');
     }
 
-    const aberto = tx
-      .select()
-      .from(usosMaquina)
-      .where(and(eq(usosMaquina.maquinaId, maquinaId), isNull(usosMaquina.fim)))
-      .get();
+    const aberto = await usoAbertoDaMaquina(tx, maquinaId);
     if (aberto) {
       // Sem operador: uso de antes do registro de quem opera, feito neste celular
       const deOutraPessoa = aberto.operadorId !== null && aberto.operadorId !== operador.id;
       if (!dados.assumir || !deOutraPessoa) throw new Error('A máquina já está em uso');
       // Troca de turno: o uso da outra pessoa termina agora
-      tx.update(usosMaquina)
-        .set({ fim: agora, fimMotivo: 'assumida' })
-        .where(eq(usosMaquina.id, aberto.id))
-        .run();
-      tx.update(paradasUso)
-        .set({ fim: agora })
-        .where(and(eq(paradasUso.usoId, aberto.id), isNull(paradasUso.fim)))
-        .run();
+      await tx
+        .update(usosMaquina)
+        .set(atualizar({ fim: agora, fimMotivo: 'assumida' as const }))
+        .where(eq(usosMaquina.id, aberto.id));
+      await tx
+        .update(paradasUso)
+        .set(atualizar({ fim: agora }))
+        .where(and(daFazenda(paradasUso), eq(paradasUso.usoId, aberto.id), isNull(paradasUso.fim)));
     }
 
-    const outraDaPessoa = tx
+    const [outraDaPessoa] = await tx
       .select({ nome: maquinas.nome })
       .from(usosMaquina)
       .innerJoin(maquinas, eq(maquinas.id, usosMaquina.maquinaId))
       .where(
         and(
+          daFazenda(usosMaquina),
           eq(usosMaquina.operadorId, operador.id),
           isNull(usosMaquina.fim),
           ne(usosMaquina.maquinaId, maquinaId)
         )
       )
-      .get();
+      .limit(1);
     if (outraDaPessoa) throw new Error(`Você está usando ${outraDaPessoa.nome}: desligue antes de ligar outra.`);
 
-    // Uso novo: o "Desfazer" dos usos anteriores da pessoa acabou; os pontos guardados saem
-    tx.delete(pontosGps)
+    // Uso novo: o "Desfazer" dos usos anteriores da pessoa acabou; os pontos
+    // guardados saem de vez (pontos_gps é local-only)
+    await tx
+      .delete(pontosGps)
       .where(
         inArray(
           pontosGps.usoId,
           tx
             .select({ id: usosMaquina.id })
             .from(usosMaquina)
-            .where(and(eq(usosMaquina.operadorId, operador.id), isNotNull(usosMaquina.fim)))
+            .where(and(daFazenda(usosMaquina), eq(usosMaquina.operadorId, operador.id), isNotNull(usosMaquina.fim)))
         )
-      )
-      .run();
+      );
 
     const implementoId = dados.implementoId ?? null;
     if (implementoId) {
-      const implemento = tx.select().from(maquinas).where(eq(maquinas.id, implementoId)).get();
+      const implemento = await maquinaDaFazenda(tx, implementoId);
       if (!implemento || implemento.categoria !== 'implemento') throw new Error('Implemento não encontrado');
       if (implemento.status === 'inativa') throw new Error(`${implemento.nome} está inativo`);
-      const engatado = tx
+      const [engatado] = await tx
         .select({ id: usosMaquina.id })
         .from(usosMaquina)
-        .where(and(eq(usosMaquina.implementoId, implementoId), isNull(usosMaquina.fim)))
-        .get();
+        .where(and(daFazenda(usosMaquina), eq(usosMaquina.implementoId, implementoId), isNull(usosMaquina.fim)))
+        .limit(1);
       if (engatado) throw new Error(`${implemento.nome} já está engatado em outra máquina`);
     }
 
-    return tx
+    const [novo] = await tx
       .insert(usosMaquina)
-      .values({
-        maquinaId,
-        inicio: agora,
-        operador: operador.nome,
-        operadorId: operador.id,
-        implementoId,
-        atividade: dados.atividade ?? null,
-        rastreado: dados.rastreado ?? false,
-        inicioLat: dados.posicao?.lat ?? null,
-        inicioLng: dados.posicao?.lng ?? null,
-      })
-      .returning()
-      .get();
+      .values(
+        novoRegistro({
+          maquinaId,
+          inicio: agora,
+          operador: operador.nome,
+          operadorId: operador.id,
+          implementoId,
+          atividade: dados.atividade ?? null,
+          rastreado: dados.rastreado ?? false,
+          inicioLat: dados.posicao?.lat ?? null,
+          inicioLng: dados.posicao?.lng ?? null,
+        })
+      )
+      .returning();
+    return novo;
   });
-}
-
-function usoAbertoDaMaquina(maquinaId: string) {
-  return db
-    .select()
-    .from(usosMaquina)
-    .where(and(eq(usosMaquina.maquinaId, maquinaId), isNull(usosMaquina.fim)))
-    .get();
 }
 
 export interface OpcoesEncerrar {
@@ -220,7 +247,7 @@ export function pausasDoUso(usoId: string) {
   return db
     .select()
     .from(paradasUso)
-    .where(and(eq(paradasUso.usoId, usoId), eq(paradasUso.motivo, 'pausa')))
+    .where(and(daFazenda(paradasUso), eq(paradasUso.usoId, usoId), eq(paradasUso.motivo, 'pausa')))
     .orderBy(asc(paradasUso.inicio));
 }
 
@@ -229,10 +256,8 @@ export async function calcularResumo(uso: UsoMaquina, fim: Date): Promise<Resumo
   const [pontos, pausas, maquina, implemento, talhoes] = await Promise.all([
     pontosDoUso(uso.id),
     pausasDoUso(uso.id),
-    db.select().from(maquinas).where(eq(maquinas.id, uso.maquinaId)).get(),
-    uso.implementoId
-      ? db.select().from(maquinas).where(eq(maquinas.id, uso.implementoId)).get()
-      : Promise.resolve(undefined),
+    maquinaDaFazenda(db, uso.maquinaId),
+    uso.implementoId ? maquinaDaFazenda(db, uso.implementoId) : Promise.resolve(undefined),
     talhoesParaRastro(),
   ]);
   return resumirRastro(pontos, {
@@ -251,7 +276,7 @@ export async function calcularResumo(uso: UsoMaquina, fim: Date): Promise<Resumo
  * (menos de 1 min e quase sem andar) é descartado e não aparece em lugar nenhum.
  */
 export async function encerrarUso(maquinaId: string, opcoes: OpcoesEncerrar = {}): Promise<UsoEncerrado> {
-  const uso = usoAbertoDaMaquina(maquinaId);
+  const uso = await usoAbertoDaMaquina(db, maquinaId);
   if (!uso) throw new Error('A máquina não está em uso');
   return fecharUso(uso, opcoes);
 }
@@ -262,62 +287,68 @@ export async function fecharUso(uso: UsoMaquina, opcoes: OpcoesEncerrar = {}): P
   const resumo = uso.rastreado ? await calcularResumo(uso, fim) : null;
 
   if (deveDescartar(fim.getTime() - uso.inicio.getTime(), resumo?.kmTotal ?? null)) {
-    await db.delete(usosMaquina).where(eq(usosMaquina.id, uso.id));
+    await db.transaction(async (tx) => {
+      await apagar(tx, usosMaquina, uso.id);
+      await apagar(tx, paradasUso, eq(paradasUso.usoId, uso.id));
+      await tx.delete(pontosGps).where(eq(pontosGps.usoId, uso.id));
+    });
     return { uso: null, descartado: true };
   }
 
   const ultimo = resumo?.rastro[resumo.rastro.length - 1];
   // Fim automático guarda os pontos por um tempo: o "Desfazer" (RF-050) retoma com o rastro inteiro
   const automatico = MOTIVOS_AUTOMATICOS.has(opcoes.motivo ?? 'manual');
-  const encerrado = db.transaction((tx) => {
-    const fechado = tx
+  const encerrado = await db.transaction(async (tx) => {
+    const [fechado] = await tx
       .update(usosMaquina)
-      .set({
-        fim,
-        fimMotivo: opcoes.motivo ?? 'manual',
-        fimLat: opcoes.posicao?.lat ?? (ultimo ? ultimo[1] : null),
-        fimLng: opcoes.posicao?.lng ?? (ultimo ? ultimo[0] : null),
-        paradaAvisadaEm: null,
-        ...(resumo
-          ? {
-              kmTotal: resumo.kmTotal,
-              kmTrabalhando: resumo.kmTrabalhando,
-              segTrabalhando: resumo.segTrabalhando,
-              segDeslocando: resumo.segDeslocando,
-              segParada: resumo.segParada,
-              segPausa: resumo.segPausa,
-              segSemSinal: resumo.segSemSinal,
-              areaEstimadaHa: resumo.areaEstimadaHa,
-              qualidade: resumo.qualidade,
-              localizacaoSimulada: resumo.localizacaoSimulada,
-              rastro: resumo.rastro,
-              talhoes: resumo.talhoes,
-            }
-          : {}),
-      })
+      .set(
+        atualizar({
+          fim,
+          fimMotivo: opcoes.motivo ?? 'manual',
+          fimLat: opcoes.posicao?.lat ?? (ultimo ? ultimo[1] : null),
+          fimLng: opcoes.posicao?.lng ?? (ultimo ? ultimo[0] : null),
+          paradaAvisadaEm: null,
+          ...(resumo
+            ? {
+                kmTotal: resumo.kmTotal,
+                kmTrabalhando: resumo.kmTrabalhando,
+                segTrabalhando: resumo.segTrabalhando,
+                segDeslocando: resumo.segDeslocando,
+                segParada: resumo.segParada,
+                segPausa: resumo.segPausa,
+                segSemSinal: resumo.segSemSinal,
+                areaEstimadaHa: resumo.areaEstimadaHa,
+                qualidade: resumo.qualidade,
+                localizacaoSimulada: resumo.localizacaoSimulada,
+                rastro: resumo.rastro,
+                talhoes: resumo.talhoes,
+              }
+            : {}),
+        })
+      )
       .where(and(eq(usosMaquina.id, uso.id), isNull(usosMaquina.fim)))
-      .returning()
-      .get();
+      .returning();
     if (!fechado) return undefined;
-    tx.update(paradasUso)
-      .set({ fim })
-      .where(and(eq(paradasUso.usoId, uso.id), isNull(paradasUso.fim)))
-      .run();
-    if (!automatico) tx.delete(pontosGps).where(eq(pontosGps.usoId, uso.id)).run();
-    // Tempo e KM por área numa tabela própria: o painel da área lê pelo índice (RF-057, RF-066)
+    await tx
+      .update(paradasUso)
+      .set(atualizar({ fim }))
+      .where(and(daFazenda(paradasUso), eq(paradasUso.usoId, uso.id), isNull(paradasUso.fim)));
+    if (!automatico) await tx.delete(pontosGps).where(eq(pontosGps.usoId, uso.id));
+    // Tempo e KM por área numa tabela própria: o painel da área lê pelo índice
+    // (RF-057, RF-066). O uso acabou de fechar, ou foi reaberto e as linhas
+    // antigas foram apagadas: não há linha repetida por uso e área.
     if (resumo && resumo.talhoes.length > 0) {
-      tx.insert(usosArea)
-        .values(
-          resumo.talhoes.map((t) => ({
+      await tx.insert(usosArea).values(
+        resumo.talhoes.map((t) =>
+          novoRegistro({
             usoId: uso.id,
             areaId: t.talhaoId,
             inicio: uso.inicio,
             segundos: t.segundos,
             km: t.km,
-          }))
+          })
         )
-        .onConflictDoNothing()
-        .run();
+      );
     }
     return fechado;
   });
@@ -333,8 +364,12 @@ export async function fecharUso(uso: UsoMaquina, opcoes: OpcoesEncerrar = {}): P
  */
 export async function reabrirUso(usoId: string, agora = new Date()): Promise<UsoMaquina> {
   const operador = usuarioAtual();
-  return db.transaction((tx) => {
-    const uso = tx.select().from(usosMaquina).where(eq(usosMaquina.id, usoId)).get();
+  return db.transaction(async (tx) => {
+    const [uso] = await tx
+      .select()
+      .from(usosMaquina)
+      .where(and(daFazenda(usosMaquina), eq(usosMaquina.id, usoId)))
+      .limit(1);
     if (!uso) throw new Error('Uso não encontrado');
     if (!uso.fim || !uso.fimMotivo || !MOTIVOS_AUTOMATICOS.has(uso.fimMotivo)) {
       throw new Error('Só dá para desfazer um encerramento feito pelo app.');
@@ -343,45 +378,42 @@ export async function reabrirUso(usoId: string, agora = new Date()): Promise<Uso
       throw new Error('Passou o tempo de desfazer este encerramento.');
     }
     if (uso.operadorId !== operador.id) throw new Error('Só quem estava usando a máquina pode desfazer.');
-    const depois = tx
+    const [depois] = await tx
       .select({ id: usosMaquina.id })
       .from(usosMaquina)
-      .where(and(eq(usosMaquina.operadorId, operador.id), gt(usosMaquina.inicio, uso.inicio)))
-      .get();
+      .where(and(daFazenda(usosMaquina), eq(usosMaquina.operadorId, operador.id), gt(usosMaquina.inicio, uso.inicio)))
+      .limit(1);
     if (depois) throw new Error('Você já ligou outra máquina depois deste uso.');
-    const ocupada = tx
-      .select({ id: usosMaquina.id })
-      .from(usosMaquina)
-      .where(and(eq(usosMaquina.maquinaId, uso.maquinaId), isNull(usosMaquina.fim)))
-      .get();
-    if (ocupada) throw new Error('A máquina já está em uso de novo.');
+    if (await usoAbertoDaMaquina(tx, uso.maquinaId)) throw new Error('A máquina já está em uso de novo.');
 
-    tx.delete(usosArea).where(eq(usosArea.usoId, usoId)).run();
-    return tx
+    await apagar(tx, usosArea, eq(usosArea.usoId, usoId));
+    const [reaberto] = await tx
       .update(usosMaquina)
-      .set({
-        fim: null,
-        fimMotivo: null,
-        fimLat: null,
-        fimLng: null,
-        kmTotal: null,
-        kmTrabalhando: null,
-        segTrabalhando: null,
-        segDeslocando: null,
-        segParada: null,
-        segPausa: null,
-        segSemSinal: null,
-        areaEstimadaHa: null,
-        qualidade: null,
-        rastro: null,
-        talhoes: null,
-        paradaAvisadaEm: null,
-        continuaAte: null,
-        regrasDesde: agora,
-      })
+      .set(
+        atualizar({
+          fim: null,
+          fimMotivo: null,
+          fimLat: null,
+          fimLng: null,
+          kmTotal: null,
+          kmTrabalhando: null,
+          segTrabalhando: null,
+          segDeslocando: null,
+          segParada: null,
+          segPausa: null,
+          segSemSinal: null,
+          areaEstimadaHa: null,
+          qualidade: null,
+          rastro: null,
+          talhoes: null,
+          paradaAvisadaEm: null,
+          continuaAte: null,
+          regrasDesde: agora,
+        })
+      )
       .where(eq(usosMaquina.id, usoId))
-      .returning()
-      .get();
+      .returning();
+    return reaberto;
   });
 }
 
@@ -399,33 +431,6 @@ export async function limparPontosAntigos(agora = new Date()): Promise<void> {
           .where(and(isNotNull(usosMaquina.fim), lt(usosMaquina.fim, limite)))
       )
     );
-}
-
-/**
- * Usos encerrados antes da tabela por área: copia o "por talhão" do JSON deles
- * uma vez (abertura do app). Depois da primeira vez a consulta não acha nada.
- */
-export async function preencherUsosPorArea(): Promise<number> {
-  const pendentes = await db
-    .select({ id: usosMaquina.id, inicio: usosMaquina.inicio, talhoes: usosMaquina.talhoes })
-    .from(usosMaquina)
-    .where(
-      and(
-        isNotNull(usosMaquina.fim),
-        isNotNull(usosMaquina.talhoes),
-        sql`${usosMaquina.talhoes} <> '[]'`,
-        sql`not exists (select 1 from ${usosArea} where ${usosArea.usoId} = ${usosMaquina.id})`
-      )
-    );
-  if (pendentes.length === 0) return 0;
-  const existentes = new Set((await db.select({ id: tabelaAreas.id }).from(tabelaAreas)).map((a) => a.id));
-  const linhas = pendentes.flatMap((uso) =>
-    (uso.talhoes ?? [])
-      .filter((t) => existentes.has(t.talhaoId))
-      .map((t) => ({ usoId: uso.id, areaId: t.talhaoId, inicio: uso.inicio, segundos: t.segundos, km: t.km }))
-  );
-  if (linhas.length > 0) await db.insert(usosArea).values(linhas).onConflictDoNothing();
-  return pendentes.length;
 }
 
 export interface DadosUsoManual {
@@ -449,73 +454,86 @@ export async function registrarUsoManual(
   if (fim.getTime() <= inicio.getTime()) throw new Error('O fim precisa ser depois do início');
   if (fim.getTime() > agora.getTime()) throw new Error('O uso esquecido já precisa ter terminado');
   const operador = dados.operador ?? usuarioAtual();
-  return db.transaction((tx) => {
-    const maquina = tx.select().from(maquinas).where(eq(maquinas.id, maquinaId)).get();
+  return db.transaction(async (tx) => {
+    const maquina = await maquinaDaFazenda(tx, maquinaId);
     if (!maquina) throw new Error('Máquina não encontrada');
     if (maquina.categoria === 'implemento') throw new Error('Registre o uso na máquina que puxou o implemento');
-    const sobreposto = tx
+    const [sobreposto] = await tx
       .select({ id: usosMaquina.id })
       .from(usosMaquina)
       .where(
         and(
+          daFazenda(usosMaquina),
           eq(usosMaquina.maquinaId, maquinaId),
           lt(usosMaquina.inicio, fim),
           or(isNull(usosMaquina.fim), gt(usosMaquina.fim, inicio))
         )
       )
-      .get();
+      .limit(1);
     if (sobreposto) throw new Error('Já há uso registrado nesse horário');
-    return tx
+    const [manual] = await tx
       .insert(usosMaquina)
-      .values({
-        maquinaId,
-        inicio,
-        fim,
-        origem: 'manual',
-        fimMotivo: 'manual',
-        operador: operador.nome,
-        operadorId: operador.id,
-        atividade: dados.atividade ?? null,
-        implementoId: dados.implementoId ?? null,
-      })
-      .returning()
-      .get();
+      .values(
+        novoRegistro({
+          maquinaId,
+          inicio,
+          fim,
+          origem: 'manual' as const,
+          fimMotivo: 'manual' as const,
+          operador: operador.nome,
+          operadorId: operador.id,
+          atividade: dados.atividade ?? null,
+          implementoId: dados.implementoId ?? null,
+        })
+      )
+      .returning();
+    return manual;
   });
 }
 
 /** Pausa (almoço): não conta como uso; volta sozinha quando a máquina andar. */
 export async function pausarUso(usoId: string, agora = new Date()): Promise<void> {
-  const aberta = await db
-    .select({ id: paradasUso.id })
-    .from(paradasUso)
-    .where(and(eq(paradasUso.usoId, usoId), eq(paradasUso.motivo, 'pausa'), isNull(paradasUso.fim)))
-    .get();
-  if (aberta) return;
-  await db.insert(paradasUso).values({ usoId, motivo: 'pausa', inicio: agora });
-  await db.update(usosMaquina).set({ paradaAvisadaEm: null }).where(eq(usosMaquina.id, usoId));
+  await db.transaction(async (tx) => {
+    const [aberta] = await tx
+      .select({ id: paradasUso.id })
+      .from(paradasUso)
+      .where(
+        and(daFazenda(paradasUso), eq(paradasUso.usoId, usoId), eq(paradasUso.motivo, 'pausa'), isNull(paradasUso.fim))
+      )
+      .limit(1);
+    if (aberta) return;
+    await tx.insert(paradasUso).values(novoRegistro({ usoId, motivo: 'pausa' as const, inicio: agora }));
+    await tx.update(usosMaquina).set(atualizar({ paradaAvisadaEm: null })).where(eq(usosMaquina.id, usoId));
+  });
 }
 
 export async function retomarUso(usoId: string, agora = new Date()): Promise<void> {
   await db
     .update(paradasUso)
-    .set({ fim: agora })
-    .where(and(eq(paradasUso.usoId, usoId), eq(paradasUso.motivo, 'pausa'), isNull(paradasUso.fim)));
+    .set(atualizar({ fim: agora }))
+    .where(
+      and(daFazenda(paradasUso), eq(paradasUso.usoId, usoId), eq(paradasUso.motivo, 'pausa'), isNull(paradasUso.fim))
+    );
 }
 
 /** Respondeu "Continua" (trabalho parado): fica registrado e só pergunta de novo depois. */
 export async function registrarContinua(usoId: string, ate: Date, agora = new Date()): Promise<void> {
-  await db.insert(paradasUso).values({ usoId, motivo: 'continua', inicio: agora, fim: agora });
-  await db
-    .update(usosMaquina)
-    .set({ continuaAte: ate, paradaAvisadaEm: null })
-    .where(eq(usosMaquina.id, usoId));
+  await db.transaction(async (tx) => {
+    await tx
+      .insert(paradasUso)
+      .values(novoRegistro({ usoId, motivo: 'continua' as const, inicio: agora, fim: agora }));
+    await tx
+      .update(usosMaquina)
+      .set(atualizar({ continuaAte: ate, paradaAvisadaEm: null }))
+      .where(eq(usosMaquina.id, usoId));
+  });
 }
 
 export async function marcarParadaAvisada(usoId: string, em: Date): Promise<void> {
-  await db.update(usosMaquina).set({ paradaAvisadaEm: em }).where(eq(usosMaquina.id, usoId));
+  await db.update(usosMaquina).set(atualizar({ paradaAvisadaEm: em })).where(eq(usosMaquina.id, usoId));
 }
 
-/** Guarda os pontos de GPS que chegaram para o uso. */
+/** Guarda os pontos de GPS que chegaram para o uso (pontos_gps é local-only). */
 export async function gravarPontos(usoId: string, pontos: PontoLido[]): Promise<void> {
   if (pontos.length === 0) return;
   await db.insert(pontosGps).values(
@@ -533,7 +551,7 @@ export async function gravarPontos(usoId: string, pontos: PontoLido[]): Promise<
 
 /** O sistema não deixou ligar o GPS: o uso segue só com o tempo. */
 export async function marcarSemRastro(usoId: string): Promise<void> {
-  await db.update(usosMaquina).set({ rastreado: false }).where(eq(usosMaquina.id, usoId));
+  await db.update(usosMaquina).set(atualizar({ rastreado: false })).where(eq(usosMaquina.id, usoId));
 }
 
 /** Pontos do uso (consulta reativa da tela Em uso). */
@@ -543,7 +561,11 @@ export function pontosGpsDoUso(usoId: string) {
 
 /** Pausas e respostas do uso (consulta reativa). */
 export function paradasDoUso(usoId: string) {
-  return db.select().from(paradasUso).where(eq(paradasUso.usoId, usoId)).orderBy(asc(paradasUso.inicio));
+  return db
+    .select()
+    .from(paradasUso)
+    .where(and(daFazenda(paradasUso), eq(paradasUso.usoId, usoId)))
+    .orderBy(asc(paradasUso.inicio));
 }
 
 /** Usos em que o implemento esteve engatado a partir de `desde` (gráfico da semana do implemento). */
@@ -553,6 +575,7 @@ export function usosDoImplementoDesde(implementoId: string, desde: Date) {
     .from(usosMaquina)
     .where(
       and(
+        daFazenda(usosMaquina),
         eq(usosMaquina.implementoId, implementoId),
         or(isNull(usosMaquina.fim), gte(usosMaquina.fim, desde))
       )

@@ -1,4 +1,4 @@
-export { apagarFoto, descartarFotoTemporaria, ehFotoGuardada, guardarFoto } from './armazenamento';
+export { apagarFoto, apagarTodasAsFotos, descartarFotoTemporaria, ehFotoGuardada, guardarFoto } from './armazenamento';
 export { escolherFoto, type OrigemFoto } from './escolherFoto';
 export {
   leituraDeTextoDisponivel,

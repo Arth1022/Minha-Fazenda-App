@@ -117,12 +117,7 @@ export default function RebanhoScreen() {
   return (
     <ScreenContainer
       header={
-        <Header
-          title="Gerenciamento Rebanho"
-          showBack
-          showMore
-          onRightPress={openModal}
-        />
+        <Header title="Gerenciamento Rebanho" showBack />
       }>
       <SegmentedTabs
         tabs={tabs}
