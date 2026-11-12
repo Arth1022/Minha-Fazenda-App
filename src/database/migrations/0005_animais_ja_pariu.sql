@@ -1,1 +1,0 @@
-ALTER TABLE `animais` ADD `ja_pariu` integer DEFAULT false NOT NULL;

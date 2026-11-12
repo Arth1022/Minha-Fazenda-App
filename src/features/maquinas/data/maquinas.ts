@@ -1,6 +1,6 @@
 import { and, asc, eq, ne } from 'drizzle-orm';
 
-import { db, maquinas } from '@/database';
+import { atualizar, daFazenda, db, maquinas, novoRegistro } from '@/database';
 import type { Maquina, NovaMaquina } from '@/dtos';
 import { gerarCodigo } from '../services/codigo';
 import { categoriaDoTipo } from '../services/padroes';
@@ -9,7 +9,7 @@ import { normalizarCodigo } from '../services/uso';
 
 /** Frota em ordem alfabética pelo nome. */
 export function listarMaquinas() {
-  return db.select().from(maquinas).orderBy(asc(maquinas.nome));
+  return db.select().from(maquinas).where(daFazenda(maquinas)).orderBy(asc(maquinas.nome));
 }
 
 /** Implementos ativos (plantadeira, grade, carreta) para engatar ao ligar. */
@@ -17,12 +17,12 @@ export function listarImplementos() {
   return db
     .select()
     .from(maquinas)
-    .where(and(eq(maquinas.categoria, 'implemento'), ne(maquinas.status, 'inativa')))
+    .where(and(daFazenda(maquinas), eq(maquinas.categoria, 'implemento'), ne(maquinas.status, 'inativa')))
     .orderBy(asc(maquinas.nome));
 }
 
 export function maquinaPorId(id: string) {
-  return db.query.maquinas.findFirst({ where: eq(maquinas.id, id) });
+  return db.query.maquinas.findFirst({ where: and(daFazenda(maquinas), eq(maquinas.id, id)) });
 }
 
 /** Máquina apontada por um QR Code (pelo id ou pelo ID curto); undefined se não existe. */
@@ -31,7 +31,7 @@ export async function buscarMaquinaPorReferencia(
 ): Promise<Maquina | undefined> {
   const filtro =
     referencia.tipo === 'id' ? eq(maquinas.id, referencia.id) : eq(maquinas.codigo, referencia.codigo);
-  const [maquina] = await db.select().from(maquinas).where(filtro).limit(1);
+  const [maquina] = await db.select().from(maquinas).where(and(daFazenda(maquinas), filtro)).limit(1);
   return maquina;
 }
 
@@ -48,23 +48,21 @@ export async function cadastrarMaquina(nova: DadosNovaMaquina): Promise<Maquina>
   if (informado === '') throw new Error('Informe a identificação da máquina');
   if (!nome) throw new Error('Informe o nome da máquina');
 
-  // Transação síncrona do driver expo-sqlite: as escritas usam .run()/.get()
-  return db.transaction((tx) => {
-    const usados = tx
-      .select({ codigo: maquinas.codigo })
-      .from(maquinas)
-      .all()
-      .map((m) => m.codigo);
+  // TODO(decisao): dois celulares offline podem gerar o mesmo código (TR-01); o sync não junta nem renumera
+  return db.transaction(async (tx) => {
+    const usados = (
+      await tx.select({ codigo: maquinas.codigo }).from(maquinas).where(daFazenda(maquinas))
+    ).map((m) => m.codigo);
     if (informado && usados.includes(informado)) {
       throw new Error(`Já existe uma máquina com a identificação ${informado}`);
     }
     const codigo = informado ?? gerarCodigo(nova.tipo ?? 'outro', usados);
     const categoria = categoriaDoTipo(nova.tipo ?? 'outro');
-    return tx
+    const [maquina] = await tx
       .insert(maquinas)
-      .values({ ...nova, ...camposDaCategoria(categoria), categoria, codigo, nome })
-      .returning()
-      .get();
+      .values(novoRegistro({ ...nova, ...camposDaCategoria(categoria), categoria, codigo, nome }))
+      .returning();
+    return maquina;
   });
 }
 
@@ -82,7 +80,7 @@ export async function atualizarMaquina(id: string, dados: Omit<DadosNovaMaquina,
   const categoria = categoriaDoTipo(dados.tipo ?? 'outro');
   const [atualizada] = await db
     .update(maquinas)
-    .set({ ...dados, ...camposDaCategoria(categoria), categoria, nome })
+    .set(atualizar({ ...dados, ...camposDaCategoria(categoria), categoria, nome }))
     .where(eq(maquinas.id, id))
     .returning();
   if (!atualizada) throw new Error('Máquina não encontrada');

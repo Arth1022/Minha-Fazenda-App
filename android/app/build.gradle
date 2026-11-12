@@ -184,3 +184,14 @@ dependencies {
         implementation jscFlavor
     }
 }
+
+// API em http só no APK de staging (plugins/withHttpLocal.js, scripts/gerarApk.js).
+// O plugin do React Native põe usesCleartextTraffic = false no release (finalizeDsl);
+// a API de variantes roda depois dele, então só aqui dá para liberar.
+androidComponents {
+    onVariants(selector().withBuildType('release')) { variant ->
+        if (findProperty('minhafazenda.httpLocal') == 'true') {
+            variant.manifestPlaceholders.put('usesCleartextTraffic', 'true')
+        }
+    }
+}

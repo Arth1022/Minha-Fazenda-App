@@ -1,23 +1,23 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { BottomSheet } from '@/components/ui';
 import { AgroColors, Radius, Spacing } from '@/constants/theme';
 import { formatarDistancia, formatarHectares } from '../services/calculos';
-import { BotaoMapa, CampoMapa, CoresTexto, RotuloCampo } from './elementos';
+import { BotaoMapa, CoresTexto, RotuloCampo } from './elementos';
 
 export interface SalvarFazendaSheetProps {
   visible: boolean;
-  /** Nome já salvo (ao redesenhar a divisa) */
+  /** Nome da fazenda ativa */
   nomeAtual?: string;
   areaHa: number;
   perimetroKm: number;
   erro?: string;
-  onSalvar: (nome: string) => void;
+  onSalvar: () => void;
   onClose: () => void;
 }
 
-/** Fim do desenho da divisa: confere as medidas e dá nome à fazenda. */
+/** Fim do desenho da divisa: confere as medidas e salva na fazenda ativa. */
 export function SalvarFazendaSheet({
   visible,
   nomeAtual = '',
@@ -27,34 +27,11 @@ export function SalvarFazendaSheet({
   onSalvar,
   onClose,
 }: SalvarFazendaSheetProps) {
-  const [nome, setNome] = useState(nomeAtual);
-  const [erroNome, setErroNome] = useState<string | undefined>();
-
-  // Cada abertura começa com o nome salvo (ajuste no render, sem efeito)
-  const [abertaAntes, setAbertaAntes] = useState(visible);
-  if (visible !== abertaAntes) {
-    setAbertaAntes(visible);
-    if (visible) {
-      setNome(nomeAtual);
-      setErroNome(undefined);
-    }
-  }
-
-  const salvar = () => {
-    if (!nome.trim()) {
-      setErroNome('Dê um nome à fazenda (ex.: Fazenda Recanto Verde).');
-      return;
-    }
-    onSalvar(nome.trim());
-  };
-
-  const mensagemErro = erroNome ?? erro;
-
   return (
     <BottomSheet
       visible={visible}
       title="Salvar fazenda"
-      subtitle="Confira a divisa e dê um nome"
+      subtitle="Confira a divisa da fazenda"
       alturaMaxima={0.6}
       onClose={onClose}>
       <View style={estilos.conteudo}>
@@ -70,25 +47,16 @@ export function SalvarFazendaSheet({
         </View>
 
         <View style={estilos.bloco}>
-          <RotuloCampo titulo="Nome da fazenda" />
-          <CampoMapa
-            valor={nome}
-            onChange={(texto) => {
-              setNome(texto);
-              if (erroNome) setErroNome(undefined);
-            }}
-            numerico={false}
-            placeholder="Ex.: Fazenda Recanto Verde"
-            acessibilidade="Nome da fazenda"
-          />
-          {mensagemErro ? <Text style={estilos.erro}>{mensagemErro}</Text> : null}
+          <RotuloCampo titulo="Fazenda" />
+          <Text style={estilos.nome}>{nomeAtual}</Text>
+          {erro ? <Text style={estilos.erro}>{erro}</Text> : null}
         </View>
 
         <Text style={estilos.proximo}>
           Depois de salvar, você separa a fazenda em talhões: pastos, lavouras e reservas.
         </Text>
 
-        <BotaoMapa rotulo="Salvar fazenda" onPress={salvar} />
+        <BotaoMapa rotulo="Salvar fazenda" onPress={onSalvar} />
       </View>
     </BottomSheet>
   );
@@ -106,6 +74,7 @@ const estilos = StyleSheet.create({
   medida: { flex: 1, gap: 2 },
   medidaRotulo: { fontSize: 14, fontWeight: '600', color: CoresTexto.suave },
   medidaValor: { fontSize: 22, lineHeight: 28, fontWeight: '800', color: CoresTexto.escuro },
+  nome: { fontSize: 18, fontWeight: '700', color: CoresTexto.escuro },
   erro: { fontSize: 13, fontWeight: '600', color: AgroColors.danger },
   proximo: { fontSize: 14, lineHeight: 20, color: CoresTexto.suave },
 });

@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, isNotNull, lt, sql } from 'drizzle-orm';
 
-import { db, maquinas, pontosGps, talhoes, usosArea, usosMaquina } from '@/database';
+import { daFazenda, db, maquinas, naoApagado, pontosGps, talhoes, usosArea, usosMaquina } from '@/database';
 import type { Maquina, UsoMaquina } from '@/dtos';
 import type { TipoTalhao } from '@/database';
 
@@ -30,6 +30,7 @@ export function trajetosDoPeriodo(desde: Date, ate: Date) {
     .innerJoin(maquinas, eq(maquinas.id, usosMaquina.maquinaId))
     .where(
       and(
+        daFazenda(usosMaquina),
         gte(usosMaquina.inicio, desde),
         lt(usosMaquina.inicio, ate),
         isNotNull(usosMaquina.fim),
@@ -63,7 +64,7 @@ export async function sessaoCompleta(usoId: string): Promise<SessaoCompleta | nu
     .select({ uso: usosMaquina, maquina: maquinas })
     .from(usosMaquina)
     .innerJoin(maquinas, eq(maquinas.id, usosMaquina.maquinaId))
-    .where(eq(usosMaquina.id, usoId))
+    .where(and(daFazenda(usosMaquina), eq(usosMaquina.id, usoId)))
     .limit(1);
   if (!linha) return null;
   const [areas, implemento] = await Promise.all([
@@ -76,16 +77,16 @@ export async function sessaoCompleta(usoId: string): Promise<SessaoCompleta | nu
         km: usosArea.km,
       })
       .from(usosArea)
-      .innerJoin(talhoes, eq(talhoes.id, usosArea.areaId))
-      .where(eq(usosArea.usoId, usoId))
+      .innerJoin(talhoes, and(eq(talhoes.id, usosArea.areaId), naoApagado(talhoes)))
+      .where(and(daFazenda(usosArea), eq(usosArea.usoId, usoId)))
       .orderBy(desc(usosArea.segundos)),
     linha.uso.implementoId
-      ? db.select().from(maquinas).where(eq(maquinas.id, linha.uso.implementoId)).limit(1)
+      ? db.select().from(maquinas).where(and(daFazenda(maquinas), eq(maquinas.id, linha.uso.implementoId))).limit(1)
       : Promise.resolve([]),
   ]);
   return { ...linha, implemento: implemento[0] ?? null, areas };
 }
-export const TABELAS_SESSAO = ['usos_maquina', 'usos_area'] as const;
+export const TABELAS_SESSAO = ['usos_maquina', 'usos_area', 'maquinas', 'talhoes'] as const;
 
 /** Usos que passaram na área, do mais recente, com o tempo e o KM dentro dela (RF-066). */
 export function usosDaArea(areaId: string, limite = 30) {
@@ -100,9 +101,9 @@ export function usosDaArea(areaId: string, limite = 30) {
       km: usosArea.km,
     })
     .from(usosArea)
-    .innerJoin(usosMaquina, eq(usosMaquina.id, usosArea.usoId))
+    .innerJoin(usosMaquina, and(eq(usosMaquina.id, usosArea.usoId), naoApagado(usosMaquina)))
     .innerJoin(maquinas, eq(maquinas.id, usosMaquina.maquinaId))
-    .where(eq(usosArea.areaId, areaId))
+    .where(and(daFazenda(usosArea), eq(usosArea.areaId, areaId)))
     .orderBy(desc(usosArea.inicio))
     .limit(limite);
 }
@@ -114,7 +115,7 @@ export async function segundosNaAreaDesde(areaId: string, desde: Date): Promise<
   const [linha] = await db
     .select({ total: sql<number>`coalesce(sum(${usosArea.segundos}), 0)` })
     .from(usosArea)
-    .where(and(eq(usosArea.areaId, areaId), gte(usosArea.inicio, desde)));
+    .where(and(daFazenda(usosArea), eq(usosArea.areaId, areaId), gte(usosArea.inicio, desde)));
   return Number(linha?.total ?? 0);
 }
 
@@ -148,9 +149,12 @@ export async function ultimasPosicoes(): Promise<PosicaoDaMaquina[]> {
     .from(usosMaquina)
     .innerJoin(maquinas, eq(maquinas.id, usosMaquina.maquinaId))
     .where(
-      eq(
-        usosMaquina.inicio,
-        sql`(select max(u2.inicio) from usos_maquina u2 where u2.maquina_id = ${usosMaquina.maquinaId})`
+      and(
+        daFazenda(usosMaquina),
+        eq(
+          usosMaquina.inicio,
+          sql`(select max(u2.inicio) from usos_maquina u2 where u2.maquina_id = ${usosMaquina.maquinaId} and u2.deleted_at is null)`
+        )
       )
     );
   const posicoes: PosicaoDaMaquina[] = [];

@@ -38,6 +38,16 @@ export function apagarFoto(uri: string | null | undefined): void {
   descartarArquivo(uri as string);
 }
 
+/** Apaga a pasta inteira das fotos (saída do modo sem conta: os registros que as usavam saíram junto). */
+export function apagarTodasAsFotos(): void {
+  try {
+    const pasta = new Directory(Paths.document, PASTA);
+    if (pasta.exists) pasta.delete();
+  } catch {
+    // Sem permissão ou já apagada: as fotos ficam órfãs, mas nada mais aponta para elas
+  }
+}
+
 /** Apaga um arquivo de cache (foto que só serviu para leitura). */
 export function descartarFotoTemporaria(uri: string): void {
   descartarArquivo(uri);

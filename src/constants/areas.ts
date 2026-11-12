@@ -1,4 +1,4 @@
-import type { TipoTalhao } from '@/database/schema';
+import type { TipoTalhao } from '@/database';
 
 /**
  * Tipos de área do mapa. No banco a área é uma linha de `talhoes` (nome

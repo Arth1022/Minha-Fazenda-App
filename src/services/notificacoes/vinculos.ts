@@ -1,7 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
 
-import { db, notificacoesAgendadas } from '@/database';
-import { newId } from '@/database/id';
+import { db, newId, notificacoesAgendadas } from '@/database';
 import type { NovaNotificacao, Vinculo } from '@/dtos';
 
 import { montarGatilho } from './gatilhos';

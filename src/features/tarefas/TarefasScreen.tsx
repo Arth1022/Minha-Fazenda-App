@@ -52,7 +52,13 @@ import {
 } from '@/services/ocorrenciaService';
 import { useLeitorQrCode } from '@/services/qrcode';
 import { listarTalhoesAtivos } from '@/services/talhaoService';
-import { listarColaboradores, usuarioAtual } from '@/services/usuario';
+import {
+  listarColaboradores,
+  podeAtribuirTarefas,
+  TABELAS_MEMBROS,
+  usuarioAtual,
+  type Usuario,
+} from '@/services/usuario';
 import { formatDiaMes } from '@/utils/date';
 import { NotaVozField, PlayerNotaVozCompacto } from './NotaVozField';
 
@@ -222,7 +228,12 @@ export default function TarefasScreen() {
   const { data: talhoes } = useLiveQuery(listarTalhoesAtivos());
   const { data: animaisAtivos } = useLiveQuery(listarAnimais());
   const { data: listaMaquinas } = useLiveQuery(listarMaquinas());
-  const colaboradores = useMemo(() => listarColaboradores(), []);
+  const { dados: colaboradores } = useConsultaAoVivo<Usuario[]>(
+    listarColaboradores,
+    TABELAS_MEMBROS,
+    eu.id,
+    [eu]
+  );
   const mapaNomes = useMemo(
     () => new Map(colaboradores.map((c) => [c.id, c.nome])),
     [colaboradores]
@@ -609,7 +620,7 @@ export default function TarefasScreen() {
   };
 
   return (
-    <ScreenContainer header={<Header title="Tarefas e Ocorrências" showNotification />}>
+    <ScreenContainer header={<Header title="Tarefas e Ocorrências" />}>
       <SegmentedTabs tabs={ABAS} activeTab={abaAtiva} onTabChange={setAbaAtiva} />
 
       {abaAtiva === 'todas' ? (
@@ -676,7 +687,7 @@ export default function TarefasScreen() {
                 : 'Sem responsável'
             }
             euId={eu.id}
-            ehAdmin={eu.papel === 'admin'}
+            ehAdmin={podeAtribuirTarefas(eu)}
             carregando={processandoId === tarefa.id}
             onPegar={handlePegar}
             onIniciar={handleIniciar}

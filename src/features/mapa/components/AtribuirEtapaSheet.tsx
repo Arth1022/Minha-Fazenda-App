@@ -3,20 +3,12 @@ import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon, BottomSheet } from '@/components/ui';
 import { AgroColors, Radius, Spacing } from '@/constants/theme';
-import type { EtapaCiclo } from '@/database';
+import { useConsultaAoVivo, type EtapaCiclo } from '@/database';
 import { atribuirEtapa } from '@/services/cicloService';
-import { listarColaboradores, usuarioAtual, type Usuario } from '@/services/usuario';
+import { listarColaboradores, TABELAS_MEMBROS, usuarioAtual, type Usuario } from '@/services/usuario';
+import { Avatar } from '@/shared/Avatar';
 import { CoresTexto, LinkMapa } from './elementos';
 import { BolinhaEscolha } from './painel/elementosPainel';
-
-/** Bolinha com a inicial da pessoa ("J" de João), como no protótipo (tela 23). */
-export function IniciaisPessoa({ nome, tamanho = 26 }: { nome: string; tamanho?: number }) {
-  return (
-    <View style={[estilos.inicial, { width: tamanho, height: tamanho, borderRadius: tamanho / 2 }]}>
-      <Text style={[estilos.inicialTexto, { fontSize: tamanho * 0.5 }]}>{nome.trim().charAt(0).toUpperCase()}</Text>
-    </View>
-  );
-}
 
 export interface AtribuirEtapaSheetProps {
   visible: boolean;
@@ -29,12 +21,11 @@ export interface AtribuirEtapaSheetProps {
 
 /**
  * "Atribuir" de uma etapa (RF-067): escolhe quem faz; a etapa vira tarefa da
- * pessoa e ela recebe o aviso. A equipe é de exemplo até o sistema online de
- * colaboradores existir (sem API ainda).
+ * pessoa e ela recebe o aviso. A equipe são os membros da fazenda (descem pelo sync).
  */
 export function AtribuirEtapaSheet({ visible, etapa, contexto, onClose }: AtribuirEtapaSheetProps) {
-  const pessoas = listarColaboradores();
   const euId = usuarioAtual().id;
+  const { dados: pessoas } = useConsultaAoVivo<Usuario[]>(listarColaboradores, TABELAS_MEMBROS, euId, []);
   const [salvando, setSalvando] = useState(false);
 
   const escolher = async (pessoa: Usuario | null) => {
@@ -61,7 +52,7 @@ export function AtribuirEtapaSheet({ visible, etapa, contexto, onClose }: Atribu
             accessibilityRole="radio"
             accessibilityState={{ checked: etapa?.responsavelId === pessoa.id }}
             style={({ pressed }) => [estilos.pessoa, indice > 0 && estilos.divisor, pressed && estilos.pressionado]}>
-            <IniciaisPessoa nome={pessoa.nome} tamanho={36} />
+            <Avatar nome={pessoa.nome} avatarUrl={pessoa.avatarUrl} usuarioId={pessoa.id} tamanho={36} />
             <Text style={estilos.nome}>
               {pessoa.nome}
               {pessoa.id === euId ? <Text style={estilos.voce}> (você)</Text> : null}
@@ -101,6 +92,4 @@ const estilos = StyleSheet.create({
     padding: Spacing.md,
   },
   notaTexto: { flex: 1, fontSize: 13.5, lineHeight: 19, color: CoresTexto.suave },
-  inicial: { backgroundColor: AgroColors.forestTint, alignItems: 'center', justifyContent: 'center' },
-  inicialTexto: { fontWeight: '800', color: AgroColors.forest },
 });

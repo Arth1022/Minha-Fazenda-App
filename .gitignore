@@ -85,3 +85,5 @@ graphify-out/
 .gemini/
 .claude/settings.local.json
 *.local.md
+.env.production
+.env.staging

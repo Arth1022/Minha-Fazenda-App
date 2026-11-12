@@ -1,19 +1,23 @@
-import { and, asc, count, eq, gte, isNull, lte, ne, sql } from 'drizzle-orm';
+import { and, asc, count, eq, gte, isNull, lte } from 'drizzle-orm';
 
 import { COR_POR_TIPO_AREA } from '@/constants/areas';
 import {
+  apagar,
+  atualizar,
   calculosCerca,
   ciclosPlantio,
+  daFazenda,
   db,
   marcadoresMapa,
   movimentacoes,
+  novoRegistro,
   talhoes,
   type FaseLavoura,
   type Talhao,
   type TipoTalhao,
 } from '@/database';
 import { cancelarLembretesDoCiclo } from '@/services/notificacoes';
-import { calcularPerimetroM, type Coordenada, extrairMetadadosEspaciais } from '@/utils/geoMath';
+import { type Coordenada, extrairMetadadosEspaciais } from '@/utils/geoMath';
 
 export interface DadosCriarTalhao {
   nome: string;
@@ -22,7 +26,6 @@ export interface DadosCriarTalhao {
   cultura?: string | null;
   faseLavoura?: FaseLavoura | null;
   dataPlantio?: Date | null;
-  criadoPor?: string | null;
 }
 
 export interface LimitesViewport {
@@ -48,7 +51,7 @@ export async function criarTalhao(dados: DadosCriarTalhao): Promise<Talhao> {
 
   const [criado] = await db
     .insert(talhoes)
-    .values({
+    .values(novoRegistro({
       nome: nomeLimpo,
       tipo,
       cor: COR_POR_TIPO_AREA[tipo],
@@ -64,8 +67,7 @@ export async function criarTalhao(dados: DadosCriarTalhao): Promise<Talhao> {
       cultura: ehLavoura ? (dados.cultura?.trim() || null) : null,
       faseLavoura: ehLavoura ? (dados.faseLavoura ?? null) : null,
       dataPlantio: ehLavoura ? (dados.dataPlantio ?? null) : null,
-      criadoPor: dados.criadoPor ?? null,
-    })
+    }))
     .returning();
 
   return criado;
@@ -76,7 +78,7 @@ export function listarTalhoesAtivos() {
   return db
     .select()
     .from(talhoes)
-    .where(ne(talhoes.syncStatus, 'deleted'))
+    .where(daFazenda(talhoes))
     .orderBy(asc(talhoes.createdAt));
 }
 
@@ -87,7 +89,7 @@ export function listarTalhoesNoViewport(limites: LimitesViewport) {
     .from(talhoes)
     .where(
       and(
-        ne(talhoes.syncStatus, 'deleted'),
+        daFazenda(talhoes),
         lte(talhoes.minLat, limites.maxLat),
         gte(talhoes.maxLat, limites.minLat),
         lte(talhoes.minLng, limites.maxLng),
@@ -102,7 +104,7 @@ async function animaisPresentes(areaId: string): Promise<number> {
   const [linha] = await db
     .select({ total: count() })
     .from(movimentacoes)
-    .where(and(eq(movimentacoes.areaId, areaId), isNull(movimentacoes.saidaEm)));
+    .where(and(daFazenda(movimentacoes), eq(movimentacoes.areaId, areaId), isNull(movimentacoes.saidaEm)));
   return linha?.total ?? 0;
 }
 
@@ -120,7 +122,7 @@ async function cicloAtivoId(areaId: string): Promise<string | null> {
   const [ciclo] = await db
     .select({ id: ciclosPlantio.id })
     .from(ciclosPlantio)
-    .where(and(eq(ciclosPlantio.areaId, areaId), eq(ciclosPlantio.status, 'ativo')))
+    .where(and(daFazenda(ciclosPlantio), eq(ciclosPlantio.areaId, areaId), eq(ciclosPlantio.status, 'ativo')))
     .limit(1);
   return ciclo?.id ?? null;
 }
@@ -129,8 +131,8 @@ async function cicloAtivoId(areaId: string): Promise<string | null> {
 const cancelarCicloAtivo = (areaId: string) =>
   db
     .update(ciclosPlantio)
-    .set({ status: 'cancelado', encerradoEm: new Date() })
-    .where(and(eq(ciclosPlantio.areaId, areaId), eq(ciclosPlantio.status, 'ativo')));
+    .set(atualizar({ status: 'cancelado' as const, encerradoEm: new Date() }))
+    .where(and(daFazenda(ciclosPlantio), eq(ciclosPlantio.areaId, areaId), eq(ciclosPlantio.status, 'ativo')));
 
 export interface DadosAtualizarTalhao {
   nome?: string;
@@ -145,10 +147,10 @@ export interface DadosAtualizarTalhao {
 
 /**
  * Edita um talhão num único UPDATE (sem ler antes). Trocar o contorno recalcula os
- * metadados espaciais. Quem ainda não subiu fica 'created'; o resto vira 'updated'.
+ * metadados espaciais.
  */
 export async function atualizarTalhao(id: string, dados: DadosAtualizarTalhao): Promise<void> {
-  const mudancas: Partial<typeof talhoes.$inferInsert> = {};
+  const mudancas: Partial<Omit<typeof talhoes.$inferInsert, 'id' | 'fazendaId' | 'createdBy' | 'createdAt' | 'updatedAt' | 'deletedAt'>> = {};
 
   if (dados.nome !== undefined) {
     const nomeLimpo = dados.nome.trim();
@@ -188,41 +190,41 @@ export async function atualizarTalhao(id: string, dados: DadosAtualizarTalhao): 
   // Saiu de lavoura: o ciclo ativo é cancelado junto (RN-004) e os avisos dele saem
   const cicloCancelado = dados.tipo !== undefined && dados.tipo !== 'lavoura' ? await cicloAtivoId(id) : null;
 
-  db.transaction((tx) => {
-    tx.update(talhoes)
-      .set({
-        ...mudancas,
-        syncStatus: sql`CASE WHEN ${talhoes.syncStatus} = 'created' THEN 'created' ELSE 'updated' END`,
-      })
-      .where(eq(talhoes.id, id))
-      .run();
+  await db.transaction(async (tx) => {
+    await tx.update(talhoes).set(atualizar(mudancas)).where(eq(talhoes.id, id));
     // Contorno novo: a cerca e as sementes foram calculadas com o contorno antigo (RF-032, RN-010)
     if (dados.coordenadas !== undefined) {
-      tx.update(calculosCerca).set({ desatualizado: true }).where(eq(calculosCerca.areaId, id)).run();
-      tx.update(ciclosPlantio)
-        .set({ calculoDesatualizado: true })
-        .where(and(eq(ciclosPlantio.areaId, id), eq(ciclosPlantio.status, 'ativo')))
-        .run();
+      await tx
+        .update(calculosCerca)
+        .set(atualizar({ desatualizado: true }))
+        .where(and(daFazenda(calculosCerca), eq(calculosCerca.areaId, id)));
+      await tx
+        .update(ciclosPlantio)
+        .set(atualizar({ calculoDesatualizado: true }))
+        .where(and(daFazenda(ciclosPlantio), eq(ciclosPlantio.areaId, id), eq(ciclosPlantio.status, 'ativo')));
     }
     if (cicloCancelado) {
-      tx.update(ciclosPlantio)
-        .set({ status: 'cancelado', encerradoEm: new Date() })
-        .where(eq(ciclosPlantio.id, cicloCancelado))
-        .run();
+      await tx
+        .update(ciclosPlantio)
+        .set(atualizar({ status: 'cancelado' as const, encerradoEm: new Date() }))
+        .where(eq(ciclosPlantio.id, cicloCancelado));
     }
   });
   if (cicloCancelado) await cancelarLembretesDoCiclo(cicloCancelado).catch(() => undefined);
 }
 
-/** Exclusão lógica (soft delete) para manter o registro na fila de sincronização com o PostGIS. */
+/**
+ * Exclusão lógica (soft delete): a linha fica para o sync levar a exclusão aos
+ * outros celulares. Os marcadores da área e a cerca saem junto.
+ */
 export async function deletarTalhao(id: string): Promise<void> {
   await exigirPastoVazio(id, 'excluir a área');
   const ciclo = await cicloAtivoId(id);
-  await db
-    .update(talhoes)
-    .set({ syncStatus: 'deleted' })
-    .where(eq(talhoes.id, id));
-  await db.delete(marcadoresMapa).where(eq(marcadoresMapa.talhaoId, id));
+  await db.transaction(async (tx) => {
+    await apagar(tx, talhoes, id);
+    await apagar(tx, marcadoresMapa, eq(marcadoresMapa.talhaoId, id));
+    await apagar(tx, calculosCerca, eq(calculosCerca.areaId, id));
+  });
   // Lavoura que sai do mapa: o ciclo ativo vira cancelado (o histórico fica) e os avisos saem
   if (ciclo) {
     await cancelarCicloAtivo(id);
@@ -230,21 +232,3 @@ export async function deletarTalhao(id: string): Promise<void> {
   }
 }
 
-/**
- * Áreas gravadas antes de o perímetro ir para o banco: calcula uma vez e grava.
- * Roda na abertura do app; depois da primeira vez a consulta não acha nada.
- */
-export async function preencherPerimetrosPendentes(): Promise<number> {
-  const pendentes = await db
-    .select({ id: talhoes.id, geometriaJson: talhoes.geometriaJson })
-    .from(talhoes)
-    .where(isNull(talhoes.perimetroM));
-  for (const area of pendentes) {
-    const anel = (area.geometriaJson.coordinates[0] ?? []) as Coordenada[];
-    await db
-      .update(talhoes)
-      .set({ perimetroM: calcularPerimetroM(anel) })
-      .where(eq(talhoes.id, area.id));
-  }
-  return pendentes.length;
-}

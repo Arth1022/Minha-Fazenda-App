@@ -129,7 +129,7 @@ export default function MaquinasScreen() {
   return (
     <ScreenContainer
       header={
-        <Header title="Máquinas e Frota" showBack showMore onRightPress={abrirCadastro} />
+        <Header title="Máquinas e Frota" showBack />
       }>
       <SegmentedTabs
         tabs={tabs}

@@ -9,6 +9,7 @@ import { FloatingActionButton } from '@/components/ui/FloatingActionButton';
 import { AgroColors, MaxContentWidth, Shadows, Spacing } from '@/constants/theme';
 import { AcoesMaquinaModal, useQrCodeMaquina } from '@/features/maquinas';
 import { LeituraBrincoModais, useLeituraBrinco, useQrCodeAnimal } from '@/features/rebanho';
+import { BannerAppDesatualizado } from '@/features/sync';
 import { BotaoLerQrCode } from '@/services/qrcode';
 
 interface TabConfig {
@@ -138,6 +139,9 @@ export default function TabsLayout() {
 
   return (
     <View style={styles.root}>
+      <SafeAreaView edges={['top']} style={styles.banner}>
+        <BannerAppDesatualizado />
+      </SafeAreaView>
       <Tabs screenOptions={{ headerShown: false }} tabBar={() => <TabBar />}>
         <Tabs.Screen name="index" options={{ title: 'Início' }} />
         <Tabs.Screen name="mapa" options={{ title: 'Mapa' }} />
@@ -174,6 +178,13 @@ export default function TabsLayout() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  banner: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
   },
   qrButton: {
     position: 'absolute',

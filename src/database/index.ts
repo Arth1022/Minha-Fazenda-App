@@ -1,9 +1,9 @@
 /**
- * Único ponto de acesso ao banco local (Drizzle + expo-sqlite).
- * Telas e features importam daqui; trocar o driver fica restrito a esta pasta.
+ * Único ponto de acesso ao banco local (PowerSync + Drizzle) para telas e
+ * features: o banco, as tabelas e helpers de `src/entities` e as consultas ao vivo.
  */
-export { db } from './client';
-export { useLiveQuery } from 'drizzle-orm/expo-sqlite';
+export { db, powersync } from '@/features/sync/db';
+export { useLiveQuery } from './consultaDrizzle';
 export { useConsultaAoVivo, type ConsultaAoVivo } from './consultaAoVivo';
-export * from './schema';
-export { useDatabaseMigrations } from './migracoes';
+export * from '@/entities';
+export { useBancoPronto } from './bancoPronto';

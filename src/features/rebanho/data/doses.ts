@@ -1,7 +1,7 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, gte, lt } from 'drizzle-orm';
 
-import { db, dosesAplicadas, tratamentos } from '@/database';
-import { inicioDoDia } from '@/utils/date';
+import { apagar, daFazenda, db, dosesAplicadas, naoApagado, novoRegistro, tratamentos } from '@/database';
+import { adicionarDias, inicioDoDia } from '@/utils/date';
 import { ehDiaDeDose } from '../services/doses';
 
 /** Dias confirmados do tratamento, do primeiro ao último (consulta para o useLiveQuery). */
@@ -9,7 +9,7 @@ export function diasConfirmados(tratamentoId: string) {
   return db
     .select()
     .from(dosesAplicadas)
-    .where(eq(dosesAplicadas.tratamentoId, tratamentoId))
+    .where(and(daFazenda(dosesAplicadas), eq(dosesAplicadas.tratamentoId, tratamentoId)))
     .orderBy(asc(dosesAplicadas.dia));
 }
 
@@ -18,8 +18,8 @@ export function diasConfirmadosDoAnimal(animalId: string) {
   return db
     .select({ tratamentoId: dosesAplicadas.tratamentoId, dia: dosesAplicadas.dia })
     .from(dosesAplicadas)
-    .innerJoin(tratamentos, eq(tratamentos.id, dosesAplicadas.tratamentoId))
-    .where(eq(tratamentos.animalId, animalId))
+    .innerJoin(tratamentos, and(eq(tratamentos.id, dosesAplicadas.tratamentoId), naoApagado(tratamentos)))
+    .where(and(daFazenda(dosesAplicadas), eq(tratamentos.animalId, animalId)))
     .orderBy(asc(dosesAplicadas.dia));
 }
 
@@ -28,31 +28,48 @@ export function todasDosesConfirmadas() {
   return db
     .select({ tratamentoId: dosesAplicadas.tratamentoId, dia: dosesAplicadas.dia })
     .from(dosesAplicadas)
+    .where(daFazenda(dosesAplicadas))
     .orderBy(asc(dosesAplicadas.dia));
 }
 
 /**
- * "Dei a dose de hoje": grava o dia como aplicado. Idempotente (o índice único
- * tratamento + dia ignora a repetição). Recusa dia que não é dia de dose.
+ * Doses do tratamento no dia (de meia-noite a meia-noite). Compara por faixa e
+ * não por igualdade: a data que volta do servidor pode vir com outra precisão.
+ */
+function doDia(tratamentoId: string, dia: Date) {
+  const inicio = inicioDoDia(dia);
+  return and(
+    daFazenda(dosesAplicadas),
+    eq(dosesAplicadas.tratamentoId, tratamentoId),
+    gte(dosesAplicadas.dia, inicio),
+    lt(dosesAplicadas.dia, adicionarDias(inicio, 1))
+  );
+}
+
+/**
+ * "Dei a dose de hoje": grava o dia como aplicado. Idempotente (dia já
+ * confirmado não grava de novo). Recusa dia que não é dia de dose.
  */
 export async function confirmarDia(tratamentoId: string, dia: Date): Promise<void> {
   const tratamento = await db.query.tratamentos.findFirst({
-    where: eq(tratamentos.id, tratamentoId),
+    where: and(daFazenda(tratamentos), eq(tratamentos.id, tratamentoId)),
   });
   if (!tratamento) throw new Error('Tratamento não encontrado');
   if (!ehDiaDeDose(tratamento, dia)) throw new Error('Este dia não tem dose no tratamento');
 
-  await db
-    .insert(dosesAplicadas)
-    .values({ tratamentoId, dia: inicioDoDia(dia) })
-    .onConflictDoNothing();
+  await db.transaction(async (tx) => {
+    const [jaConfirmado] = await tx
+      .select({ id: dosesAplicadas.id })
+      .from(dosesAplicadas)
+      .where(doDia(tratamentoId, dia))
+      .limit(1);
+    if (!jaConfirmado) {
+      await tx.insert(dosesAplicadas).values(novoRegistro({ tratamentoId, dia: inicioDoDia(dia) }));
+    }
+  });
 }
 
 /** Desfaz a confirmação do dia. Idempotente: sem confirmação, não faz nada. */
 export async function desfazerDia(tratamentoId: string, dia: Date): Promise<void> {
-  await db
-    .delete(dosesAplicadas)
-    .where(
-      and(eq(dosesAplicadas.tratamentoId, tratamentoId), eq(dosesAplicadas.dia, inicioDoDia(dia)))
-    );
+  await apagar(db, dosesAplicadas, doDia(tratamentoId, dia)!);
 }
