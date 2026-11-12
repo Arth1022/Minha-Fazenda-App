@@ -176,6 +176,13 @@
       "when": 1794347124670,
       "tag": "0024_tarefas_das_etapas",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1794433130107,
+      "tag": "0025_tarefas_e_ocorrencias",
+      "breakpoints": true
     }
   ]
 }

@@ -1173,3 +1173,119 @@ export type EtapaCiclo = typeof etapasCiclo.$inferSelect;
 export type NovaEtapaCiclo = typeof etapasCiclo.$inferInsert;
 export type UsoArea = typeof usosArea.$inferSelect;
 export type NovoUsoArea = typeof usosArea.$inferInsert;
+
+export const CATEGORIAS_TAREFA = [
+  'cerca',
+  'animal',
+  'maquina',
+  'agua',
+  'pasto',
+  'outro',
+] as const;
+export type CategoriaTarefa = (typeof CATEGORIAS_TAREFA)[number];
+
+export const ORIGENS_TAREFA = [
+  'ocorrencia',
+  'manual',
+  'etapa_ciclo',
+  'tratamento',
+] as const;
+export type OrigemTarefa = (typeof ORIGENS_TAREFA)[number];
+
+export const STATUS_TAREFA = [
+  'aberta',
+  'em_andamento',
+  'concluida',
+  'cancelada',
+] as const;
+export type StatusTarefa = (typeof STATUS_TAREFA)[number];
+
+export const SYNC_STATUS_TAREFA = ['pendente', 'sincronizado'] as const;
+export type SyncStatusTarefa = (typeof SYNC_STATUS_TAREFA)[number];
+
+export const TIPOS_EVENTO_TAREFA = [
+  'criada',
+  'atribuida',
+  'assumida',
+  'liberada',
+  'iniciada',
+  'concluida',
+  'cancelada',
+  'reaberta',
+  'observacao',
+] as const;
+export type TipoEventoTarefa = (typeof TIPOS_EVENTO_TAREFA)[number];
+
+/**
+ * Tarefas e ocorrências da fazenda. `status` e `responsavel_id` são caches do
+ * último evento válido de `tarefa_eventos` para leitura rápida sem JOIN.
+ */
+export const tarefas = sqliteTable(
+  'tarefas',
+  {
+    id: id(),
+    titulo: text('titulo').notNull(),
+    categoria: text('categoria', { enum: CATEGORIAS_TAREFA }).notNull(),
+    origem: text('origem', { enum: ORIGENS_TAREFA }).notNull().default('ocorrencia'),
+    descricao: text('descricao'),
+    urgente: integer('urgente', { mode: 'boolean' }).notNull().default(false),
+    status: text('status', { enum: STATUS_TAREFA }).notNull().default('aberta'),
+    responsavelId: text('responsavel_id'),
+    criadoPor: criadoPor(),
+    prazo: integer('prazo', { mode: 'timestamp_ms' }),
+    areaId: text('area_id').references(() => talhoes.id, { onDelete: 'set null' }),
+    pontoLat: real('ponto_lat'),
+    pontoLng: real('ponto_lng'),
+    syncStatus: text('sync_status', { enum: SYNC_STATUS_TAREFA })
+      .notNull()
+      .default('pendente'),
+    ...timestamps,
+  },
+  (table) => [
+    index('tarefas_status_responsavel_urgente_idx').on(
+      table.status,
+      table.responsavelId,
+      table.urgente
+    ),
+    index('tarefas_responsavel_urgente_prazo_idx').on(
+      table.responsavelId,
+      table.urgente,
+      table.prazo
+    ),
+  ]
+);
+
+/**
+ * Histórico append-only de eventos de uma tarefa (RN-T06 / RF-T20).
+ */
+export const tarefaEventos = sqliteTable(
+  'tarefa_eventos',
+  {
+    id: id(),
+    tarefaId: text('tarefa_id')
+      .notNull()
+      .references(() => tarefas.id, { onDelete: 'cascade' }),
+    tipo: text('tipo', { enum: TIPOS_EVENTO_TAREFA }).notNull(),
+    autorId: text('autor_id').notNull(),
+    ocorridoEm: integer('ocorrido_em', { mode: 'timestamp_ms' })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    texto: text('texto'),
+    dados: text('dados', { mode: 'json' }).$type<Record<string, unknown>>(),
+  },
+  (table) => [index('tarefa_eventos_tarefa_ocorrido_idx').on(table.tarefaId, table.ocorridoEm)]
+);
+
+export const tarefasRelations = relations(tarefas, ({ one, many }) => ({
+  area: one(talhoes, { fields: [tarefas.areaId], references: [talhoes.id] }),
+  eventos: many(tarefaEventos),
+}));
+
+export const tarefaEventosRelations = relations(tarefaEventos, ({ one }) => ({
+  tarefa: one(tarefas, { fields: [tarefaEventos.tarefaId], references: [tarefas.id] }),
+}));
+
+export type TarefaOcorrencia = typeof tarefas.$inferSelect;
+export type NovaTarefaOcorrencia = typeof tarefas.$inferInsert;
+export type TarefaEvento = typeof tarefaEventos.$inferSelect;
+export type NovoTarefaEvento = typeof tarefaEventos.$inferInsert;

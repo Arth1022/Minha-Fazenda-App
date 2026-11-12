@@ -1,1 +1,1 @@
-export { default } from '@/features/estoque/EstoqueScreen';
+export { default } from '@/features/tarefas/TarefasScreen';
