@@ -12,7 +12,7 @@
  * As variáveis EXPO_PUBLIC_* entram no APK na hora do bundle.
  *
  * API em http (staging local): o APK de release bloqueia http por padrão, então
- * o build liga `minhafazenda.httpLocal` (ver plugins/withHttpLocal.js). Produção
+ * o build liga a propriedade `minhafazenda.httpLocal` (ver plugins/withHttpLocal.js). Produção
  * só aceita https.
  */
 const { spawnSync } = require('node:child_process');
@@ -48,11 +48,16 @@ fs.writeFileSync(envLocal, `# Gerado por scripts/gerarApk.js (${ambiente}); apag
 console.log(`\n📦 APK ${ambiente} → API ${urlApi}\n`);
 let status = 1;
 try {
-  const gradlew = process.platform === 'win32' ? 'gradlew.bat' : './gradlew';
-  const resultado = spawnSync(gradlew, ['assembleRelease', `-Pminhafazenda.httpLocal=${http}`], {
-    cwd: path.join(raiz, 'android'),
+  const pastaAndroid = path.join(raiz, 'android');
+  // Caminho completo: o cmd do Windows nem sempre procura o .bat na pasta atual
+  const gradlew = process.platform === 'win32' ? `"${path.join(pastaAndroid, 'gradlew.bat')}"` : './gradlew';
+  const resultado = spawnSync(gradlew, ['assembleRelease'], {
+    cwd: pastaAndroid,
     stdio: 'inherit',
     shell: process.platform === 'win32',
+    // Propriedade do Gradle por variável de ambiente: no cmd do Windows um
+    // `-Pnome=valor` se perde no "=" (o gradlew.bat recebe nome e valor separados)
+    env: { ...process.env, 'ORG_GRADLE_PROJECT_minhafazenda.httpLocal': String(http) },
   });
   status = resultado.status ?? 1;
 } finally {

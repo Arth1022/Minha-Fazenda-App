@@ -89,8 +89,6 @@ android {
 
     namespace 'com.minhafazenda.app'
     defaultConfig {
-        // API em http só no build de staging (plugins/withHttpLocal.js)
-        manifestPlaceholders += [usesCleartextTraffic: findProperty('minhafazenda.httpLocal') ?: 'false']
         applicationId 'com.minhafazenda.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
@@ -184,5 +182,16 @@ dependencies {
         implementation("com.facebook.react:hermes-android")
     } else {
         implementation jscFlavor
+    }
+}
+
+// API em http só no APK de staging (plugins/withHttpLocal.js, scripts/gerarApk.js).
+// O plugin do React Native põe usesCleartextTraffic = false no release (finalizeDsl);
+// a API de variantes roda depois dele, então só aqui dá para liberar.
+androidComponents {
+    onVariants(selector().withBuildType('release')) { variant ->
+        if (findProperty('minhafazenda.httpLocal') == 'true') {
+            variant.manifestPlaceholders.put('usesCleartextTraffic', 'true')
+        }
     }
 }
