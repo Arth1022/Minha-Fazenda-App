@@ -4,6 +4,7 @@ import {
   corDaMaquina,
   CORES_TRAJETO,
   intervaloDoPeriodo,
+  PERIODO_PADRAO,
   numerosDaSessao,
   podeDesfazer,
   sugestaoDeEtapa,
@@ -113,7 +114,14 @@ function regrasPuras() {
       hoje.ate.getTime() === new Date(2026, 10, 11).getTime() &&
       seteDias.desde.getTime() === new Date(2026, 10, 4).getTime() &&
       intervaloDoPeriodo('ontem', agora).ate.getTime() === hoje.desde.getTime(),
-    'períodos da camada: hoje (padrão, RF-060), ontem, 7 e 30 dias'
+    'períodos da camada: hoje, ontem, 7 e 30 dias'
+  );
+  const doisDias = intervaloDoPeriodo(PERIODO_PADRAO, agora);
+  check(
+    PERIODO_PADRAO === '2dias' &&
+      doisDias.desde.getTime() === new Date(2026, 10, 9).getTime() &&
+      doisDias.ate.getTime() === hoje.ate.getTime(),
+    'padrão da camada: 2 dias (ontem e hoje), o traçado de ontem continua no mapa'
   );
   check(
     [30 * SEG, 20 * MIN, 3 * 60 * MIN, 26 * 60 * MIN, 3 * 24 * 60 * MIN]

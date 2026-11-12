@@ -28,12 +28,15 @@ export function corDaMaquina(maquinaId: string): string {
   return CORES_TRAJETO[soma % CORES_TRAJETO.length];
 }
 
-/** Períodos da camada Trajetos; por padrão só hoje (RF-060). */
-export type PeriodoTrajetos = 'hoje' | 'ontem' | '7dias' | '30dias';
-export const ORDEM_PERIODOS: readonly PeriodoTrajetos[] = ['hoje', 'ontem', '7dias', '30dias'];
+/** Períodos da camada Trajetos (RF-060). */
+export type PeriodoTrajetos = 'hoje' | 'ontem' | '2dias' | '7dias' | '30dias';
+export const ORDEM_PERIODOS: readonly PeriodoTrajetos[] = ['hoje', 'ontem', '2dias', '7dias', '30dias'];
+/** Ao abrir a camada o traçado fica 2 dias no mapa: o de ontem ainda aparece hoje. */
+export const PERIODO_PADRAO: PeriodoTrajetos = '2dias';
 export const ROTULO_PERIODO: Record<PeriodoTrajetos, string> = {
   hoje: 'Hoje',
   ontem: 'Ontem',
+  '2dias': '2 dias',
   '7dias': '7 dias',
   '30dias': '30 dias',
 };
@@ -45,6 +48,8 @@ export function intervaloDoPeriodo(periodo: PeriodoTrajetos, agora = new Date())
   switch (periodo) {
     case 'ontem':
       return { desde: adicionarDias(hoje, -1), ate: hoje };
+    case '2dias':
+      return { desde: adicionarDias(hoje, -1), ate: amanha };
     case '7dias':
       return { desde: adicionarDias(hoje, -6), ate: amanha };
     case '30dias':

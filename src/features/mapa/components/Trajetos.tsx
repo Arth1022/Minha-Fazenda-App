@@ -98,6 +98,7 @@ export interface ItemTrajeto {
 const VAZIO: Record<PeriodoTrajetos, string> = {
   hoje: 'Nenhuma máquina gravou trajeto hoje.',
   ontem: 'Nenhum trajeto ontem.',
+  '2dias': 'Nenhum trajeto hoje nem ontem.',
   '7dias': 'Nenhum trajeto nos últimos 7 dias.',
   '30dias': 'Nenhum trajeto nos últimos 30 dias.',
 };

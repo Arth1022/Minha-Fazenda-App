@@ -124,6 +124,7 @@ import { identificacaoAnimal, mapaDeOcupacao, type LinhaOcupacao } from '../serv
 import {
   corDaMaquina,
   intervaloDoPeriodo,
+  PERIODO_PADRAO,
   podeDesfazer,
   textoHa,
   type PeriodoTrajetos,
@@ -1410,7 +1411,7 @@ export default function MapaCompletoScreen() {
 
       <PeriodoTrajetosSheet
         visible={periodoVisivel}
-        periodo={trajetos?.periodo ?? 'hoje'}
+        periodo={trajetos?.periodo ?? PERIODO_PADRAO}
         onEscolher={(periodo) => {
           setPeriodoVisivel(false);
           setSessaoId(null);
@@ -1428,7 +1429,7 @@ export default function MapaCompletoScreen() {
           setCamadasVisivel(false);
           setSelecionadoId(null);
           setSessaoId(null);
-          setTrajetos({ periodo: 'hoje', maquinaId: null });
+          setTrajetos({ periodo: PERIODO_PADRAO, maquinaId: null });
         }}
         onRedesenharDivisa={
           admin && fazenda
