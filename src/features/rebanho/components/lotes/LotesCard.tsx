@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 
 import { AppIcon, Card, SectionHeader } from '@/components/ui';
-import { AgroColors, IconSize, Spacing, Typography } from '@/constants/theme';
+import { AgroColors, IconSize, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import { useConsultaAoVivo } from '@/database';
 import { listarLotes, TABELAS_LOTES, type LoteResumo } from '@/services/loteService';
 import { LoteFormSheet } from './LoteFormSheet';
@@ -25,15 +25,14 @@ export function LotesCard() {
 
   return (
     <View style={estilos.secao}>
-      <SectionHeader
-        title="Lotes"
-        rightElement={
-          <Pressable onPress={() => setCriando(true)} hitSlop={8} accessibilityRole="button" style={estilos.novo}>
-            <AppIcon name="plus" size={IconSize.md} color={AgroColors.primary} />
-            <Text style={estilos.novoTexto}>Novo lote</Text>
-          </Pressable>
-        }
-      />
+      <SectionHeader title="Lotes" />
+      {/* Mesmo botão do "NOVO ANIMAL" da aba */}
+      <Pressable
+        onPress={() => setCriando(true)}
+        style={({ pressed }) => [estilos.novo, pressed && estilos.pressionado]}
+        accessibilityRole="button">
+        <Text style={estilos.novoTexto}>NOVO LOTE</Text>
+      </Pressable>
       <Card padding="three">
         {carregado && lotes.length === 0 ? (
           <Text style={estilos.vazio}>
@@ -77,8 +76,15 @@ export function LotesCard() {
 
 const estilos = StyleSheet.create({
   secao: { gap: Spacing.md },
-  novo: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one },
-  novoTexto: { ...Typography.captionBold, fontSize: 14, color: AgroColors.primary },
+  novo: {
+    backgroundColor: AgroColors.primaryLight,
+    borderRadius: Radius.md,
+    paddingVertical: Spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadows.sm,
+  },
+  novoTexto: { ...Typography.button, color: AgroColors.textInverse, letterSpacing: 0.5 },
   vazio: { ...Typography.caption, fontSize: 14, lineHeight: 20 },
   linha: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.sm },
   divisor: { borderTopWidth: 1, borderTopColor: AgroColors.divider },
