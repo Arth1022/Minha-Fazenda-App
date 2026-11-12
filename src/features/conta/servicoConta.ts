@@ -8,7 +8,7 @@ import {
 import { conectarSync, desconectarELimpar, desconectarSync } from '@/features/sync';
 import { apagarTodasAsFotos } from '@/services/fotos';
 import { cancelarTodasNotificacoes } from '@/services/notificacoes';
-import { definirEstadoDaConta, definirUsuarioAtual, estadoDaConta } from '@/services/usuario';
+import { definirEstadoDaConta, definirPapelAtual, definirUsuarioAtual, estadoDaConta } from '@/services/usuario';
 import { api, configurarSessaoDaApi, ehErroApi, ErroApi } from '@/shared/api';
 import { obterDeviceId } from '@/shared/deviceId';
 import { criarPerfilLocal, lerPerfilLocal } from './perfilLocal';
@@ -123,6 +123,7 @@ export function iniciarConta(): Promise<void> {
       const perfil = await lerPerfilLocal().catch(() => null);
       if (perfil) {
         definirUsuarioAtual({ id: perfil.id, nome: perfil.nome, avatarUrl: perfil.fotoPath });
+        definirPapelAtual('owner');
         definirEstadoDaConta('sem-conta');
         return;
       }
@@ -207,6 +208,7 @@ export async function entrar(credencial: Credencial): Promise<ResultadoConvite> 
 export async function entrarSemConta(dados: { nome: string; fotoUri: string | null; nomeFazenda: string }) {
   const perfil = await criarPerfilLocal(dados.nome, dados.fotoUri);
   definirUsuarioAtual({ id: perfil.id, nome: perfil.nome, avatarUrl: perfil.fotoPath });
+  definirPapelAtual('owner');
   const fazendaId = await criarFazendaLocal(dados.nomeFazenda);
   await salvarModo('sem-conta');
   definirFazendaAtiva(fazendaId);

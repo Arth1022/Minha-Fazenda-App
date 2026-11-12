@@ -22,7 +22,14 @@ import { buscarMaquinaPorReferencia } from '@/features/maquinas/data/maquinas';
 import { lerQrMaquina } from '@/features/maquinas/services/qrCode';
 import { buscarAnimalPorReferencia } from '@/features/rebanho/data/animais';
 import { lerQrAnimal } from '@/features/rebanho/services/qrCode';
-import { podeAtribuirTarefas, usuarioAtual, type Usuario } from '@/services/usuario';
+import {
+  podeAtribuirTarefas,
+  podeCancelarOuEditarTarefa,
+  podeCriarTarefaManual,
+  podeIniciarOuConcluirTarefa,
+  usuarioAtual,
+  type Usuario,
+} from '@/services/usuario';
 import { pontoDentroDoPoligono, type Coordenada } from '@/utils/geoMath';
 
 /** A lista lê só `tarefas` (status e responsável são cache dela): `tarefa_eventos` não precisa reconsultar. */
@@ -65,8 +72,22 @@ export interface CriarOcorrenciaInput {
   pontoLng?: number | null;
   /** Caminhos locais das fotos já salvas no filesystem (máx. 3; nunca base64) */
   fotos?: string[];
+  autor?: Usuario;
   autorId?: string;
   agora?: Date;
+}
+
+export interface EditarOcorrenciaInput {
+  titulo?: string;
+  categoria?: CategoriaTarefa;
+  descricao?: string | null;
+  urgente?: boolean;
+  prazo?: Date | null;
+  areaId?: string | null;
+  animalId?: string | null;
+  maquinaId?: string | null;
+  pontoLat?: number | null;
+  pontoLng?: number | null;
 }
 
 export interface FiltrosTodasTarefas {
@@ -197,7 +218,24 @@ export async function identificarAreaNoPonto(
  */
 export async function criarOcorrencia(input: CriarOcorrenciaInput): Promise<TarefaOcorrencia> {
   const agora = input.agora ?? new Date();
-  const autorId = input.autorId ?? usuarioAtual().id;
+  const atual = usuarioAtual();
+  const autor: Usuario =
+    input.autor ??
+    (input.autorId && input.autorId !== atual.id
+      ? { id: input.autorId, nome: input.autorId }
+      : atual);
+  const autorId = input.autorId ?? autor.id;
+  const origem = input.origem ?? 'ocorrencia';
+
+  // RF-T11: Criar tarefa manual é exclusivo do admin
+  if (origem === 'manual' && !podeCriarTarefaManual(autor)) {
+    throw new Error('Só o admin pode criar tarefas manuais.');
+  }
+  // RF-T14: Colaboradores não atribuem tarefas a outras pessoas
+  if (input.responsavelId && input.responsavelId !== autorId && !podeAtribuirTarefas(autor)) {
+    throw new Error('Colaboradores não podem atribuir tarefas a outras pessoas.');
+  }
+
   const fotos = limparFotos(input.fotos);
   const audioUri = limparAudioUri(input.audioUri);
   const animalId = input.animalId ?? null;
@@ -274,11 +312,11 @@ export async function criarOcorrencia(input: CriarOcorrenciaInput): Promise<Tare
   return db.transaction(async (tx) => {
     const [criada] = await tx
       .insert(tarefas)
-      .values(
-        novoRegistro({
+      .values({
+        ...novoRegistro({
           titulo,
           categoria: input.categoria,
-          origem: input.origem ?? 'ocorrencia',
+          origem,
           descricao: input.descricao?.trim() || null,
           urgente: input.urgente ?? maquinaParada,
           status: 'aberta' as const,
@@ -292,8 +330,9 @@ export async function criarOcorrencia(input: CriarOcorrenciaInput): Promise<Tare
           pontoLat,
           pontoLng,
           syncStatus: 'pendente' as const,
-        })
-      )
+        }),
+        createdBy: autorId,
+      })
       .returning();
 
     await tx.insert(tarefaEventos).values(
@@ -321,6 +360,7 @@ export async function criarOcorrencia(input: CriarOcorrenciaInput): Promise<Tare
 
 interface TarefaValidacao {
   id: string;
+  origem: OrigemTarefa;
   status: StatusTarefa;
   responsavelId: string | null;
   createdBy: string | null;
@@ -332,6 +372,7 @@ async function buscarTarefaOuFalhar(tarefaId: string): Promise<TarefaValidacao> 
   const [tarefa] = await db
     .select({
       id: tarefas.id,
+      origem: tarefas.origem,
       status: tarefas.status,
       responsavelId: tarefas.responsavelId,
       createdBy: tarefas.createdBy,
@@ -431,7 +472,7 @@ export async function iniciarOcorrencia(
 ): Promise<TarefaOcorrencia> {
   const tarefa = await buscarTarefaOuFalhar(tarefaId);
   if (tarefa.status !== 'aberta') throw new Error('Apenas tarefas abertas podem ser iniciadas.');
-  if (tarefa.responsavelId && tarefa.responsavelId !== autor.id && !podeAtribuirTarefas(autor)) {
+  if (!podeIniciarOuConcluirTarefa(tarefa, autor)) {
     throw new Error('Só o responsável ou o admin pode iniciar a tarefa.');
   }
   return transicionar(
@@ -453,7 +494,7 @@ export async function concluirOcorrencia(
   if (tarefa.status !== 'aberta' && tarefa.status !== 'em_andamento') {
     throw new Error('Tarefa já está encerrada.');
   }
-  if (tarefa.responsavelId && tarefa.responsavelId !== autor.id && !podeAtribuirTarefas(autor)) {
+  if (!podeIniciarOuConcluirTarefa(tarefa, autor)) {
     throw new Error('Só o responsável ou o admin pode concluir a tarefa.');
   }
   const fotos = limparFotos(opcoes?.fotos);
@@ -523,11 +564,88 @@ export async function cancelarOcorrencia(
   if (tarefa.status !== 'aberta' && tarefa.status !== 'em_andamento') {
     throw new Error('Apenas tarefas abertas ou em andamento podem ser canceladas.');
   }
-  const relatouAberta = tarefa.status === 'aberta' && tarefa.createdBy === autor.id;
-  if (!podeAtribuirTarefas(autor) && !relatouAberta) {
+  if (!podeCancelarOuEditarTarefa(tarefa, autor)) {
     throw new Error('Só o admin ou quem relatou enquanto aberta pode cancelar a tarefa.');
   }
   return transicionar(tarefaId, { status: 'cancelada' }, { tipo: 'cancelada', autorId: autor.id, texto: motivoLimpo }, agora);
+}
+
+/**
+ * Edita categoria, local e vínculos da tarefa (Tabela de Atores e Permissões, RN-T09):
+ * Admin pode em qualquer tarefa ativa; colaborador apenas nas que relatou enquanto abertas.
+ */
+export async function editarOcorrencia(
+  tarefaId: string,
+  dados: EditarOcorrenciaInput,
+  autor: Usuario = usuarioAtual(),
+  agora = new Date()
+): Promise<TarefaOcorrencia> {
+  const tarefa = await buscarTarefaOuFalhar(tarefaId);
+  if (!podeCancelarOuEditarTarefa(tarefa, autor)) {
+    throw new Error('Só o admin ou quem relatou enquanto aberta pode editar a tarefa.');
+  }
+  if (
+    tarefa.origem !== 'ocorrencia' &&
+    tarefa.origem !== 'manual' &&
+    (dados.categoria !== undefined ||
+      dados.areaId !== undefined ||
+      dados.animalId !== undefined ||
+      dados.maquinaId !== undefined)
+  ) {
+    throw new Error('Tarefa gerada por outro módulo não pode ter categoria ou vínculo de origem alterados.');
+  }
+  const campos: Record<string, unknown> = { syncStatus: 'pendente' as const, updatedAt: agora };
+  if (dados.titulo !== undefined) campos.titulo = dados.titulo.trim();
+  if (dados.categoria !== undefined) campos.categoria = dados.categoria;
+  if (dados.descricao !== undefined) campos.descricao = dados.descricao?.trim() || null;
+  if (dados.urgente !== undefined) campos.urgente = dados.urgente;
+  if (dados.prazo !== undefined) campos.prazo = dados.prazo;
+  if (dados.areaId !== undefined) campos.areaId = dados.areaId;
+  if (dados.animalId !== undefined) campos.animalId = dados.animalId;
+  if (dados.maquinaId !== undefined) campos.maquinaId = dados.maquinaId;
+  if (dados.pontoLat !== undefined) campos.pontoLat = dados.pontoLat;
+  if (dados.pontoLng !== undefined) campos.pontoLng = dados.pontoLng;
+
+  const [atualizada] = await db
+    .update(tarefas)
+    .set(campos)
+    .where(and(daFazenda(tarefas), eq(tarefas.id, tarefaId)))
+    .returning();
+  return atualizada;
+}
+
+/**
+ * Qualquer usuário pode adicionar observação ou foto a uma tarefa aberta ou em andamento (RF-T18).
+ */
+export async function adicionarObservacaoOcorrencia(
+  tarefaId: string,
+  opcoes: { texto?: string; fotos?: string[]; autor?: Usuario; agora?: Date }
+): Promise<TarefaEvento> {
+  const autor = opcoes.autor ?? usuarioAtual();
+  const agora = opcoes.agora ?? new Date();
+  const tarefa = await buscarTarefaOuFalhar(tarefaId);
+  if (tarefa.status !== 'aberta' && tarefa.status !== 'em_andamento') {
+    throw new Error('Apenas tarefas abertas ou em andamento aceitam novas observações.');
+  }
+  const textoLimpo = opcoes.texto?.trim() || null;
+  const fotos = limparFotos(opcoes.fotos);
+  if (!textoLimpo && fotos.length === 0) {
+    throw new Error('Informe uma observação ou foto.');
+  }
+  const [evento] = await db
+    .insert(tarefaEventos)
+    .values(
+      novoRegistro({
+        tarefaId,
+        tipo: 'observacao' as const,
+        autorId: autor.id,
+        ocorridoEm: agora,
+        texto: textoLimpo,
+        dados: fotos.length > 0 ? { fotos } : null,
+      })
+    )
+    .returning();
+  return evento;
 }
 
 /** Histórico append-only de eventos de uma tarefa (RF-T20). */
@@ -615,7 +733,7 @@ export async function listarTodasTarefas(
 
 export type OcorrenciaNoMapa = Pick<
   TarefaOcorrencia,
-  'id' | 'titulo' | 'categoria' | 'urgente' | 'status' | 'descricao' | 'pontoLat' | 'pontoLng'
+  'id' | 'titulo' | 'categoria' | 'urgente' | 'status' | 'responsavelId' | 'descricao' | 'pontoLat' | 'pontoLng'
 >;
 
 /**
@@ -630,6 +748,7 @@ export async function listarOcorrenciasNoMapa(): Promise<OcorrenciaNoMapa[]> {
       categoria: tarefas.categoria,
       urgente: tarefas.urgente,
       status: tarefas.status,
+      responsavelId: tarefas.responsavelId,
       descricao: tarefas.descricao,
       pontoLat: tarefas.pontoLat,
       pontoLng: tarefas.pontoLng,

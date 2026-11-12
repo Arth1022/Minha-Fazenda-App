@@ -34,6 +34,8 @@ import { NovoTratamentoForm } from '@/features/rebanho/components/NovoTratamento
 import { listarAnimais } from '@/features/rebanho/data/animais';
 import { escolherFoto, guardarFoto, type OrigemFoto } from '@/services/fotos';
 import {
+  atribuirOcorrencia,
+  cancelarOcorrencia,
   concluirOcorrencia,
   criarOcorrencia,
   garantirSeedOcorrencias,
@@ -47,6 +49,7 @@ import {
   resolverQrCodeParaOcorrencia,
   ROTULO_CATEGORIA_TAREFA,
   ROTULO_STATUS_TAREFA,
+  soltarTarefa,
   TABELAS_OCORRENCIAS,
   type AlvoQrOcorrencia,
 } from '@/services/ocorrenciaService';
@@ -55,8 +58,10 @@ import { listarTalhoesAtivos } from '@/services/talhaoService';
 import {
   listarColaboradores,
   podeAtribuirTarefas,
+  podeCancelarOuEditarTarefa,
+  podeSoltarTarefa,
   TABELAS_MEMBROS,
-  usuarioAtual,
+  useUsuarioAtual,
   type Usuario,
 } from '@/services/usuario';
 import { formatDiaMes } from '@/utils/date';
@@ -110,10 +115,14 @@ interface CardTarefaProps {
   nomeResponsavel: string;
   euId: string;
   ehAdmin: boolean;
+  temEquipe: boolean;
   carregando: boolean;
   onPegar: (id: string) => void;
+  onSoltar: (id: string) => void;
   onIniciar: (id: string) => void;
   onConcluir: (tarefa: TarefaOcorrencia) => void;
+  onAtribuir: (tarefa: TarefaOcorrencia) => void;
+  onCancelar: (tarefa: TarefaOcorrencia) => void;
 }
 
 const CardTarefa = React.memo(function CardTarefa({
@@ -121,17 +130,26 @@ const CardTarefa = React.memo(function CardTarefa({
   nomeResponsavel,
   euId,
   ehAdmin,
+  temEquipe,
   carregando,
   onPegar,
+  onSoltar,
   onIniciar,
   onConcluir,
+  onAtribuir,
+  onCancelar,
 }: CardTarefaProps) {
+  const usuarioContexto = { id: euId, nome: '', papel: ehAdmin ? ('owner' as const) : ('collaborator' as const) };
   const semDono = tarefa.responsavelId === null;
   const ehDonoOuAdmin = tarefa.responsavelId === euId || ehAdmin;
   const podePegar = tarefa.status === 'aberta' && semDono;
+  const podeSoltar = podeSoltarTarefa(tarefa, usuarioContexto);
   const podeIniciar = tarefa.status === 'aberta' && ehDonoOuAdmin && !semDono;
   const podeConcluir =
     (tarefa.status === 'aberta' || tarefa.status === 'em_andamento') && ehDonoOuAdmin && !semDono;
+  const podeAtribuir =
+    ehAdmin && temEquipe && (tarefa.status === 'aberta' || tarefa.status === 'em_andamento');
+  const podeCancelar = podeCancelarOuEditarTarefa(tarefa, usuarioContexto);
 
   return (
     <Card style={tarefa.urgente ? [styles.card, styles.cardUrgente] : styles.card}>
@@ -213,12 +231,50 @@ const CardTarefa = React.memo(function CardTarefa({
           ) : null}
         </View>
       ) : null}
+
+      {podeSoltar || podeAtribuir || podeCancelar ? (
+        <View style={styles.acoesRow}>
+          {podeSoltar ? (
+            <Button
+              label="Soltar"
+              size="sm"
+              variant="outline"
+              loading={carregando}
+              onPress={() => onSoltar(tarefa.id)}
+              style={styles.botaoAcao}
+            />
+          ) : null}
+
+          {podeAtribuir ? (
+            <Button
+              label={semDono ? 'Atribuir' : 'Reatribuir'}
+              size="sm"
+              variant="secondary"
+              loading={carregando}
+              onPress={() => onAtribuir(tarefa)}
+              style={styles.botaoAcao}
+            />
+          ) : null}
+
+          {podeCancelar ? (
+            <Button
+              label="Cancelar"
+              size="sm"
+              variant="outline"
+              loading={carregando}
+              onPress={() => onCancelar(tarefa)}
+              style={styles.botaoAcao}
+            />
+          ) : null}
+        </View>
+      ) : null}
     </Card>
   );
 });
 
 export default function TarefasScreen() {
-  const eu = usuarioAtual();
+  const eu = useUsuarioAtual();
+  const ehAdmin = podeAtribuirTarefas(eu);
   const lerQrCode = useLeitorQrCode();
   const { relatarAreaId, relatarAnimalId, relatarMaquinaId } = useLocalSearchParams<{
     relatarAreaId?: string;
@@ -234,6 +290,7 @@ export default function TarefasScreen() {
     eu.id,
     [eu]
   );
+  const temEquipe = colaboradores.length > 1;
   const mapaNomes = useMemo(
     () => new Map(colaboradores.map((c) => [c.id, c.nome])),
     [colaboradores]
@@ -251,6 +308,7 @@ export default function TarefasScreen() {
   const [tituloEditadoManualmente, setTituloEditadoManualmente] = useState(false);
   const [novaUrgente, setNovaUrgente] = useState(false);
   const [novaDescricao, setNovaDescricao] = useState('');
+  const [novoResponsavelId, setNovoResponsavelId] = useState<string | null>(null);
   const [novasFotos, setNovasFotos] = useState<string[]>([]);
   const [novoAudioUri, setNovoAudioUri] = useState<string | null>(null);
   const [novoAnimalId, setNovoAnimalId] = useState<string | null>(null);
@@ -260,6 +318,11 @@ export default function TarefasScreen() {
   const [areaDetectada, setAreaDetectada] = useState<{ id: string; nome: string } | null>(null);
   const [salvando, setSalvando] = useState(false);
   const modalAbertoRef = useRef(false);
+
+  // Modais de Atribuição (admin) e Cancelamento (com motivo obrigatório)
+  const [tarefaParaAtribuir, setTarefaParaAtribuir] = useState<TarefaOcorrencia | null>(null);
+  const [tarefaParaCancelar, setTarefaParaCancelar] = useState<TarefaOcorrencia | null>(null);
+  const [motivoCancelamento, setMotivoCancelamento] = useState('');
 
   // Fechamento de ciclo: Animal -> Tratamento no Rebanho
   const [animalParaTratamento, setAnimalParaTratamento] = useState<{
@@ -314,6 +377,12 @@ export default function TarefasScreen() {
     },
     [executarAcao, eu.id]
   );
+  const handleSoltar = useCallback(
+    (id: string) => {
+      void executarAcao(id, () => soltarTarefa(id, eu.id));
+    },
+    [executarAcao, eu.id]
+  );
   const handleIniciar = useCallback(
     (id: string) => {
       void executarAcao(id, () => iniciarOcorrencia(id, eu));
@@ -340,6 +409,34 @@ export default function TarefasScreen() {
     },
     [executarAcao, eu, animaisAtivos]
   );
+  const handleAbrirAtribuir = useCallback((tarefa: TarefaOcorrencia) => {
+    setTarefaParaAtribuir(tarefa);
+  }, []);
+  const handleSelecionarResponsavelAtribuicao = useCallback(
+    async (valor: string) => {
+      if (!tarefaParaAtribuir) return;
+      const alvo = tarefaParaAtribuir;
+      const responsavelId = valor === 'nenhum' ? null : valor;
+      setTarefaParaAtribuir(null);
+      await executarAcao(alvo.id, () => atribuirOcorrencia(alvo.id, responsavelId, eu));
+    },
+    [tarefaParaAtribuir, executarAcao, eu]
+  );
+  const handleAbrirCancelar = useCallback((tarefa: TarefaOcorrencia) => {
+    setMotivoCancelamento('');
+    setTarefaParaCancelar(tarefa);
+  }, []);
+  const handleConfirmarCancelamento = useCallback(async () => {
+    if (!tarefaParaCancelar) return;
+    const alvo = tarefaParaCancelar;
+    const ok = await executarAcao(alvo.id, () =>
+      cancelarOcorrencia(alvo.id, motivoCancelamento, eu)
+    );
+    if (ok) {
+      setTarefaParaCancelar(null);
+      setMotivoCancelamento('');
+    }
+  }, [tarefaParaCancelar, motivoCancelamento, executarAcao, eu]);
 
   const rotuloVinculoAtual = useCallback(
     (cat: CategoriaTarefa, animId: string | null, maqId: string | null, nomeArea?: string | null) => {
@@ -397,6 +494,17 @@ export default function TarefasScreen() {
       })),
     ],
     [listaMaquinas]
+  );
+
+  const opcoesResponsavel = useMemo<ChipOption<string>[]>(
+    () => [
+      { label: 'Sem responsável', value: 'nenhum' },
+      ...colaboradores.map((c) => ({
+        label: c.id === eu.id ? `${c.nome} (você)` : c.nome,
+        value: c.id,
+      })),
+    ],
+    [colaboradores, eu.id]
   );
 
   const selecionarAreaModal = (valor: string) => {
@@ -472,6 +580,7 @@ export default function TarefasScreen() {
       setTituloEditadoManualmente(false);
       setNovaUrgente(false);
       setNovaDescricao('');
+      setNovoResponsavelId(abaAtiva === 'minhas' ? eu.id : null);
       setNovasFotos([]);
       setPontoGps(areaInicial ? { lat: areaInicial.centroLat, lng: areaInicial.centroLng } : null);
       setAreaDetectada(areaInicial ? { id: areaInicial.id, nome: areaInicial.nome } : null);
@@ -505,7 +614,7 @@ export default function TarefasScreen() {
         // Sem sinal de GPS: o relato segue normalmente sem coordenada
       }
     },
-    []
+    [abaAtiva, eu.id]
   );
 
   const escanearQrParaOcorrencia = useCallback(async () => {
@@ -596,7 +705,8 @@ export default function TarefasScreen() {
         categoria: novaCategoria,
         urgente: novaUrgente,
         descricao: novaDescricao,
-        responsavelId: abaAtiva === 'minhas' ? eu.id : null,
+        responsavelId:
+          ehAdmin && temEquipe ? novoResponsavelId : abaAtiva === 'minhas' ? eu.id : null,
         areaId: areaDetectada?.id ?? null,
         animalId: novaCategoria === 'animal' ? novoAnimalId : null,
         maquinaId: novaCategoria === 'maquina' ? novaMaquinaId : null,
@@ -605,7 +715,7 @@ export default function TarefasScreen() {
         pontoLat: pontoGps?.lat ?? null,
         pontoLng: pontoGps?.lng ?? null,
         fotos: fotosGuardadas,
-        autorId: eu.id,
+        autor: eu,
       });
       modalAbertoRef.current = false;
       setModalVisivel(false);
@@ -687,11 +797,15 @@ export default function TarefasScreen() {
                 : 'Sem responsável'
             }
             euId={eu.id}
-            ehAdmin={podeAtribuirTarefas(eu)}
+            ehAdmin={ehAdmin}
+            temEquipe={temEquipe}
             carregando={processandoId === tarefa.id}
             onPegar={handlePegar}
+            onSoltar={handleSoltar}
             onIniciar={handleIniciar}
             onConcluir={handleConcluir}
+            onAtribuir={handleAbrirAtribuir}
+            onCancelar={handleAbrirCancelar}
           />
         ))}
       </View>
@@ -797,6 +911,15 @@ export default function TarefasScreen() {
             onChange={setNovaUrgente}
           />
 
+          {ehAdmin && temEquipe ? (
+            <ChipSelector
+              label="Responsável (opcional)"
+              options={opcoesResponsavel}
+              value={novoResponsavelId ?? 'nenhum'}
+              onChange={(valor) => setNovoResponsavelId(valor === 'nenhum' ? null : valor)}
+            />
+          ) : null}
+
           <View style={styles.fotosBloco}>
             <Text style={styles.secaoLabel}>
               Fotos ({novasFotos.length}/{LIMITE_FOTOS_OCORRENCIA})
@@ -888,6 +1011,54 @@ export default function TarefasScreen() {
         identificacao={animalParaTratamento?.identificacao ?? ''}
         onClose={() => setModalFormTratamento(false)}
       />
+
+      <BottomSheet
+        visible={tarefaParaAtribuir !== null}
+        title="Atribuir responsável"
+        subtitle={tarefaParaAtribuir?.titulo ?? 'Escolha quem ficará responsável pela tarefa'}
+        onClose={() => setTarefaParaAtribuir(null)}>
+        <View style={styles.modalBody}>
+          <ChipSelector
+            label="Responsável"
+            options={opcoesResponsavel}
+            value={tarefaParaAtribuir?.responsavelId ?? 'nenhum'}
+            onChange={(valor) => void handleSelecionarResponsavelAtribuicao(valor)}
+          />
+        </View>
+      </BottomSheet>
+
+      <BottomSheet
+        visible={tarefaParaCancelar !== null}
+        title="Cancelar tarefa"
+        subtitle={tarefaParaCancelar?.titulo ?? 'Informe o motivo do cancelamento'}
+        onClose={() => setTarefaParaCancelar(null)}>
+        <View style={styles.modalBody}>
+          <CustomInput
+            label="Motivo do cancelamento *"
+            placeholder="Ex.: Problema resolvido antes ou relatado por engano..."
+            value={motivoCancelamento}
+            onChangeText={setMotivoCancelamento}
+            multiline
+          />
+          <View style={styles.acoesRow}>
+            <Button
+              label="Voltar"
+              variant="secondary"
+              onPress={() => setTarefaParaCancelar(null)}
+              style={styles.botaoAcao}
+            />
+            <Button
+              label="Confirmar cancelamento"
+              variant="primary"
+              loading={
+                tarefaParaCancelar !== null && processandoId === tarefaParaCancelar.id
+              }
+              onPress={() => void handleConfirmarCancelamento()}
+              style={styles.botaoAcao}
+            />
+          </View>
+        </View>
+      </BottomSheet>
     </ScreenContainer>
   );
 }

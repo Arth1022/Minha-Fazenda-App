@@ -10,7 +10,7 @@ import { useConsultaAoVivo, useLiveQuery, type Talhao } from '@/database';
 import { TABELAS_TAREFAS, tarefasDe, type Tarefa } from '@/services/cicloService';
 import { ocupacaoDasAreas, TABELAS_OCUPACAO } from '@/services/movimentacaoService';
 import { listarTalhoesAtivos } from '@/services/talhaoService';
-import { podeEditarGeometria, usuarioAtual } from '@/services/usuario';
+import { podeEditarGeometria, useUsuarioAtual } from '@/services/usuario';
 import { CamadaDivisaFazenda } from '../components/CamadaDivisaFazenda';
 import { CamadaTalhoesSalvos } from '../components/CamadaTalhoesSalvos';
 import { BotaoMapa, CoresTexto } from '../components/elementos';
@@ -40,7 +40,8 @@ function abrirMapa(opcoes: { talhao?: string; desenhar?: 'divisa' | 'area' } = {
 export default function MapeamentoScreen() {
   const { data: talhoes, updatedAt, error } = useLiveQuery(listarTalhoesAtivos());
   const fazenda = useFazendaMapa();
-  const admin = podeEditarGeometria();
+  const eu = useUsuarioAtual();
+  const admin = podeEditarGeometria(eu);
   const { dados: linhasOcupacao } = useConsultaAoVivo<LinhaOcupacao[]>(
     () => ocupacaoDasAreas(),
     TABELAS_OCUPACAO,
@@ -49,7 +50,7 @@ export default function MapeamentoScreen() {
   );
   const ocupacoes = useMemo(() => mapaDeOcupacao(linhasOcupacao), [linhasOcupacao]);
   // Tarefas de quem está com o celular (M6): o atalho aparece quando há alguma
-  const euId = usuarioAtual().id;
+  const euId = eu.id;
   const { dados: tarefas } = useConsultaAoVivo<Tarefa[]>(() => tarefasDe(euId), TABELAS_TAREFAS, euId, []);
   const paraFazer = tarefas.filter((t) => t.etapa.realizadaEm === null && t.cicloStatus === 'ativo').length;
 

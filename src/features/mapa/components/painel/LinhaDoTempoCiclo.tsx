@@ -12,7 +12,7 @@ import {
   mudarPrevisaoDaEtapa,
   salvarObservacaoDaEtapa,
 } from '@/services/cicloService';
-import { podeAtribuirTarefas } from '@/services/usuario';
+import { podeAtribuirTarefas, useUsuarioAtual } from '@/services/usuario';
 import { diasEntre, formatDataBR } from '@/utils/date';
 import { formatarNumero } from '../../services/calculos';
 import {
@@ -76,7 +76,8 @@ export function LinhaDoTempoCiclo({
   // Folha "Atribuir": a etapa fica guardada para a folha sumir deslizando
   const [atribuindo, setAtribuindo] = useState<EtapaCiclo | null>(null);
   const [atribuirVisivel, setAtribuirVisivel] = useState(false);
-  const podeAtribuir = !somenteLeitura && podeAtribuirTarefas();
+  const eu = useUsuarioAtual();
+  const podeAtribuir = !somenteLeitura && podeAtribuirTarefas(eu);
   const abrirAtribuir = (etapa: EtapaCiclo) => {
     setAtribuindo(etapa);
     setAtribuirVisivel(true);

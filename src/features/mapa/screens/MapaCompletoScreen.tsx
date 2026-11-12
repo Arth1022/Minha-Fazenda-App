@@ -61,7 +61,7 @@ import {
   deletarTalhao,
   listarTalhoesAtivos,
 } from '@/services/talhaoService';
-import { podeEditarGeometria, usuarioAtual } from '@/services/usuario';
+import { podeEditarGeometria, podeIniciarOuConcluirTarefa, useUsuarioAtual } from '@/services/usuario';
 import { calcularPerimetroKm, calcularPerimetroM, type Coordenada } from '@/utils/geoMath';
 import { BarraBuscaMapa, BotaoQuadrado, type AnimalBuscado } from '../components/BarraBuscaMapa';
 import { CamadaDesenho } from '../components/CamadaDesenho';
@@ -170,7 +170,8 @@ export default function MapaCompletoScreen() {
   const ocupacoes = useMemo(() => mapaDeOcupacao(linhasOcupacao), [linhasOcupacao]);
   const carregado = updatedAt !== undefined || error !== undefined;
   const fazenda = useFazendaMapa();
-  const admin = podeEditarGeometria();
+  const eu = useUsuarioAtual();
+  const admin = podeEditarGeometria(eu);
   const pedidoDesenho = admin && (desenhar === 'divisa' || desenhar === 'area');
 
   const mapaRef = useRef<MapaBaseHandle>(null);
@@ -925,7 +926,7 @@ export default function MapaCompletoScreen() {
           key={sessao.uso.id}
           sessao={sessao}
           cor={corDaMaquina(sessao.maquina.id)}
-          podeDesfazer={podeDesfazer(sessao.uso, usuarioAtual().id)}
+          podeDesfazer={podeDesfazer(sessao.uso, eu.id)}
           onDesfazer={desfazerFim}
           onFechar={() => setSessaoId(null)}
           onAltura={enquadrarSessao}
@@ -1072,16 +1073,18 @@ export default function MapaCompletoScreen() {
                     }}
                     style={estilos.acao}
                   />
-                  <BotaoMapa
-                    rotulo="Concluir"
-                    icone="check"
-                    onPress={async () => {
-                      const id = ocorrenciaSelecionada.id;
-                      setOcorrenciaId(null);
-                      await concluirOcorrencia(id);
-                    }}
-                    style={estilos.acao}
-                  />
+                  {podeIniciarOuConcluirTarefa(ocorrenciaSelecionada, eu) ? (
+                    <BotaoMapa
+                      rotulo="Concluir"
+                      icone="check"
+                      onPress={async () => {
+                        const id = ocorrenciaSelecionada.id;
+                        setOcorrenciaId(null);
+                        await concluirOcorrencia(id, { autor: eu });
+                      }}
+                      style={estilos.acao}
+                    />
+                  ) : null}
                 </View>
               </>
             ) : marcadorSelecionado ? (

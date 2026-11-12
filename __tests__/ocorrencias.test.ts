@@ -4,10 +4,12 @@ import { animais, atualizar, daFazenda, db, maquinas, tarefas } from '@/database
 import { cadastrarMaquina, maquinaPorId } from '@/features/maquinas/data/maquinas';
 import { cadastrarAnimal } from '@/features/rebanho/data/animais';
 import {
+  adicionarObservacaoOcorrencia,
   atribuirOcorrencia,
   cancelarOcorrencia,
   concluirOcorrencia,
   criarOcorrencia,
+  editarOcorrencia,
   garantirSeedOcorrencias,
   identificarAreaNoPonto,
   iniciarOcorrencia,
@@ -430,10 +432,125 @@ async function runOcorrenciasTest() {
     'preserva ocorrência e limpa animal_id ao desvincular animal'
   );
 
+  // 11. Matriz de Permissões (Admin vs. Colaborador — Requisitos PDF pág. 2-3, 6, 8-9)
+  const equipe = await listarColaboradores();
+  const admin = equipe.find((u) => u.papel === 'owner')!;
+  const colabJoao = equipe.find((u) => u.id === 'colaborador-joao')!;
+  const colabMaria = equipe.find((u) => u.id === 'colaborador-maria')!;
+
+  // RF-T11: Colaborador não cria tarefa manual; Admin cria
+  const erroColabManual = await rejeita(() =>
+    criarOcorrencia({
+      titulo: 'Revisar cerca sul',
+      categoria: 'cerca',
+      origem: 'manual',
+      autor: colabJoao,
+    })
+  );
+  check(erroColabManual !== null, 'bloqueia colaborador de criar tarefa manual (RF-T11)');
+
+  const tarefaManualAdmin = await criarOcorrencia({
+    titulo: 'Revisar cerca sul',
+    categoria: 'cerca',
+    origem: 'manual',
+    autor: admin,
+  });
+  check(tarefaManualAdmin.origem === 'manual', 'admin pode criar tarefa manual (RF-T11)');
+
+  // RF-T14: Colaborador não pode atribuir tarefa a outra pessoa na criação nem depois
+  const erroColabAtribuirCriacao = await rejeita(() =>
+    criarOcorrencia({
+      categoria: 'agua',
+      responsavelId: colabMaria.id,
+      autor: colabJoao,
+    })
+  );
+  const erroColabAtribuirDepois = await rejeita(() =>
+    atribuirOcorrencia(tarefaManualAdmin.id, colabMaria.id, colabJoao)
+  );
+  check(
+    erroColabAtribuirCriacao !== null && erroColabAtribuirDepois !== null,
+    'bloqueia colaborador de atribuir ou reatribuir tarefa a outra pessoa (RF-T14)'
+  );
+
+  // RN-T03 / RF-T16: Colaborador só inicia ou conclui tarefa que está com ele; Admin pode em qualquer uma
+  const erroColabIniciarSemPegar = await rejeita(() =>
+    iniciarOcorrencia(tarefaManualAdmin.id, colabJoao)
+  );
+  const erroColabConcluirSemPegar = await rejeita(() =>
+    concluirOcorrencia(tarefaManualAdmin.id, { autor: colabJoao })
+  );
+  check(
+    erroColabIniciarSemPegar !== null && erroColabConcluirSemPegar !== null,
+    'bloqueia colaborador de iniciar ou concluir tarefa sem responsável antes de pegá-la (RN-T03)'
+  );
+
+  // RF-T18: Qualquer membro (colaborador ou admin) pode adicionar observação em tarefa aberta/em andamento
+  await adicionarObservacaoOcorrencia(tarefaManualAdmin.id, {
+    texto: 'Passei perto e vi dois mourões bambos.',
+    autor: colabMaria,
+  });
+  const eventosComObs = await listarEventosDaTarefa(tarefaManualAdmin.id);
+  check(
+    eventosComObs.some((e) => e.tipo === 'observacao' && e.autorId === colabMaria.id),
+    'qualquer colaborador pode adicionar observação em tarefa aberta (RF-T18)'
+  );
+
+  // RF-T19 / RN-T09: Colaborador edita/cancela apenas o que relatou enquanto aberta
+  const relatoJoao = await criarOcorrencia({
+    categoria: 'pasto',
+    descricao: 'Formigueiro perto da porteira',
+    autor: colabJoao,
+  });
+
+  const erroMariaEditarRelatoJoao = await rejeita(() =>
+    editarOcorrencia(relatoJoao.id, { categoria: 'outro' }, colabMaria)
+  );
+  const erroMariaCancelarRelatoJoao = await rejeita(() =>
+    cancelarOcorrencia(relatoJoao.id, 'Não precisa mais', colabMaria)
+  );
+  check(
+    erroMariaEditarRelatoJoao !== null && erroMariaCancelarRelatoJoao !== null,
+    'bloqueia colaborador de editar ou cancelar ocorrência relatada por outra pessoa (RF-T19)'
+  );
+
+  const editadaPorJoao = await editarOcorrencia(
+    relatoJoao.id,
+    { categoria: 'outro', urgente: true },
+    colabJoao
+  );
+  check(
+    editadaPorJoao.categoria === 'outro' && editadaPorJoao.urgente === true,
+    'colaborador pode editar categoria e urgência da ocorrência que ele mesmo relatou enquanto aberta'
+  );
+
+  // Quando entra em andamento, colaborador não pode mais cancelar nem editar; Admin continua podendo
+  await pegarTarefa(relatoJoao.id, colabJoao.id);
+  await iniciarOcorrencia(relatoJoao.id, colabJoao);
+  const erroJoaoCancelarEmAndamento = await rejeita(() =>
+    cancelarOcorrencia(relatoJoao.id, 'Desisti', colabJoao)
+  );
+  check(
+    erroJoaoCancelarEmAndamento !== null,
+    'bloqueia colaborador de cancelar ocorrência depois que já entrou em andamento (RF-T19)'
+  );
+
+  const canceladaPeloAdmin = await cancelarOcorrencia(
+    relatoJoao.id,
+    'Admin cancelou durante andamento',
+    admin
+  );
+  check(
+    canceladaPeloAdmin.status === 'cancelada',
+    'admin pode cancelar qualquer tarefa aberta ou em andamento (RF-T19)'
+  );
+
   console.log('\n🎉 TODOS OS TESTES DE OCORRÊNCIAS PASSARAM COM 100% DE SUCESSO!\n');
 }
 
-runOcorrenciasTest().catch((erro) => {
-  console.error('❌ Falha nos testes de ocorrências:', erro);
-  process.exit(1);
-});
+runOcorrenciasTest()
+  .then(() => process.exit(0))
+  .catch((erro) => {
+    console.error('❌ Falha nos testes de ocorrências:', erro);
+    process.exit(1);
+  });

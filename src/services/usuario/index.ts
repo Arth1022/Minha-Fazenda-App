@@ -1,5 +1,12 @@
 export { listarColaboradores, listarMembros, TABELAS_MEMBROS, type MembroDaFazenda } from './colaboradores';
-export { podeAtribuirTarefas, podeEditarGeometria } from './permissoes';
+export {
+  podeAtribuirTarefas,
+  podeCancelarOuEditarTarefa,
+  podeCriarTarefaManual,
+  podeEditarGeometria,
+  podeIniciarOuConcluirTarefa,
+  podeSoltarTarefa,
+} from './permissoes';
 export {
   definirEstadoDaConta,
   definirPapelAtual,
