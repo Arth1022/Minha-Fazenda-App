@@ -7,6 +7,7 @@ import {
   db,
   fazendaConfig,
   fazendaDoContexto,
+  ouvirFazendaDoContexto,
   fazendas,
   novoRegistro,
   powersync,
@@ -173,8 +174,11 @@ export function pontosForaDaFazenda(fazenda: FazendaMapa, pontos: Coordenada[]):
 
 function inscrever(ouvinte: () => void) {
   ouvintes.add(ouvinte);
+  // Outra fazenda: a tela pede a divisa dela (o cache é por fazenda)
+  const pararDeOuvirFazenda = ouvirFazendaDoContexto(ouvinte);
   return () => {
     ouvintes.delete(ouvinte);
+    pararDeOuvirFazenda();
   };
 }
 

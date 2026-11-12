@@ -30,7 +30,6 @@ import {
   atribuirOcorrencia,
   cancelarOcorrencia,
   concluirOcorrencia,
-  garantirSeedOcorrencias,
   iniciarOcorrencia,
   listarMinhasTarefas,
   listarTodasTarefas,
@@ -271,12 +270,6 @@ export default function TarefasScreen() {
   } | null>(null);
   const [modalPerguntaTratamento, setModalPerguntaTratamento] = useState(false);
   const [modalFormTratamento, setModalFormTratamento] = useState(false);
-
-  useEffect(() => {
-    garantirSeedOcorrencias().catch((err) =>
-      console.warn('[Tarefas] Falha ao garantir seed inicial:', err)
-    );
-  }, []);
 
   useEffect(() => {
     if (!relatarAreaId && !relatarAnimalId) return;

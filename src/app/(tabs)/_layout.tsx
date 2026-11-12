@@ -8,6 +8,7 @@ import { AppIcon, type AppIconName } from '@/components/ui/AppIcon';
 import { useBotoesFlutuantes } from '@/components/ui/botoesFlutuantes';
 import { FloatingActionButton } from '@/components/ui/FloatingActionButton';
 import { AgroColors, MaxContentWidth, Shadows, Spacing } from '@/constants/theme';
+import { useFazendaDoContexto } from '@/database';
 import { AcoesMaquinaModal, useQrCodeMaquina } from '@/features/maquinas';
 import { LeituraBrincoModais, useLeituraBrinco, useQrCodeAnimal } from '@/features/rebanho';
 import { BannerAppDesatualizado } from '@/features/sync';
@@ -142,6 +143,10 @@ export default function TabsLayout() {
     mostrarQrCodeLido(valor);
   };
 
+  // Uma árvore de abas por fazenda: trocar de fazenda remonta as telas do zero
+  // (sem seleção, filtros ou leituras da fazenda anterior) e volta para o Início
+  const fazendaId = useFazendaDoContexto();
+
   // Botões flutuantes empilhados no canto inferior direito, logo acima da barra de abas
   // (ou acima do painel que a tela abriu no rodapé, como a lista de áreas do mapa)
   const posicaoBotoes = useBotoesFlutuantes();
@@ -155,7 +160,7 @@ export default function TabsLayout() {
         <SafeAreaView edges={['top']} style={styles.banner}>
           <BannerAppDesatualizado />
         </SafeAreaView>
-        <Tabs screenOptions={{ headerShown: false }} tabBar={() => <TabBar />}>
+        <Tabs key={fazendaId ?? 'sem-fazenda'} screenOptions={{ headerShown: false }} tabBar={() => <TabBar />}>
           <Tabs.Screen name="index" options={{ title: 'Início' }} />
           <Tabs.Screen name="mapa" options={{ title: 'Mapa' }} />
           <Tabs.Screen name="rebanho" options={{ title: 'Rebanho' }} />

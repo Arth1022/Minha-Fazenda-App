@@ -8,7 +8,6 @@ import { BotaoConta, CampoConta } from '@/features/conta/componentes';
 import { useEntrarComCodigo } from '@/features/convite/useEntrarComCodigo';
 import type { FazendaDoUsuario } from './consultas';
 import { ChipPapel, IconeFazenda } from './elementos';
-import { limparFazendaAtiva } from './fazendaAtiva';
 import { useFazendaAtiva } from './FazendaAtivaProvider';
 import { useListaFazendas } from './useListaFazendas';
 
@@ -29,7 +28,6 @@ export default function FazendasScreen() {
   const [folha, setFolha] = useState<'codigo' | 'nova' | null>(null);
   // Veio do Perfil para trocar: a fazenda aberta fica marcada até escolher outra
   const [abertaAoEntrar] = useState(fazenda?.id ?? null);
-  const [fechouAAtual, setFechouAAtual] = useState(false);
 
   /** Abre o app do zero na fazenda (o Perfil que ficou na pilha sai junto). */
   const abrirOApp = useCallback(() => {
@@ -37,40 +35,28 @@ export default function FazendasScreen() {
     router.replace('/');
   }, [router]);
 
-  // Fazenda aberta (escolhida, criada ou do código) e já no celular: abre o app nela
+  // Outra fazenda aberta (escolhida, criada ou do código) e já no celular: abre o app nela.
+  // As abas e as consultas seguem a fazenda ativa sozinhas (key das abas e deps das consultas)
   useEffect(() => {
-    if (fazenda && (fazenda.id !== abertaAoEntrar || fechouAAtual)) abrirOApp();
-  }, [fazenda, abertaAoEntrar, fechouAAtual, abrirOApp]);
+    if (fazenda && fazenda.id !== abertaAoEntrar) abrirOApp();
+  }, [fazenda, abertaAoEntrar, abrirOApp]);
 
   /** Tocou na que já está aberta: só volta para o app */
   const voltarParaOApp = () => router.dismissTo('/');
-
-  /**
-   * Trocar de fazenda fecha a atual antes: as abas saem e voltam já na nova,
-   * sem consultas da fazenda anterior montadas.
-   */
-  const fecharAAtual = () => {
-    if (!fazenda) return;
-    setFechouAAtual(true);
-    limparFazendaAtiva();
-  };
 
   const escolher = (item: FazendaDoUsuario) => {
     if (item.id === fazenda?.id) {
       voltarParaOApp();
       return;
     }
-    fecharAAtual();
     lista.escolher(item);
   };
 
   const entrarComCodigo = async () => {
-    fecharAAtual();
     if (await convite.entrar()) setFolha(null);
   };
 
   const criarFazenda = async () => {
-    fecharAAtual();
     if (await lista.criar()) setFolha(null);
   };
 

@@ -7,3 +7,4 @@ export { useLiveQuery } from './consultaDrizzle';
 export { useConsultaAoVivo, type ConsultaAoVivo } from './consultaAoVivo';
 export * from '@/entities';
 export { useBancoPronto } from './bancoPronto';
+export { useFazendaDoContexto } from './fazendaDoContexto';

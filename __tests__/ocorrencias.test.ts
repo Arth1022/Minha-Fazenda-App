@@ -10,7 +10,6 @@ import {
   concluirOcorrencia,
   criarOcorrencia,
   editarOcorrencia,
-  garantirSeedOcorrencias,
   identificarAreaNoPonto,
   iniciarOcorrencia,
   listarEventosDaTarefa,
@@ -205,16 +204,6 @@ async function runOcorrenciasTest() {
   check(
     filtradasSemDono.length === 1 && filtradasSemDono[0].id === semDono.id,
     'listarTodasTarefas filtra corretamente por "sem responsável" (RF-T22)'
-  );
-
-  // 5. Seed inicial num banco vazio
-  await initTestDatabase();
-  await equipeDaFazenda();
-  await garantirSeedOcorrencias();
-  const todasDoSeed = await listarTodasTarefas();
-  check(
-    todasDoSeed.length === 3,
-    'garantirSeedOcorrencias popula 3 ocorrências de exemplo quando o banco está vazio'
   );
 
   // 6. Fase 2 — GPS, identificação automática de área pelo polígono e título padrão

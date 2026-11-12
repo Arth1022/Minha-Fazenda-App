@@ -4,6 +4,7 @@ import { SQLiteRelationalQuery } from 'drizzle-orm/sqlite-core/query-builders/qu
 import { useEffect, useState } from 'react';
 
 import { powersync } from '@/features/sync/db';
+import { useFazendaDoContexto } from './fazendaDoContexto';
 
 const ESPERA_MS = 40;
 
@@ -24,12 +25,17 @@ function erroDeFrom(consulta: ConsultaDrizzle): Error | undefined {
  * FROM e as dos JOINs, resolvidas pelo PowerSync), inclusive pelo sync. Mesmo
  * formato do `useLiveQuery` do drizzle-orm: `data` começa em `[]` (ou
  * `undefined` no `findFirst`) e `updatedAt` marca a primeira leitura.
+ *
+ * A fazenda ativa entra nas deps sozinha: ao trocar de fazenda, a tela
+ * re-renderiza, a consulta é montada de novo (com o filtro da nova) e o que foi
+ * lido da anterior deixa de aparecer enquanto a nova carrega.
  */
 export function useLiveQuery<T extends ConsultaDrizzle>(consulta: T, deps: unknown[] = []) {
   const primeiro = is(consulta, SQLiteRelationalQuery) && (consulta as unknown as { mode: string }).mode === 'first';
-  const [data, setData] = useState<Awaited<T>>((primeiro ? undefined : []) as Awaited<T>);
+  const vazio = (primeiro ? undefined : []) as Awaited<T>;
+  const fazendaId = useFazendaDoContexto();
+  const [lido, setLido] = useState<{ fazendaId: string | null; data: Awaited<T>; updatedAt: Date } | null>(null);
   const [error, setError] = useState<Error>();
-  const [updatedAt, setUpdatedAt] = useState<Date>();
 
   const erroDoFrom = erroDeFrom(consulta);
 
@@ -42,8 +48,7 @@ export function useLiveQuery<T extends ConsultaDrizzle>(consulta: T, deps: unkno
       (consulta as PromiseLike<Awaited<T>>).then(
         (linhas) => {
           if (!ativo) return;
-          setData(linhas);
-          setUpdatedAt(new Date());
+          setLido({ fazendaId, data: linhas, updatedAt: new Date() });
         },
         (erro: unknown) => {
           if (ativo) setError(erro instanceof Error ? erro : new Error(String(erro)));
@@ -67,9 +72,15 @@ export function useLiveQuery<T extends ConsultaDrizzle>(consulta: T, deps: unkno
       ativo = false;
       parar?.();
     };
-    // Como no drizzle-orm: quem chama diz quando a consulta muda (deps)
+    // Como no drizzle-orm: quem chama diz quando a consulta muda (deps), mais a fazenda
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  }, [...deps, fazendaId]);
 
-  return { data, error: erroDoFrom ?? error, updatedAt } as const;
+  // Leitura de outra fazenda não vale: volta ao vazio até ler a atual
+  const valido = lido !== null && lido.fazendaId === fazendaId;
+  return {
+    data: valido ? lido.data : vazio,
+    error: erroDoFrom ?? error,
+    updatedAt: valido ? lido.updatedAt : undefined,
+  } as const;
 }
