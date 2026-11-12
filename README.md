@@ -55,7 +55,22 @@ O app é offline-first: a tela lê e grava sempre no SQLite local; o PowerSync s
 - **Conta:** tokens só no `expo-secure-store`. Estados `carregando`, `deslogado`, `sem-conta`, `logado` (sobrevivem ao reiniciar). Sem conta, o `connect()` nunca é chamado.
 - **QR Code impresso** vale em todos os celulares da fazenda: o `id` é UUID gerado no aparelho e o sync nunca o troca.
 
-Configuração: copie `.env.example` para `.env` e ajuste `EXPO_PUBLIC_API_URL`.
+### Ambientes (URL da API)
+
+| Arquivo | Ambiente | API |
+|---|---|---|
+| `.env.staging` | staging (padrão) | back-end local na rede (`http://<IP do computador>:8080`) |
+| `.env.production` | produção | API na nuvem (ainda não existe: troque o `TROCAR` antes de gerar) |
+| `.env` (não versionado) | desenvolvimento (`expo start`, debug) | cópia do staging: `cp .env.staging .env` |
+
+O Expo 58 não carrega `.env.staging` sozinho; o script de APK copia o ambiente escolhido para `.env.local` durante o build e apaga depois:
+
+```bash
+npm run apk                # staging (padrão) → dist/apk/minha-fazenda-staging-<versão>.apk
+npm run apk:production     # produção (recusa enquanto a URL tiver "TROCAR")
+```
+
+A API de staging é `http`: só o build de staging libera http no release (`plugins/withHttpLocal.js`); produção aceita só https. Os APKs são assinados com a chave de debug (para testes, não para a Play Store).
 
 ---
 

@@ -58,6 +58,7 @@
         }
       ],
       "./plugins/withModeloOcr",
+      "./plugins/withHttpLocal",
       [
         "expo-image-picker",
         {

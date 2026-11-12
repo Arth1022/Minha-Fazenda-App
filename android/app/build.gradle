@@ -89,6 +89,8 @@ android {
 
     namespace 'com.minhafazenda.app'
     defaultConfig {
+        // API em http só no build de staging (plugins/withHttpLocal.js)
+        manifestPlaceholders += [usesCleartextTraffic: findProperty('minhafazenda.httpLocal') ?: 'false']
         applicationId 'com.minhafazenda.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
