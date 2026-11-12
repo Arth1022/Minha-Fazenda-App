@@ -63,7 +63,7 @@ export default function MapeamentoScreen() {
   const chavePrevia = JSON.stringify(vista);
 
   return (
-    <ScreenContainer header={<Header title={APP_NAME} showMenu showNotification />}>
+    <ScreenContainer header={<Header title={APP_NAME} showMenu />}>
       <View style={estilos.titulos}>
         <Text style={estilos.titulo}>Mapa da fazenda</Text>
         <Text style={estilos.subtitulo}>{carregado ? resumoFazenda(fazenda, talhoes) : '…'}</Text>

@@ -4,9 +4,11 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 
 import { useBancoPronto } from '@/database';
+import { HeaderDireitaProvider } from '@/components/ui';
 import { AgroColors, Spacing, Typography } from '@/constants/theme';
 import { AuthProvider } from '@/features/conta';
 import { FazendaAtivaProvider } from '@/features/fazenda';
+import { AvatarDoCabecalho } from '@/features/perfil';
 import { LeitorQrCodeProvider } from '@/services/qrcode';
 import { FazendaProvider } from './FazendaProvider';
 import { InicializacaoDoApp } from './InicializacaoDoApp';
@@ -24,7 +26,10 @@ export function AppProviders({ children }: AppProvidersProps) {
       <FazendaAtivaProvider>
         <FazendaProvider>
           <InicializacaoDoApp />
-          <LeitorQrCodeProvider>{children}</LeitorQrCodeProvider>
+          {/* Avatar do perfil à direita de todo cabeçalho */}
+          <HeaderDireitaProvider elemento={<AvatarDoCabecalho />}>
+            <LeitorQrCodeProvider>{children}</LeitorQrCodeProvider>
+          </HeaderDireitaProvider>
         </FazendaProvider>
       </FazendaAtivaProvider>
     </AuthProvider>

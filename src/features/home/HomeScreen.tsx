@@ -19,7 +19,6 @@ import {
 } from '@/components/ui';
 import { APP_NAME } from '@/constants/app';
 import { CardUsoAtual } from '@/features/maquinas';
-import { AvatarDoCabecalho } from '@/features/perfil';
 import { AgroColors, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
 import type { PeriodoOrdenha } from '@/dtos';
 
@@ -66,7 +65,7 @@ export default function HomeScreen() {
   };
 
   return (
-    <ScreenContainer header={<Header title={APP_NAME} showNotification direita={<AvatarDoCabecalho />} />}>
+    <ScreenContainer header={<Header title={APP_NAME} />}>
       <SectionHeader title="Painel Inicial" size="lg" />
 
       {/* Máquina em uso por quem está com o celular (some sem uso aberto) */}
