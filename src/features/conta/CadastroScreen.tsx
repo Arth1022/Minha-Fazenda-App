@@ -32,6 +32,18 @@ export default function CadastroScreen() {
           required
         />
         <CredencialForm onChange={c.setCredencial} erro={c.erros.email} erroSenha={c.erros.senha} novaSenha />
+        {!c.comLink ? (
+          <CustomInput
+            label="Código de convite (opcional)"
+            value={c.codigoConvite}
+            onChangeText={c.setCodigoConvite}
+            error={c.erros.codigoConvite}
+            placeholder="Recebeu um código? Digite aqui"
+            autoCapitalize="characters"
+            autoCorrect={false}
+            maxLength={8}
+          />
+        ) : null}
         {c.comConvite ? (
           <Text style={Typography.caption}>Você vai entrar na fazenda do convite.</Text>
         ) : (

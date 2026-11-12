@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Share } from 'react-native';
 
 import { useConsultaAoVivo } from '@/database';
@@ -6,12 +6,12 @@ import { limparFazendaAtiva, renomearFazenda, useFazendaAtiva, usePapel } from '
 import { listarMembros, TABELAS_MEMBROS, useUsuarioAtual, type MembroDaFazenda } from '@/services/usuario';
 import { mensagemDoErro } from '@/shared/api';
 import {
-  criarConvite,
+  codigoConviteValido,
+  gerarCodigoConvite,
   mudarPapel,
   removerMembro,
-  revogarConvite,
   sairDaFazenda,
-  type Convite,
+  type CodigoConvite,
 } from './servicoConvite';
 
 function confirmar(titulo: string, mensagem: string, rotulo: string): Promise<boolean> {
@@ -39,7 +39,7 @@ export function useMembros() {
     []
   );
 
-  const [convite, setConvite] = useState<Convite | null>(null);
+  const [codigo, setCodigo] = useState<CodigoConvite | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -60,29 +60,37 @@ export function useMembros() {
 
   const fazendaId = fazenda?.id ?? '';
 
+  // O dono voltou para a tela: mostra o código que ainda vale (se houver)
+  useEffect(() => {
+    if (!ehDono || !fazendaId) return;
+    let ativo = true;
+    codigoConviteValido(fazendaId).then(
+      (atual) => ativo && setCodigo(atual),
+      () => undefined
+    );
+    return () => {
+      ativo = false;
+    };
+  }, [ehDono, fazendaId]);
+
   return {
     fazenda,
     membros,
     carregado,
     euId: eu.id,
     ehDono,
-    convite,
+    codigo,
     ocupado,
     erro,
     aviso,
-    convidar: () => executar(async () => setConvite(await criarConvite(fazendaId))),
+    /** Código novo: 6 caracteres, vale 24 horas e para uma pessoa só. */
+    gerarCodigo: () => executar(async () => setCodigo(await gerarCodigoConvite(fazendaId))),
     compartilhar: async () => {
-      if (!convite) return;
-      await Share.share({
-        message: `Entre na fazenda ${fazenda?.nome ?? ''} no Minha Fazenda: ${convite.url}`,
-      }).catch(() => undefined);
+      if (!codigo) return;
+      await Share.share({ message: codigo.mensagem || `Entre na minha fazenda: ${codigo.codigo}` }).catch(
+        () => undefined
+      );
     },
-    revogar: () =>
-      executar(async () => {
-        if (!convite) return;
-        await revogarConvite(convite.id);
-        setConvite(null);
-      }, 'Convite revogado.'),
     promover: (membro: MembroDaFazenda) =>
       executar(() => mudarPapel(fazendaId, membro.id, 'owner'), `${membro.nome} agora é dono.`),
     rebaixar: (membro: MembroDaFazenda) =>

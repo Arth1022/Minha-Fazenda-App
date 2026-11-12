@@ -2,14 +2,14 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert } from 'react-native';
 
-import { conviteGuardado } from '@/features/convite';
+import { conviteGuardado, MENSAGEM_CODIGO_INVALIDO, pareceCodigo } from '@/features/convite';
 import { validarNomeFazenda } from '@/features/fazenda';
-import { mensagemDoErro } from '@/shared/api';
+import { ehErroApi, mensagemDoErro } from '@/shared/api';
 import { enviarAvatar, escolherFotoDoAvatar } from './avatarEPerfil';
 import { registrar, type Credencial } from './servicoConta';
 import { campoDoErro, validarEmail, validarNome, validarSenha } from './validacao';
 
-type Campo = 'nome' | 'email' | 'senha' | 'nomeFazenda';
+type Campo = 'nome' | 'email' | 'senha' | 'nomeFazenda' | 'codigoConvite';
 
 /**
  * Cadastro: nome, credencial, nome da fazenda (escondido com convite) e avatar
@@ -17,7 +17,11 @@ type Campo = 'nome' | 'email' | 'senha' | 'nomeFazenda';
  */
 export function useCadastro() {
   const router = useRouter();
-  const [comConvite] = useState(() => conviteGuardado() !== null);
+  // Link de convite guardado, ou código digitado: entra numa fazenda em vez de criar
+  const [comLink] = useState(() => conviteGuardado() !== null);
+  const [codigoConvite, setCodigoConvite] = useState('');
+  const comCodigo = !comLink && codigoConvite.trim().length > 0;
+  const comConvite = comLink || comCodigo;
   const [nome, setNome] = useState('');
   const [credencial, setCredencial] = useState<Credencial>({ tipo: 'senha', email: '', senha: '' });
   const [nomeFazenda, setNomeFazenda] = useState('');
@@ -43,6 +47,7 @@ export function useCadastro() {
       email: validarEmail(credencial.email) ?? undefined,
       senha: validarSenha(credencial.senha) ?? undefined,
       nomeFazenda: comConvite ? undefined : (validarNomeFazenda(nomeFazenda) ?? undefined),
+      codigoConvite: comCodigo && !pareceCodigo(codigoConvite) ? 'O código tem 6 letras e números.' : undefined,
     };
     setErros(novos);
     setErroGeral(null);
@@ -50,8 +55,13 @@ export function useCadastro() {
 
     setEnviando(true);
     try {
-      await registrar({ nome, credencial, nomeFazenda });
+      await registrar({ nome, credencial, nomeFazenda, codigoConvite: comCodigo ? codigoConvite : null });
     } catch (e) {
+      if (comCodigo && ehErroApi(e) && e.status === 410) {
+        setErros({ codigoConvite: MENSAGEM_CODIGO_INVALIDO });
+        setEnviando(false);
+        return;
+      }
       const campo = campoDoErro<Campo>(e, comConvite ? ['senha', 'email', 'nome'] : ['nomeFazenda', 'senha', 'email', 'nome']);
       if (campo) setErros({ [campo]: mensagemDoErro(e) });
       else setErroGeral(mensagemDoErro(e));
@@ -70,6 +80,12 @@ export function useCadastro() {
 
   return {
     comConvite,
+    comLink,
+    codigoConvite,
+    setCodigoConvite: (valor: string) => {
+      setCodigoConvite(valor.toUpperCase());
+      limparErro('codigoConvite');
+    },
     nome,
     setNome: (valor: string) => {
       setNome(valor);

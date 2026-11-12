@@ -5,6 +5,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { CustomInput } from '@/components/forms';
 import { Button, Card, Header, ScreenContainer } from '@/components/ui';
 import { AgroColors, Spacing, Typography } from '@/constants/theme';
+import { useEntrarComCodigo } from '@/features/convite/useEntrarComCodigo';
 import { useFazendaAtiva } from './FazendaAtivaProvider';
 import { useListaFazendas } from './useListaFazendas';
 
@@ -16,6 +17,7 @@ export default function FazendasScreen() {
   const { trocar } = useLocalSearchParams<{ trocar?: string }>();
   const lista = useListaFazendas({ trocando: trocar === '1' });
   const { fazenda } = useFazendaAtiva();
+  const convite = useEntrarComCodigo();
 
   // Fazenda escolhida e já no celular: abre o app nela
   useEffect(() => {
@@ -49,6 +51,29 @@ export default function FazendasScreen() {
             </Pressable>
           ))
         )}
+
+        <View style={estilos.bloco}>
+          <Text style={Typography.sectionTitle}>Entrar com código</Text>
+          <Text style={Typography.caption}>Recebeu um código do dono de uma fazenda? Digite aqui.</Text>
+          <CustomInput
+            label="Código de convite"
+            value={convite.codigo}
+            onChangeText={convite.setCodigo}
+            error={convite.erro ?? undefined}
+            placeholder="Ex.: K7M2QX"
+            autoCapitalize="characters"
+            autoCorrect={false}
+            maxLength={8}
+          />
+          <Button
+            label="Entrar na fazenda"
+            variant="outline"
+            onPress={convite.entrar}
+            loading={convite.entrando}
+            disabled={convite.codigo.trim().length === 0}
+            fullWidth
+          />
+        </View>
 
         {lista.podeCriar ? (
           <View style={estilos.bloco}>
