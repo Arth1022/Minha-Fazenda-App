@@ -1,8 +1,8 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { useCallback, useState } from 'react';
 import { Alert } from 'react-native';
 
-import { db, maquinas } from '@/database';
+import { daFazenda, db, maquinas } from '@/database';
 import type { AtividadeUso, Maquina, UsoMaquina } from '@/dtos';
 import { usuarioAtual } from '@/services/usuario';
 import {
@@ -57,7 +57,7 @@ export function useOperacaoMaquina() {
     const resultado = await encerrarUso(maquinaId, { posicao });
     await pararRastro();
     if (resultado.uso) await limparAvisoParada(resultado.uso.id);
-    const maquina = await db.select().from(maquinas).where(eq(maquinas.id, maquinaId)).get();
+    const maquina = await db.select().from(maquinas).where(and(daFazenda(maquinas), eq(maquinas.id, maquinaId))).get();
     if (maquina) publicar(maquina, false);
     return resultado;
   }, []);
@@ -69,7 +69,7 @@ export function useOperacaoMaquina() {
         // Ninguém dirige duas máquinas: a que a pessoa está usando é desligada antes
         const [outra] = await usoAbertoDoOperador(usuarioAtual().id);
         if (outra && outra.maquinaId !== maquina.id) {
-          const nome = (await db.select().from(maquinas).where(eq(maquinas.id, outra.maquinaId)).get())?.nome;
+          const nome = (await db.select().from(maquinas).where(and(daFazenda(maquinas), eq(maquinas.id, outra.maquinaId))).get())?.nome;
           const trocar = await perguntar(
             `Você está usando ${nome ?? 'outra máquina'}`,
             `Desligar ${nome ?? 'a outra'} e ligar ${maquina.nome}?`,

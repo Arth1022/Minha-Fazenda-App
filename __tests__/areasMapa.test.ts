@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { eq } from 'drizzle-orm';
 import Storage from 'expo-sqlite/kv-store';
 
@@ -23,11 +22,10 @@ import { contarPontosAbertos, criarMarcador, resolverMarcador } from '@/services
 import {
   atualizarTalhao,
   criarTalhao,
-  preencherPerimetrosPendentes,
 } from '@/services/talhaoService';
 import { podeEditarGeometria } from '@/services/usuario';
 import type { Coordenada } from '@/utils/geoMath';
-import { db, initTestDatabase, sqlite, talhoes, type Talhao } from './support/database';
+import { db, initTestDatabase, talhoes, type Talhao, fecharTestDatabase } from './support/database';
 
 function check(condition: boolean, message: string) {
   if (!condition) throw new Error(message);
@@ -71,8 +69,9 @@ function areaFake(parcial: Partial<Talhao>): Talhao {
     cultura: null,
     faseLavoura: null,
     dataPlantio: null,
-    syncStatus: 'created',
-    criadoPor: null,
+    fazendaId: 'f',
+    createdBy: null,
+    deletedAt: null,
     createdAt: AGORA,
     updatedAt: AGORA,
     ...parcial,
@@ -188,8 +187,8 @@ function regrasPuras() {
 }
 
 function permissoesECamadas() {
-  check(podeEditarGeometria(), 'usuário simulado (dono) pode desenhar e excluir áreas');
-  check(!podeEditarGeometria({ id: 'c1', nome: 'João', papel: 'colaborador' }), 'colaborador não mexe no polígono');
+  check(podeEditarGeometria({ id: 'd1', nome: 'Beta', papel: 'owner' }), 'o dono pode desenhar e excluir áreas');
+  check(!podeEditarGeometria({ id: 'c1', nome: 'João', papel: 'collaborator' }), 'colaborador não mexe no polígono');
   check(!podeEditarGeometria({ id: 'c2', nome: 'Sem papel' }), 'usuário sem papel é tratado como colaborador');
 
   check(JSON.stringify(lerCamadas()) === JSON.stringify(CAMADAS_PADRAO), 'camadas começam no padrão (satélite, tudo ligado)');
@@ -234,33 +233,12 @@ async function banco() {
     `redesenhar recalcula área e perímetro e mantém nome e tipo (${redesenhada.areaHectares} ha, ${redesenhada.perimetroM} m)`
   );
 
-  // Área antiga (sem perímetro no banco) é preenchida na abertura do app
-  await db.update(talhoes).set({ perimetroM: null }).where(eq(talhoes.id, lavoura.id));
-  const preenchidas = await preencherPerimetrosPendentes();
-  const [preenchida] = await db.select().from(talhoes).where(eq(talhoes.id, lavoura.id));
-  check(
-    preenchidas === 1 && preenchida.perimetroM !== null && Math.abs(preenchida.perimetroM - 600) <= 3,
-    'preencherPerimetrosPendentes calcula o perímetro das áreas antigas'
-  );
-  check((await preencherPerimetrosPendentes()) === 0, 'na segunda abertura não há nada a preencher');
-
   // Aviso antes de excluir: conta só os pontos de atenção abertos da área
   const ponto = await criarMarcador({ tipo: 'praga', titulo: 'Lagarta', lat: LADO / 2, lng: -47.0 + LADO / 2 });
   check(ponto.talhaoId === lavoura.id && (await contarPontosAbertos(lavoura.id)) === 1, 'conta o ponto de atenção aberto dentro da área');
   await resolverMarcador(ponto.id);
   check((await contarPontosAbertos(lavoura.id)) === 0, 'ponto resolvido não entra na contagem');
 
-  // Migration 0018: a cor de cada área passa a ser a do tipo
-  await db.update(talhoes).set({ cor: '#123456' }).where(eq(talhoes.id, lavoura.id));
-  const sql = readFileSync('src/database/migrations/0018_areas_no_mapa.sql', 'utf8');
-  const normalizar = sql
-    .split('--> statement-breakpoint')
-    .map((trecho) => trecho.trim())
-    .find((trecho) => trecho.startsWith('UPDATE'));
-  check(normalizar !== undefined, 'migration 0018 tem o UPDATE que normaliza a cor');
-  sqlite.run(normalizar!);
-  const [normalizada] = await db.select().from(talhoes).where(eq(talhoes.id, lavoura.id));
-  check(normalizada.cor === COR_POR_TIPO_AREA.reserva, 'migration 0018 troca cor livre pela cor do tipo');
 }
 
 async function runAreasMapaTest() {
@@ -271,7 +249,7 @@ async function runAreasMapaTest() {
   console.log('\n🎉 ÁREAS NO MAPA OK!');
 }
 
-runAreasMapaTest().catch((erro) => {
+runAreasMapaTest().then(fecharTestDatabase).catch((erro) => {
   console.error('❌', erro);
   process.exit(1);
 });

@@ -16,9 +16,9 @@ import {
   ultimosPrecosCerca,
   type DadosCalculoCerca,
 } from '@/services/cercaService';
-import { atualizarTalhao, criarTalhao } from '@/services/talhaoService';
+import { atualizarTalhao, criarTalhao, deletarTalhao } from '@/services/talhaoService';
 import { contarCantos, type Coordenada } from '@/utils/geoMath';
-import { calculosCerca, db, initTestDatabase, talhoes } from './support/database';
+import { calculosCerca, db, initTestDatabase, talhoes, fecharTestDatabase } from './support/database';
 
 function check(condition: boolean, message: string) {
   if (!condition) throw new Error(message);
@@ -195,8 +195,8 @@ async function banco() {
   [salva] = await calculoCercaDaArea(pasto.id);
   check(salva?.desatualizado === false && salva.perimetroM === 600, 'salvar de novo recalcula e tira a marca de desatualizada');
 
-  // Área apagada de vez leva a cerca junto (ON DELETE CASCADE da migration 0021)
-  await db.delete(talhoes).where(eq(talhoes.id, reserva.id));
+  // Área excluída leva a cerca junto (soft delete na mesma transação)
+  await deletarTalhao(reserva.id);
   check(!(await existeCercaSalva(reserva.id)), 'apagar a área apaga a cerca dela');
 }
 
@@ -207,7 +207,7 @@ async function runCercaMapaTest() {
   console.log('\n🎉 CERCA NA ÁREA OK!');
 }
 
-runCercaMapaTest().catch((erro) => {
+runCercaMapaTest().then(fecharTestDatabase).catch((erro) => {
   console.error('❌', erro);
   process.exit(1);
 });

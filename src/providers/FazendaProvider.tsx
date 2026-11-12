@@ -1,8 +1,10 @@
-import { eq } from 'drizzle-orm';
 import React, { createContext, useContext } from 'react';
 
-import { db, fazendaConfig, useLiveQuery } from '@/database';
+import { useLiveQuery } from '@/database';
 import type { TipoProducao } from '@/dtos';
+import { configDaFazenda, useFazendaAtiva } from '@/features/fazenda';
+
+export { salvarTipoProducao } from '@/features/fazenda';
 
 interface FazendaContextValue {
   /** null enquanto o produtor não respondeu a pergunta inicial */
@@ -19,26 +21,11 @@ const FazendaContext = createContext<FazendaContextValue>({
 export const produzLeite = (tipo: TipoProducao | null) =>
   tipo === 'leite' || tipo === 'misto';
 
-function configDaFazenda() {
-  return db.select().from(fazendaConfig).limit(1);
-}
-
-/** Grava (ou altera) o tipo de produção da fazenda. */
-export async function salvarTipoProducao(tipoProducao: TipoProducao): Promise<void> {
-  const [atual] = await configDaFazenda();
-  if (atual) {
-    await db
-      .update(fazendaConfig)
-      .set({ tipoProducao })
-      .where(eq(fazendaConfig.id, atual.id));
-  } else {
-    await db.insert(fazendaConfig).values({ tipoProducao });
-  }
-}
-
+/** Tipo de produção da fazenda aberta (`fazenda_config`). */
 export function FazendaProvider({ children }: { children: React.ReactNode }) {
-  const { data } = useLiveQuery(configDaFazenda());
-  const tipoProducao = data[0]?.tipoProducao ?? null;
+  const fazendaId = useFazendaAtiva().fazenda?.id ?? '';
+  const { data } = useLiveQuery(configDaFazenda(fazendaId), [fazendaId]);
+  const tipoProducao = (fazendaId && data[0]?.tipoProducao) || null;
 
   return (
     <FazendaContext.Provider

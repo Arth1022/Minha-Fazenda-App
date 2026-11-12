@@ -65,7 +65,7 @@ export default function HomeScreen() {
   };
 
   return (
-    <ScreenContainer header={<Header title={APP_NAME} showNotification />}>
+    <ScreenContainer header={<Header title={APP_NAME} />}>
       <SectionHeader title="Painel Inicial" size="lg" />
 
       {/* Máquina em uso por quem está com o celular (some sem uso aberto) */}

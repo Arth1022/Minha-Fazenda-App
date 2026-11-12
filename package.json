@@ -5,6 +5,10 @@
   "dependencies": {
     "@expo/ui": "~58.0.27",
     "@hookform/resolvers": "^5.9.2",
+    "@op-engineering/op-sqlite": "18.2.5",
+    "@powersync/common": "2.5.0",
+    "@powersync/drizzle-driver": "0.8.0",
+    "@powersync/react-native": "2.4.1",
     "@react-native-community/datetimepicker": "9.2.1",
     "@rnmapbox/maps": "^10.3.17",
     "@turf/area": "^7.4.0",
@@ -30,6 +34,7 @@
     "expo-notifications": "~58.1.8",
     "expo-print": "~58.0.8",
     "expo-router": "~58.0.30",
+    "expo-secure-store": "~58.0.3",
     "expo-sharing": "~58.0.22",
     "expo-splash-screen": "~58.0.13",
     "expo-sqlite": "~58.0.15",
@@ -55,14 +60,12 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@powersync/node": "^1.3.0",
     "@types/qrcode": "^1.5.6",
     "@types/react": "~19.3.0",
-    "@types/sql.js": "^1.4.11",
-    "babel-plugin-inline-import": "^3.0.0",
-    "drizzle-kit": "^0.31.11",
+    "better-sqlite3": "^12.11.1",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~58.0.4",
-    "sql.js": "^1.15.1",
     "tsx": "^4.19.2",
     "typescript": "~6.0.3"
   },
@@ -70,11 +73,13 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
+    "apk": "node scripts/gerarApk.js staging",
+    "apk:staging": "node scripts/gerarApk.js staging",
+    "apk:production": "node scripts/gerarApk.js production",
     "lint": "expo lint",
     "test:db": "tsx --tsconfig tsconfig.test.json __tests__/persistence.test.ts",
     "test:regras": "tsx --tsconfig tsconfig.test.json __tests__/regras.test.ts",
     "test:notificacoes": "tsx --tsconfig tsconfig.test.json __tests__/notificacoes.test.ts",
-    "test:migrations": "tsx --tsconfig tsconfig.test.json __tests__/migrations.test.ts",
     "test:doses": "tsx --tsconfig tsconfig.test.json __tests__/doses.test.ts",
     "test:cadastro": "tsx --tsconfig tsconfig.test.json __tests__/cadastro.test.ts",
     "test:talhoes": "tsx --tsconfig tsconfig.test.json __tests__/talhoes.test.ts",
@@ -82,13 +87,14 @@
     "test:auditoria": "tsx --tsconfig tsconfig.test.json __tests__/auditoriaMaquinas.test.ts",
     "test:agro": "tsx --tsconfig tsconfig.test.json __tests__/agriculturaMapa.test.ts",
     "test:areas": "tsx --tsconfig tsconfig.test.json __tests__/areasMapa.test.ts",
-    "test:reparo": "tsx --tsconfig tsconfig.test.json __tests__/reparoMigracoes.test.ts",
     "test:rebanhomapa": "tsx --tsconfig tsconfig.test.json __tests__/rebanhoMapa.test.ts",
     "test:cerca": "tsx --tsconfig tsconfig.test.json __tests__/cercaMapa.test.ts",
     "test:plantio": "tsx --tsconfig tsconfig.test.json __tests__/plantioMapa.test.ts",
     "test:trajetos": "tsx --tsconfig tsconfig.test.json __tests__/trajetosMapa.test.ts",
     "test:tarefas": "tsx --tsconfig tsconfig.test.json __tests__/tarefasMapa.test.ts",
-    "test": "npm run test:regras && npm run test:db && npm run test:notificacoes && npm run test:migrations && npm run test:reparo && npm run test:doses && npm run test:cadastro && npm run test:talhoes && npm run test:maquinas && npm run test:auditoria && npm run test:agro && npm run test:areas && npm run test:rebanhomapa && npm run test:cerca && npm run test:plantio && npm run test:trajetos && npm run test:tarefas"
+    "test": "npm run test:regras && npm run test:db && npm run test:notificacoes && npm run test:doses && npm run test:cadastro && npm run test:talhoes && npm run test:maquinas && npm run test:auditoria && npm run test:agro && npm run test:areas && npm run test:rebanhomapa && npm run test:cerca && npm run test:plantio && npm run test:trajetos && npm run test:tarefas && npm run test:contasync && npm run test:schema",
+    "test:contasync": "tsx --tsconfig tsconfig.test.json __tests__/contaSync.test.ts",
+    "test:schema": "tsx --tsconfig tsconfig.test.json __tests__/schemaColunas.test.ts"
   },
   "private": true
 }

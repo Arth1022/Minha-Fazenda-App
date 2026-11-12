@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { createContext, useContext } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -9,7 +9,17 @@ import {
 import { useRouter } from 'expo-router';
 
 import { AgroColors, Spacing, Typography } from '@/constants/theme';
-import { AppIcon } from './AppIcon';
+
+/**
+ * O que aparece à direita de todo cabeçalho quando a tela não passa `direita`
+ * (o app põe o avatar do perfil). Fica num contexto para o componente de UI
+ * não depender das features.
+ */
+const DireitaPadrao = createContext<React.ReactNode>(null);
+
+export function HeaderDireitaProvider({ elemento, children }: { elemento: React.ReactNode; children: React.ReactNode }) {
+  return <DireitaPadrao.Provider value={elemento}>{children}</DireitaPadrao.Provider>;
+}
 
 export interface HeaderProps {
   /** Título exibido na barra superior */
@@ -20,16 +30,12 @@ export interface HeaderProps {
   showBack?: boolean;
   /** Exibe ícone de menu hambúrguer (☰) à esquerda quando showBack=false */
   showMenu?: boolean;
-  /** Exibe sino de notificação à direita */
-  showNotification?: boolean;
-  /** Exibe botão de mais opções (⋮) à direita */
-  showMore?: boolean;
   /** Sub-banner verde abaixo do cabeçalho (ex.: "✓ Tratamento Animal" na Tela 3 do Figma) */
   subBannerTitle?: string;
   /** Callback customizado para o botão esquerdo */
   onLeftPress?: () => void;
-  /** Callback customizado para o botão direito */
-  onRightPress?: () => void;
+  /** Conteúdo à direita; sem ele, vale o padrão do app (avatar do perfil) */
+  direita?: React.ReactNode;
   /** Estilo customizado */
   style?: ViewStyle;
 }
@@ -44,14 +50,13 @@ export function Header({
   subtitle,
   showBack = false,
   showMenu = false,
-  showNotification = false,
-  showMore = false,
   subBannerTitle,
   onLeftPress,
-  onRightPress,
+  direita,
   style,
 }: HeaderProps) {
   const router = useRouter();
+  const direitaPadrao = useContext(DireitaPadrao);
 
   const handleLeftAction = () => {
     if (onLeftPress) {
@@ -111,35 +116,7 @@ export function Header({
           </View>
         </View>
 
-        <View style={styles.rightRow}>
-          {showNotification ? (
-            <Pressable
-              onPress={onRightPress}
-              hitSlop={10}
-              style={({ pressed }) => [
-                styles.iconBtn,
-                pressed && styles.pressed,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Notificações">
-              <AppIcon name="bell" size={22} color={AgroColors.textInverse} />
-            </Pressable>
-          ) : null}
-
-          {showMore ? (
-            <Pressable
-              onPress={onRightPress}
-              hitSlop={10}
-              style={({ pressed }) => [
-                styles.iconBtn,
-                pressed && styles.pressed,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="Mais opções">
-              <Text style={styles.moreDots}>⋮</Text>
-            </Pressable>
-          ) : null}
-        </View>
+        <View style={styles.rightRow}>{direita ?? direitaPadrao}</View>
       </View>
 
       {subBannerTitle ? (
@@ -218,12 +195,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#A7F3D0',
     marginTop: 1,
-  },
-  moreDots: {
-    color: AgroColors.textInverse,
-    fontSize: 20,
-    fontWeight: '800',
-    lineHeight: 22,
   },
   subBanner: {
     width: '100%',

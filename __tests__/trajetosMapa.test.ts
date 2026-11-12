@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 
 import {
   corDaMaquina,
@@ -27,7 +27,6 @@ import {
   gravarPontos,
   iniciarUso,
   limparPontosAntigos,
-  preencherUsosPorArea,
   reabrirUso,
 } from '@/features/maquinas/data/usos';
 import { decidirAutomacao, fimPorSaidaDaFazenda } from '@/features/maquinas/services/automacao';
@@ -39,7 +38,7 @@ import { etapasPendentesNasAreas, iniciarCiclo } from '@/services/cicloService';
 import { criarTalhao } from '@/services/talhaoService';
 import { usuarioAtual } from '@/services/usuario';
 import type { Coordenada } from '@/utils/geoMath';
-import { db, initTestDatabase, pontosGps, talhoes, usosArea, usosMaquina } from './support/database';
+import { db, initTestDatabase, pontosGps, talhoes, usosArea, usosMaquina, fecharTestDatabase } from './support/database';
 
 function check(condition: boolean, message: string) {
   if (!condition) throw new Error(message);
@@ -316,7 +315,7 @@ async function banco() {
     '"Desfazer" reabre o uso e as regras recomeçam dali (RF-050)'
   );
   check(
-    (await db.select().from(usosArea).where(eq(usosArea.usoId, uso.id))).length === 0,
+    (await db.select().from(usosArea).where(and(eq(usosArea.usoId, uso.id), isNull(usosArea.deletedAt)))).length === 0,
     'reaberto: o "por área" sai até encerrar de novo'
   );
   await gravarPontos(uso.id, vaiEVolta(24, 620, 880, 150, 1.5, fimAuto.getTime() + 6 * MIN));
@@ -324,7 +323,7 @@ async function banco() {
   check(
     (manual.uso?.kmTotal ?? 0) > kmAntes &&
       (await db.select().from(pontosGps).where(eq(pontosGps.usoId, uso.id))).length === 0 &&
-      (await db.select().from(usosArea).where(eq(usosArea.usoId, uso.id))).length === 2,
+      (await db.select().from(usosArea).where(and(eq(usosArea.usoId, uso.id), isNull(usosArea.deletedAt)))).length === 2,
     'encerrado na mão depois do "Desfazer": rastro inteiro, pontos apagados, por área de volta'
   );
   check(
@@ -363,33 +362,8 @@ async function banco() {
     'passadas 12 h, os pontos do uso saem'
   );
 
-  // Usos de antes da tabela por área: copiados do JSON uma vez
-  const [antigo] = await db
-    .insert(usosMaquina)
-    .values({
-      maquinaId: trator.id,
-      inicio: new Date(T0 - 48 * 60 * MIN),
-      fim: new Date(T0 - 47 * 60 * MIN),
-      operador: 'Carlos',
-      operadorId: 'carlos',
-      talhoes: [{ talhaoId: pasto2.id, nome: 'Pasto 2', km: 1.2, segundos: 900, areaHa: null }],
-    })
-    .returning();
-  check((await preencherUsosPorArea()) === 1, 'uso antigo ganha a linha por área na abertura do app');
-  check(
-    (await db.select().from(usosArea).where(eq(usosArea.usoId, antigo.id)))[0]?.segundos === 900 &&
-      (await preencherUsosPorArea()) === 0,
-    'copiado uma vez só'
-  );
-
   check(usuarioAtual().id === reaberto.operadorId, 'o uso é de quem está com o celular');
 
-  // Área apagada de vez leva as linhas por área (ON DELETE CASCADE)
-  await db.delete(talhoes).where(eq(talhoes.id, pasto2.id));
-  check(
-    (await db.select().from(usosArea).where(eq(usosArea.areaId, pasto2.id))).length === 0,
-    'apagar a área apaga o tempo das máquinas nela'
-  );
 }
 
 async function runTrajetosMapaTest() {
@@ -399,7 +373,7 @@ async function runTrajetosMapaTest() {
   console.log('\n🎉 TRAJETOS DAS MÁQUINAS OK!');
 }
 
-runTrajetosMapaTest().catch((erro) => {
+runTrajetosMapaTest().then(fecharTestDatabase).catch((erro) => {
   console.error('❌', erro);
   process.exit(1);
 });

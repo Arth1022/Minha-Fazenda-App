@@ -1,6 +1,6 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 
-import { db, leiturasHorimetro } from '@/database';
+import { daFazenda, db, leiturasHorimetro, novoRegistro } from '@/database';
 import type { LeituraHorimetro } from '@/dtos';
 import { usuarioAtual, type Usuario } from '@/services/usuario';
 
@@ -24,17 +24,17 @@ export async function registrarLeituraHorimetro(
   const operador = dados.operador ?? usuarioAtual();
   const [leitura] = await db
     .insert(leiturasHorimetro)
-    .values({
+    .values(novoRegistro({
       maquinaId: dados.maquinaId,
       usoId: dados.usoId ?? null,
       operador: operador.nome,
       operadorId: operador.id,
       valorH: dados.valorH,
       estimadoH: dados.estimadoH ?? null,
-      origem: 'avulsa',
+      origem: 'avulsa' as const,
       fotoUri: dados.fotoUri ?? null,
       lidoEm: agora,
-    })
+    }))
     .returning();
   return leitura;
 }
@@ -44,7 +44,7 @@ export function leiturasDaMaquina(maquinaId: string, limite = 10) {
   return db
     .select()
     .from(leiturasHorimetro)
-    .where(eq(leiturasHorimetro.maquinaId, maquinaId))
+    .where(and(daFazenda(leiturasHorimetro), eq(leiturasHorimetro.maquinaId, maquinaId)))
     .orderBy(desc(leiturasHorimetro.lidoEm))
     .limit(limite);
 }

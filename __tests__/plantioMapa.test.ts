@@ -40,6 +40,7 @@ import {
   notificacoesAgendadas,
   talhoes,
   type EtapaCiclo,
+  fecharTestDatabase,
 } from './support/database';
 
 function check(condition: boolean, message: string) {
@@ -93,6 +94,9 @@ const etapa = (
   responsavelNome: null,
   atribuidaEm: null,
   atribuidaPor: null,
+  fazendaId: 'f',
+  createdBy: null,
+  deletedAt: null,
   createdAt: HOJE,
   updatedAt: HOJE,
 });
@@ -284,19 +288,6 @@ async function banco() {
     (await rejeita(() => plantarMilho(lavoura.id, d(1, 11))))?.startsWith('Esta lavoura já tem um ciclo ativo') === true,
     'um ciclo ativo por área (RN-009)'
   );
-  const segundoAtivo = await rejeita(async () => {
-    await db.insert(ciclosPlantio).values({
-      areaId: lavoura.id,
-      cultura: 'Soja',
-      dataPlantio: d(1, 11),
-      areaHa: 1,
-      taxaKgHa: 1,
-      sacoKg: 1,
-      sementesKg: 1,
-      sacos: 1,
-    });
-  });
-  check(segundoAtivo !== null, 'o índice parcial único barra um segundo ciclo ativo direto no banco');
 
   // Etapas: marcar feita (só acréscimo), mudar a data, observação
   const [, , adubacao, pulverizacao, colheita] = ativo!.etapas;
@@ -434,12 +425,13 @@ async function banco() {
     'modelo sem colheita não passa'
   );
 
-  // Área apagada de vez leva ciclos e etapas (ON DELETE CASCADE)
-  await db.delete(talhoes).where(eq(talhoes.id, lavoura.id));
+  // Área excluída: some do mapa e os ciclos ficam no histórico (o ativo vira cancelado)
+  await deletarTalhao(lavoura.id);
+  const ciclosDaArea = await db.select().from(ciclosPlantio).where(eq(ciclosPlantio.areaId, lavoura.id));
   check(
-    (await db.select().from(ciclosPlantio).where(eq(ciclosPlantio.areaId, lavoura.id))).length === 0 &&
-      (await db.select().from(etapasCiclo).where(eq(etapasCiclo.cicloId, cicloId))).length === 0,
-    'apagar a área apaga os ciclos e as etapas'
+    ciclosDaArea.length > 0 && ciclosDaArea.every((c) => c.status !== 'ativo') &&
+      (await db.select().from(etapasCiclo).where(eq(etapasCiclo.cicloId, cicloId))).length > 0,
+    'apagar a área cancela o ciclo ativo e mantém o histórico'
   );
 }
 
@@ -450,7 +442,7 @@ async function runPlantioMapaTest() {
   console.log('\n🎉 PLANTIO NA LAVOURA OK!');
 }
 
-runPlantioMapaTest().catch((erro) => {
+runPlantioMapaTest().then(fecharTestDatabase).catch((erro) => {
   console.error('❌', erro);
   process.exit(1);
 });

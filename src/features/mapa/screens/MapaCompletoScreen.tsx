@@ -643,10 +643,10 @@ export default function MapaCompletoScreen() {
     iniciar();
   };
 
-  const salvarFazenda = (nome: string) => {
+  const salvarFazenda = async () => {
     if (!rascunho) return;
     try {
-      salvarFazendaMapa(nome, rascunho.pontos);
+      await salvarFazendaMapa(rascunho.pontos);
       limpar();
       setRascunho(null);
       setErroSalvar(undefined);

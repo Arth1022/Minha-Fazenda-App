@@ -1,6 +1,6 @@
-import { desc, eq, max } from 'drizzle-orm';
+import { and, desc, eq, max } from 'drizzle-orm';
 
-import { avaliacoesCorporais, db, pesagens } from '@/database';
+import { avaliacoesCorporais, daFazenda, db, novoRegistro, pesagens } from '@/database';
 import type { DadosPesagem, NovaPesagem } from '@/dtos';
 import { escoreValido } from '../services/indicadores';
 
@@ -9,7 +9,7 @@ export function pesagensDoAnimal(animalId: string) {
   return db
     .select()
     .from(pesagens)
-    .where(eq(pesagens.animalId, animalId))
+    .where(and(daFazenda(pesagens), eq(pesagens.animalId, animalId)))
     .orderBy(desc(pesagens.data));
 }
 
@@ -23,11 +23,12 @@ export function pesosAtuais() {
   return db
     .select({ animalId: pesagens.animalId, pesoKg: pesagens.pesoKg, data: max(pesagens.data) })
     .from(pesagens)
+    .where(daFazenda(pesagens))
     .groupBy(pesagens.animalId);
 }
 
 export async function createPesagem(input: NovaPesagem): Promise<void> {
-  await db.insert(pesagens).values(input);
+  await db.insert(pesagens).values(novoRegistro(input));
 }
 
 /** Escores corporais do animal, do mais recente para o mais antigo. */
@@ -35,7 +36,7 @@ export function avaliacoesDoAnimal(animalId: string) {
   return db
     .select()
     .from(avaliacoesCorporais)
-    .where(eq(avaliacoesCorporais.animalId, animalId))
+    .where(and(daFazenda(avaliacoesCorporais), eq(avaliacoesCorporais.animalId, animalId)))
     .orderBy(desc(avaliacoesCorporais.data));
 }
 
@@ -54,8 +55,8 @@ export async function registrarPesagem({
   if (pesoKg !== null && !(Number.isFinite(pesoKg) && pesoKg > 0)) throw new Error('Peso inválido');
   if (escore !== null && !escoreValido(escore)) throw new Error('Escore corporal vai de 1 a 5');
 
-  db.transaction((tx) => {
-    if (pesoKg !== null) tx.insert(pesagens).values({ animalId, data, pesoKg, metodo }).run();
-    if (escore !== null) tx.insert(avaliacoesCorporais).values({ animalId, data, escore }).run();
+  await db.transaction(async (tx) => {
+    if (pesoKg !== null) await tx.insert(pesagens).values(novoRegistro({ animalId, data, pesoKg, metodo }));
+    if (escore !== null) await tx.insert(avaliacoesCorporais).values(novoRegistro({ animalId, data, escore }));
   });
 }

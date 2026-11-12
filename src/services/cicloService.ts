@@ -1,10 +1,15 @@
 import { and, asc, desc, eq, gt, inArray, isNull, ne, sql } from 'drizzle-orm';
 
 import {
+  atualizar,
   ciclosPlantio,
+  daFazenda,
   db,
   etapasCiclo,
   modelosCultura,
+  naoApagado,
+  newId,
+  novoRegistro,
   talhoes,
   type CicloPlantio,
   type EtapaCiclo,
@@ -12,7 +17,6 @@ import {
   type ModeloCultura,
   type TipoEtapa,
 } from '@/database';
-import { newId } from '@/database/id';
 import { avisarPessoa, cancelarLembretesDoCiclo, reagendarLembretesDoCiclo } from '@/services/notificacoes';
 import { podeAtribuirTarefas, usuarioAtual } from '@/services/usuario';
 import { adicionarDias, diasEntre, formatDiaMes, inicioDoDia } from '@/utils/date';
@@ -23,14 +27,10 @@ import { adicionarDias, diasEntre, formatDiaMes, inicioDoDia } from '@/utils/dat
  * selo da tabela de áreas, sem JOIN. Etapas feitas não voltam (RN-007).
  */
 
-/** Área com o resumo mexido: na fila do sync (quem ainda não subiu continua 'created'). */
-const syncAlterado = () =>
-  sql`CASE WHEN ${talhoes.syncStatus} = 'created' THEN 'created' ELSE 'updated' END`;
-
 const ativoDaArea = (areaId: string) =>
-  and(eq(ciclosPlantio.areaId, areaId), eq(ciclosPlantio.status, 'ativo'));
+  and(daFazenda(ciclosPlantio), eq(ciclosPlantio.areaId, areaId), eq(ciclosPlantio.status, 'ativo'));
 
-/** O ciclo ativo da área (0 ou 1 linha, pelo índice parcial único). */
+/** O ciclo ativo da área (0 ou 1 linha: quem planta confere antes de gravar). */
 export function cicloAtivoDaArea(areaId: string) {
   return db.select().from(ciclosPlantio).where(ativoDaArea(areaId)).limit(1);
 }
@@ -40,7 +40,7 @@ export function etapasDoCiclo(cicloId: string) {
   return db
     .select()
     .from(etapasCiclo)
-    .where(eq(etapasCiclo.cicloId, cicloId))
+    .where(and(daFazenda(etapasCiclo), eq(etapasCiclo.cicloId, cicloId)))
     .orderBy(asc(etapasCiclo.ordem));
 }
 
@@ -55,9 +55,18 @@ export async function cicloAtivoComEtapas(areaId: string): Promise<CicloComEtapa
   return ciclo ? { ciclo, etapas: await etapasDoCiclo(ciclo.id) } : null;
 }
 
+async function cicloPorId(cicloId: string): Promise<CicloPlantio | undefined> {
+  const [ciclo] = await db
+    .select()
+    .from(ciclosPlantio)
+    .where(and(daFazenda(ciclosPlantio), eq(ciclosPlantio.id, cicloId)))
+    .limit(1);
+  return ciclo;
+}
+
 /** Um ciclo qualquer com as etapas (ciclo anterior aberto da lista). */
 export async function cicloComEtapas(cicloId: string): Promise<CicloComEtapas | null> {
-  const [ciclo] = await db.select().from(ciclosPlantio).where(eq(ciclosPlantio.id, cicloId)).limit(1);
+  const ciclo = await cicloPorId(cicloId);
   return ciclo ? { ciclo, etapas: await etapasDoCiclo(ciclo.id) } : null;
 }
 
@@ -66,7 +75,7 @@ export function ciclosAnterioresDaArea(areaId: string) {
   return db
     .select()
     .from(ciclosPlantio)
-    .where(and(eq(ciclosPlantio.areaId, areaId), ne(ciclosPlantio.status, 'ativo')))
+    .where(and(daFazenda(ciclosPlantio), eq(ciclosPlantio.areaId, areaId), ne(ciclosPlantio.status, 'ativo')))
     .orderBy(desc(ciclosPlantio.dataPlantio));
 }
 
@@ -80,9 +89,10 @@ export function etapasPendentesNasAreas(areaIds: readonly string[]) {
   return db
     .select({ areaId: ciclosPlantio.areaId, etapa: etapasCiclo })
     .from(ciclosPlantio)
-    .innerJoin(etapasCiclo, eq(etapasCiclo.cicloId, ciclosPlantio.id))
+    .innerJoin(etapasCiclo, and(eq(etapasCiclo.cicloId, ciclosPlantio.id), naoApagado(etapasCiclo)))
     .where(
       and(
+        daFazenda(ciclosPlantio),
         inArray(ciclosPlantio.areaId, areaIds.length > 0 ? [...areaIds] : ['']),
         eq(ciclosPlantio.status, 'ativo'),
         isNull(etapasCiclo.realizadaEm)
@@ -103,7 +113,7 @@ async function atualizarLembretes(cicloId: string): Promise<void> {
       .select({ ciclo: ciclosPlantio, nomeArea: talhoes.nome })
       .from(ciclosPlantio)
       .innerJoin(talhoes, eq(talhoes.id, ciclosPlantio.areaId))
-      .where(eq(ciclosPlantio.id, cicloId))
+      .where(and(daFazenda(ciclosPlantio), eq(ciclosPlantio.id, cicloId)))
       .limit(1);
     if (!linha || linha.ciclo.status !== 'ativo') {
       await cancelarLembretesDoCiclo(cicloId);
@@ -133,7 +143,7 @@ export interface DadosIniciarCiclo {
   areaId: string;
   /** Nome da cultura ("Milho silagem") */
   cultura: string;
-  /** Modelo que gerou a linha do tempo (pronto ou do admin) */
+  /** Modelo que gerou a linha do tempo (pronto ou do dono) */
   modeloId: string | null;
   dataPlantio: Date;
   /** Conta das sementes (RF-035/RF-036) */
@@ -160,18 +170,19 @@ function conferirEtapas(etapas: readonly { tipo: TipoEtapa; previstaEm: Date }[]
 /**
  * Começa o ciclo (RF-037): grava o ciclo com a conta das sementes, as etapas e
  * o resumo na área, numa transação. Só lavoura recebe plantio (RN-004) e há no
- * máximo um ciclo ativo por área (RN-009; o índice parcial garante no banco).
+ * máximo um ciclo ativo por área (RN-009, conferido dentro da transação).
  */
 export async function iniciarCiclo(dados: DadosIniciarCiclo): Promise<string> {
   const cultura = dados.cultura.trim();
   if (!cultura) throw new Error('Escolha a cultura.');
   conferirEtapas(dados.etapas);
-  const [area] = await db.select({ tipo: talhoes.tipo }).from(talhoes).where(eq(talhoes.id, dados.areaId)).limit(1);
+  const [area] = await db
+    .select({ tipo: talhoes.tipo })
+    .from(talhoes)
+    .where(and(daFazenda(talhoes), eq(talhoes.id, dados.areaId)))
+    .limit(1);
   if (!area) throw new Error('Área não encontrada.');
   if (area.tipo !== 'lavoura') throw new Error('Só lavoura recebe plantio.');
-  if (await existeCicloAtivo(dados.areaId)) {
-    throw new Error('Esta lavoura já tem um ciclo ativo. Colha ou cancele o atual antes de plantar de novo.');
-  }
 
   const cicloId = newId();
   const dataPlantio = inicioDoDia(dados.dataPlantio);
@@ -180,18 +191,24 @@ export async function iniciarCiclo(dados: DadosIniciarCiclo): Promise<string> {
   const etapas = dados.etapas
     .map((etapa, indice) => ({ etapa, indice }))
     .sort((a, b) => a.etapa.previstaEm.getTime() - b.etapa.previstaEm.getTime() || a.indice - b.indice)
-    .map(({ etapa }, ordem) => ({
-      cicloId,
-      ordem,
-      nome: etapa.nome.trim(),
-      tipo: etapa.tipo,
-      previstaEm: inicioDoDia(etapa.previstaEm),
-      realizadaEm: etapa.realizadaEm ? inicioDoDia(etapa.realizadaEm) : null,
-    }));
+    .map(({ etapa }, ordem) =>
+      novoRegistro({
+        cicloId,
+        ordem,
+        nome: etapa.nome.trim(),
+        tipo: etapa.tipo,
+        previstaEm: inicioDoDia(etapa.previstaEm),
+        realizadaEm: etapa.realizadaEm ? inicioDoDia(etapa.realizadaEm) : null,
+      })
+    );
 
-  db.transaction((tx) => {
-    tx.insert(ciclosPlantio)
-      .values({
+  await db.transaction(async (tx) => {
+    const [jaAtivo] = await tx.select({ id: ciclosPlantio.id }).from(ciclosPlantio).where(ativoDaArea(dados.areaId)).limit(1);
+    if (jaAtivo) {
+      throw new Error('Esta lavoura já tem um ciclo ativo. Colha ou cancele o atual antes de plantar de novo.');
+    }
+    await tx.insert(ciclosPlantio).values(
+      novoRegistro({
         id: cicloId,
         areaId: dados.areaId,
         cultura,
@@ -202,23 +219,31 @@ export async function iniciarCiclo(dados: DadosIniciarCiclo): Promise<string> {
         sacoKg: dados.sacoKg,
         sementesKg: dados.sementesKg,
         sacos: dados.sacos,
-        criadoPor: usuarioAtual().id,
       })
-      .run();
-    tx.insert(etapasCiclo).values(etapas).run();
-    tx.update(talhoes)
-      .set({ cultura, faseLavoura: plantado ? 'vegetativo' : 'preparo', dataPlantio, syncStatus: syncAlterado() })
-      .where(eq(talhoes.id, dados.areaId))
-      .run();
+    );
+    await tx.insert(etapasCiclo).values(etapas);
+    await tx
+      .update(talhoes)
+      .set(atualizar({ cultura, faseLavoura: plantado ? ('vegetativo' as const) : ('preparo' as const), dataPlantio }))
+      .where(eq(talhoes.id, dados.areaId));
   });
   await atualizarLembretes(cicloId);
   return cicloId;
 }
 
+async function etapaPorId(etapaId: string): Promise<EtapaCiclo | undefined> {
+  const [etapa] = await db
+    .select()
+    .from(etapasCiclo)
+    .where(and(daFazenda(etapasCiclo), eq(etapasCiclo.id, etapaId)))
+    .limit(1);
+  return etapa;
+}
+
 async function etapaDoCicloAtivo(etapaId: string): Promise<{ etapa: EtapaCiclo; ciclo: CicloPlantio }> {
-  const [etapa] = await db.select().from(etapasCiclo).where(eq(etapasCiclo.id, etapaId)).limit(1);
+  const etapa = await etapaPorId(etapaId);
   if (!etapa) throw new Error('Etapa não encontrada.');
-  const [ciclo] = await db.select().from(ciclosPlantio).where(eq(ciclosPlantio.id, etapa.cicloId)).limit(1);
+  const ciclo = await cicloPorId(etapa.cicloId);
   if (!ciclo || ciclo.status !== 'ativo') throw new Error('Este ciclo já foi encerrado.');
   return { etapa, ciclo };
 }
@@ -230,11 +255,7 @@ async function etapaDoCicloAtivo(etapaId: string): Promise<{ etapa: EtapaCiclo; 
  * encerra o ciclo, que vai para os ciclos anteriores (RF-041).
  */
 export async function marcarEtapaFeita(etapaId: string, quando = new Date()): Promise<void> {
-  const [jaFeita] = await db
-    .select({ realizadaEm: etapasCiclo.realizadaEm })
-    .from(etapasCiclo)
-    .where(eq(etapasCiclo.id, etapaId))
-    .limit(1);
+  const jaFeita = await etapaPorId(etapaId);
   if (jaFeita?.realizadaEm) return;
   const { etapa, ciclo } = await etapaDoCicloAtivo(etapaId);
   const dia = inicioDoDia(quando);
@@ -245,36 +266,41 @@ export async function marcarEtapaFeita(etapaId: string, quando = new Date()): Pr
           .select({ id: etapasCiclo.id, previstaEm: etapasCiclo.previstaEm })
           .from(etapasCiclo)
           .where(
-            and(eq(etapasCiclo.cicloId, ciclo.id), gt(etapasCiclo.ordem, etapa.ordem), isNull(etapasCiclo.realizadaEm))
+            and(
+              daFazenda(etapasCiclo),
+              eq(etapasCiclo.cicloId, ciclo.id),
+              gt(etapasCiclo.ordem, etapa.ordem),
+              isNull(etapasCiclo.realizadaEm)
+            )
           )
       : [];
 
-  db.transaction((tx) => {
-    tx.update(etapasCiclo)
-      .set({ realizadaEm: dia })
-      .where(and(eq(etapasCiclo.id, etapaId), isNull(etapasCiclo.realizadaEm)))
-      .run();
+  await db.transaction(async (tx) => {
+    await tx
+      .update(etapasCiclo)
+      .set(atualizar({ realizadaEm: dia }))
+      .where(and(eq(etapasCiclo.id, etapaId), isNull(etapasCiclo.realizadaEm)));
     if (etapa.tipo === 'plantio') {
       for (const seguinte of seguintes) {
-        tx.update(etapasCiclo)
-          .set({ previstaEm: adicionarDias(seguinte.previstaEm, atraso) })
-          .where(eq(etapasCiclo.id, seguinte.id))
-          .run();
+        await tx
+          .update(etapasCiclo)
+          .set(atualizar({ previstaEm: adicionarDias(seguinte.previstaEm, atraso) }))
+          .where(eq(etapasCiclo.id, seguinte.id));
       }
-      tx.update(ciclosPlantio).set({ dataPlantio: dia }).where(eq(ciclosPlantio.id, ciclo.id)).run();
-      tx.update(talhoes)
-        .set({ faseLavoura: 'vegetativo', dataPlantio: dia, syncStatus: syncAlterado() })
-        .where(eq(talhoes.id, ciclo.areaId))
-        .run();
+      await tx.update(ciclosPlantio).set(atualizar({ dataPlantio: dia })).where(eq(ciclosPlantio.id, ciclo.id));
+      await tx
+        .update(talhoes)
+        .set(atualizar({ faseLavoura: 'vegetativo' as const, dataPlantio: dia }))
+        .where(eq(talhoes.id, ciclo.areaId));
     } else if (etapa.tipo === 'colheita') {
-      tx.update(ciclosPlantio)
-        .set({ status: 'encerrado', encerradoEm: dia })
-        .where(eq(ciclosPlantio.id, ciclo.id))
-        .run();
-      tx.update(talhoes)
-        .set({ cultura: null, faseLavoura: 'pousio', dataPlantio: null, syncStatus: syncAlterado() })
-        .where(eq(talhoes.id, ciclo.areaId))
-        .run();
+      await tx
+        .update(ciclosPlantio)
+        .set(atualizar({ status: 'encerrado' as const, encerradoEm: dia }))
+        .where(eq(ciclosPlantio.id, ciclo.id));
+      await tx
+        .update(talhoes)
+        .set(atualizar({ cultura: null, faseLavoura: 'pousio' as const, dataPlantio: null }))
+        .where(eq(talhoes.id, ciclo.areaId));
     }
   });
   await atualizarLembretes(ciclo.id);
@@ -298,23 +324,27 @@ export async function mudarPrevisaoDaEtapa(etapaId: string, data: Date): Promise
       ? await db
           .select({ id: etapasCiclo.id, previstaEm: etapasCiclo.previstaEm })
           .from(etapasCiclo)
-          .where(and(eq(etapasCiclo.cicloId, ciclo.id), ne(etapasCiclo.id, etapaId), isNull(etapasCiclo.realizadaEm)))
+          .where(
+            and(
+              daFazenda(etapasCiclo),
+              eq(etapasCiclo.cicloId, ciclo.id),
+              ne(etapasCiclo.id, etapaId),
+              isNull(etapasCiclo.realizadaEm)
+            )
+          )
       : [];
 
-  db.transaction((tx) => {
-    tx.update(etapasCiclo).set({ previstaEm: nova }).where(eq(etapasCiclo.id, etapaId)).run();
+  await db.transaction(async (tx) => {
+    await tx.update(etapasCiclo).set(atualizar({ previstaEm: nova })).where(eq(etapasCiclo.id, etapaId));
     if (etapa.tipo === 'plantio') {
       for (const outra of outras) {
-        tx.update(etapasCiclo)
-          .set({ previstaEm: adicionarDias(outra.previstaEm, atraso) })
-          .where(eq(etapasCiclo.id, outra.id))
-          .run();
+        await tx
+          .update(etapasCiclo)
+          .set(atualizar({ previstaEm: adicionarDias(outra.previstaEm, atraso) }))
+          .where(eq(etapasCiclo.id, outra.id));
       }
-      tx.update(ciclosPlantio).set({ dataPlantio: nova }).where(eq(ciclosPlantio.id, ciclo.id)).run();
-      tx.update(talhoes)
-        .set({ dataPlantio: nova, syncStatus: syncAlterado() })
-        .where(eq(talhoes.id, ciclo.areaId))
-        .run();
+      await tx.update(ciclosPlantio).set(atualizar({ dataPlantio: nova })).where(eq(ciclosPlantio.id, ciclo.id));
+      await tx.update(talhoes).set(atualizar({ dataPlantio: nova })).where(eq(talhoes.id, ciclo.areaId));
     }
   });
   await atualizarLembretes(ciclo.id);
@@ -324,23 +354,23 @@ export async function mudarPrevisaoDaEtapa(etapaId: string, data: Date): Promise
 export async function salvarObservacaoDaEtapa(etapaId: string, texto: string): Promise<void> {
   await db
     .update(etapasCiclo)
-    .set({ observacao: texto.trim() || null })
+    .set(atualizar({ observacao: texto.trim() || null }))
     .where(eq(etapasCiclo.id, etapaId));
 }
 
 /** Ciclo começado por engano ou perdido: sai do painel e fica nos anteriores como cancelado. */
 export async function cancelarCiclo(cicloId: string): Promise<void> {
-  const [ciclo] = await db.select().from(ciclosPlantio).where(eq(ciclosPlantio.id, cicloId)).limit(1);
+  const ciclo = await cicloPorId(cicloId);
   if (!ciclo || ciclo.status !== 'ativo') return;
-  db.transaction((tx) => {
-    tx.update(ciclosPlantio)
-      .set({ status: 'cancelado', encerradoEm: new Date() })
-      .where(and(eq(ciclosPlantio.id, cicloId), eq(ciclosPlantio.status, 'ativo')))
-      .run();
-    tx.update(talhoes)
-      .set({ cultura: null, faseLavoura: null, dataPlantio: null, syncStatus: syncAlterado() })
-      .where(eq(talhoes.id, ciclo.areaId))
-      .run();
+  await db.transaction(async (tx) => {
+    await tx
+      .update(ciclosPlantio)
+      .set(atualizar({ status: 'cancelado' as const, encerradoEm: new Date() }))
+      .where(and(eq(ciclosPlantio.id, cicloId), eq(ciclosPlantio.status, 'ativo')));
+    await tx
+      .update(talhoes)
+      .set(atualizar({ cultura: null, faseLavoura: null, dataPlantio: null }))
+      .where(eq(talhoes.id, ciclo.areaId));
   });
   await atualizarLembretes(cicloId);
 }
@@ -354,26 +384,32 @@ export interface Responsavel {
 }
 
 async function nomeDaArea(areaId: string): Promise<string> {
-  const [area] = await db.select({ nome: talhoes.nome }).from(talhoes).where(eq(talhoes.id, areaId)).limit(1);
+  const [area] = await db
+    .select({ nome: talhoes.nome })
+    .from(talhoes)
+    .where(and(daFazenda(talhoes), eq(talhoes.id, areaId)))
+    .limit(1);
   return area?.nome ?? 'Lavoura';
 }
 
 /**
  * Atribui a etapa pendente a um colaborador (RF-067): ela vira tarefa dele;
- * null tira o responsável. Só o admin atribui. A pessoa recebe o aviso
- * (RF-070; sem API, simulado: ver `avisarPessoa`).
+ * null tira o responsável. Só o dono atribui. A pessoa recebe o aviso
+ * (RF-070; sem API de push, simulado: ver `avisarPessoa`).
  */
 export async function atribuirEtapa(etapaId: string, responsavel: Responsavel | null, agora = new Date()): Promise<void> {
   const quem = usuarioAtual();
-  if (!podeAtribuirTarefas(quem)) throw new Error('Só o admin atribui tarefas.');
+  if (!podeAtribuirTarefas(quem)) throw new Error('Só o dono da fazenda atribui tarefas.');
   const { etapa, ciclo } = await etapaDoCicloAtivo(etapaId);
   if (etapa.realizadaEm) throw new Error('Etapa feita não vira tarefa.');
   await db
     .update(etapasCiclo)
     .set(
-      responsavel
-        ? { responsavelId: responsavel.id, responsavelNome: responsavel.nome, atribuidaEm: agora, atribuidaPor: quem.id }
-        : { responsavelId: null, responsavelNome: null, atribuidaEm: null, atribuidaPor: null }
+      atualizar(
+        responsavel
+          ? { responsavelId: responsavel.id, responsavelNome: responsavel.nome, atribuidaEm: agora, atribuidaPor: quem.id }
+          : { responsavelId: null, responsavelNome: null, atribuidaEm: null, atribuidaPor: null }
+      )
     )
     .where(eq(etapasCiclo.id, etapaId));
   if (responsavel && responsavel.id !== etapa.responsavelId) {
@@ -402,9 +438,9 @@ export function tarefasDe(responsavelId: string) {
       areaTipo: talhoes.tipo,
     })
     .from(etapasCiclo)
-    .innerJoin(ciclosPlantio, eq(ciclosPlantio.id, etapasCiclo.cicloId))
-    .innerJoin(talhoes, eq(talhoes.id, ciclosPlantio.areaId))
-    .where(and(eq(etapasCiclo.responsavelId, responsavelId), ne(ciclosPlantio.status, 'cancelado')))
+    .innerJoin(ciclosPlantio, and(eq(ciclosPlantio.id, etapasCiclo.cicloId), naoApagado(ciclosPlantio)))
+    .innerJoin(talhoes, and(eq(talhoes.id, ciclosPlantio.areaId), naoApagado(talhoes)))
+    .where(and(daFazenda(etapasCiclo), eq(etapasCiclo.responsavelId, responsavelId), ne(ciclosPlantio.status, 'cancelado')))
     .orderBy(asc(etapasCiclo.previstaEm));
 }
 export type Tarefa = Awaited<ReturnType<typeof tarefasDe>>[number];
@@ -412,12 +448,12 @@ export const TABELAS_TAREFAS = ['etapas_ciclo', 'ciclos_plantio', 'talhoes'] as 
 
 /**
  * Conclui a tarefa (RF-069): é marcar a etapa como feita na linha do tempo do
- * ciclo. Quem atribuiu recebe o aviso (RF-070; sem API, simulado).
+ * ciclo. Quem atribuiu recebe o aviso (RF-070; sem API de push, simulado).
  */
 export async function concluirTarefa(etapaId: string, quando = new Date()): Promise<void> {
-  const [etapa] = await db.select().from(etapasCiclo).where(eq(etapasCiclo.id, etapaId)).limit(1);
+  const etapa = await etapaPorId(etapaId);
   if (!etapa) throw new Error('Tarefa não encontrada.');
-  const [ciclo] = await db.select().from(ciclosPlantio).where(eq(ciclosPlantio.id, etapa.cicloId)).limit(1);
+  const ciclo = await cicloPorId(etapa.cicloId);
   await marcarEtapaFeita(etapaId, quando);
   const quem = usuarioAtual();
   if (ciclo && etapa.atribuidaPor && etapa.atribuidaPor !== quem.id) {
@@ -434,9 +470,9 @@ export async function concluirTarefa(etapaId: string, quando = new Date()): Prom
   }
 }
 
-/** Modelos criados pelo admin, por nome (os prontos ficam no código). */
+/** Modelos criados na fazenda, por nome (os prontos ficam no código). */
 export function modelosDoAdmin() {
-  return db.select().from(modelosCultura).orderBy(asc(modelosCultura.nome));
+  return db.select().from(modelosCultura).where(daFazenda(modelosCultura)).orderBy(asc(modelosCultura.nome));
 }
 
 export const TABELAS_MODELOS = ['modelos_cultura'] as const;
@@ -448,7 +484,7 @@ export interface DadosModeloCultura {
   etapas: EtapaModelo[];
 }
 
-/** Modelo próprio do admin (RF-042): aparece no "Plantar" junto com os prontos. */
+/** Modelo próprio da fazenda (RF-042): aparece no "Plantar" junto com os prontos. */
 export async function criarModeloCultura(dados: DadosModeloCultura): Promise<ModeloCultura> {
   const nome = dados.nome.trim();
   if (!nome) throw new Error('Dê um nome à cultura.');
@@ -460,18 +496,19 @@ export async function criarModeloCultura(dados: DadosModeloCultura): Promise<Mod
   const [repetido] = await db
     .select({ id: modelosCultura.id })
     .from(modelosCultura)
-    .where(sql`lower(${modelosCultura.nome}) = lower(${nome})`)
+    .where(and(daFazenda(modelosCultura), sql`lower(${modelosCultura.nome}) = lower(${nome})`))
     .limit(1);
   if (repetido) throw new Error('Já existe uma cultura com esse nome.');
   const [modelo] = await db
     .insert(modelosCultura)
-    .values({
-      nome,
-      taxaKgHa: dados.taxaKgHa && dados.taxaKgHa > 0 ? dados.taxaKgHa : null,
-      sacoKg: dados.sacoKg > 0 ? dados.sacoKg : 20,
-      etapas: dados.etapas,
-      criadoPor: usuarioAtual().id,
-    })
+    .values(
+      novoRegistro({
+        nome,
+        taxaKgHa: dados.taxaKgHa && dados.taxaKgHa > 0 ? dados.taxaKgHa : null,
+        sacoKg: dados.sacoKg > 0 ? dados.sacoKg : 20,
+        etapas: dados.etapas,
+      })
+    )
     .returning();
   return modelo;
 }

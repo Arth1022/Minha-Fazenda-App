@@ -1,11 +1,10 @@
-import { count, desc, eq, isNotNull, or } from 'drizzle-orm';
+import { and, count, desc, eq, isNotNull, or } from 'drizzle-orm';
 
-import { calculosCerca, db, type TipoDeCerca } from '@/database';
-import { usuarioAtual } from '@/services/usuario';
+import { atualizar, calculosCerca, daFazenda, db, novoRegistro, type TipoDeCerca } from '@/database';
 
 /**
- * Cerca salva na área (M3): uma conta por área (índice único), reaberta pelo
- * painel. Salvar de novo substitui a anterior e tira a marca de desatualizada.
+ * Cerca salva na área (M3): uma conta por área, reaberta pelo painel. Salvar de
+ * novo substitui a anterior e tira a marca de desatualizada.
  */
 
 export interface DadosCalculoCerca {
@@ -25,21 +24,34 @@ export interface DadosCalculoCerca {
   custo: number | null;
 }
 
-/** Grava a cerca da área num comando só (insere ou substitui pela área). */
+/**
+ * Grava a cerca da área: substitui a que já existe ou cria. Sem UNIQUE no banco
+ * do sync, a transação confere a linha da área antes de inserir.
+ */
 export async function salvarCalculoCerca(dados: DadosCalculoCerca): Promise<void> {
   const valores = { ...dados, desatualizado: false };
-  await db
-    .insert(calculosCerca)
-    .values({ ...valores, criadoPor: usuarioAtual().id })
-    .onConflictDoUpdate({
-      target: calculosCerca.areaId,
-      set: { ...valores, updatedAt: new Date() },
-    });
+  await db.transaction(async (tx) => {
+    const [existente] = await tx
+      .select({ id: calculosCerca.id })
+      .from(calculosCerca)
+      .where(and(daFazenda(calculosCerca), eq(calculosCerca.areaId, dados.areaId)))
+      .limit(1);
+    if (existente) {
+      await tx.update(calculosCerca).set(atualizar(valores)).where(eq(calculosCerca.id, existente.id));
+    } else {
+      await tx.insert(calculosCerca).values(novoRegistro(valores));
+    }
+  });
 }
 
-/** A cerca salva da área (lista com 0 ou 1 linha, pelo índice único). */
+/** A cerca salva da área (lista com 0 ou 1 linha; a mais recente, se o sync trouxer duas). */
 export function calculoCercaDaArea(areaId: string) {
-  return db.select().from(calculosCerca).where(eq(calculosCerca.areaId, areaId)).limit(1);
+  return db
+    .select()
+    .from(calculosCerca)
+    .where(and(daFazenda(calculosCerca), eq(calculosCerca.areaId, areaId)))
+    .orderBy(desc(calculosCerca.updatedAt))
+    .limit(1);
 }
 export const TABELAS_CERCA = ['calculos_cerca'] as const;
 
@@ -48,7 +60,7 @@ export async function existeCercaSalva(areaId: string): Promise<boolean> {
   const [linha] = await db
     .select({ total: count() })
     .from(calculosCerca)
-    .where(eq(calculosCerca.areaId, areaId));
+    .where(and(daFazenda(calculosCerca), eq(calculosCerca.areaId, areaId)));
   return (linha?.total ?? 0) > 0;
 }
 
@@ -62,10 +74,13 @@ export async function ultimosPrecosCerca() {
     })
     .from(calculosCerca)
     .where(
-      or(
-        isNotNull(calculosCerca.precoRolo),
-        isNotNull(calculosCerca.precoMourao),
-        isNotNull(calculosCerca.precoEsticador)
+      and(
+        daFazenda(calculosCerca),
+        or(
+          isNotNull(calculosCerca.precoRolo),
+          isNotNull(calculosCerca.precoMourao),
+          isNotNull(calculosCerca.precoEsticador)
+        )
       )
     )
     .orderBy(desc(calculosCerca.updatedAt))

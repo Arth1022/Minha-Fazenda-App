@@ -103,7 +103,7 @@ export function DadosMaquinaTab({ ficha, anotacoes, onEditar, onAdicionarAnotaca
             <Fragment key={anotacao.id}>
               {index > 0 ? <View style={styles.divisor} /> : null}
               <View style={styles.anotacao}>
-                <Text style={styles.anotacaoData}>{formatDataBR(anotacao.createdAt)}</Text>
+                <Text style={styles.anotacaoData}>{anotacao.createdAt ? formatDataBR(anotacao.createdAt) : ''}</Text>
                 <Text style={styles.anotacaoTexto}>{anotacao.texto}</Text>
               </View>
             </Fragment>

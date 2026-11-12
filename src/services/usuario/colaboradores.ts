@@ -1,19 +1,44 @@
+import { and, asc, eq, isNull } from 'drizzle-orm';
+
+import { db, fazendaDoContexto, fazendaMembros, usuarios, type Papel } from '@/database';
 import { usuarioAtual, type Usuario } from './usuarioAtual';
 
-/**
- * Pessoas da fazenda que recebem tarefas (M6). Ainda não há o sistema online
- * de colaboradores (API): a lista é de EXEMPLO e fica no app. Quando a API
- * existir, só esta função muda; quem chama continua igual. Quem está com o
- * celular entra primeiro, para dar para testar a ida e a volta de uma tarefa
- * num aparelho só.
- */
-const COLABORADORES_EXEMPLO: readonly Usuario[] = [
-  { id: 'colaborador-joao', nome: 'João', papel: 'colaborador' },
-  { id: 'colaborador-carlos', nome: 'Carlos', papel: 'colaborador' },
-  { id: 'colaborador-maria', nome: 'Maria', papel: 'colaborador' },
-];
+export interface MembroDaFazenda extends Usuario {
+  papel: Papel;
+  avatarUrl: string | null;
+}
 
-export function listarColaboradores(): Usuario[] {
+/** Tabelas lidas por `listarMembros` (para a consulta ao vivo). */
+export const TABELAS_MEMBROS = ['fazenda_membros', 'usuarios'] as const;
+
+/**
+ * Pessoas da fazenda ativa (membros ativos, com nome e foto que descem pelo
+ * sync). Sem conta não há membros: só quem está com o celular.
+ */
+export async function listarMembros(): Promise<MembroDaFazenda[]> {
+  const fazendaId = fazendaDoContexto();
+  if (!fazendaId) return [];
+  const linhas = await db
+    .select({
+      id: fazendaMembros.usuarioId,
+      papel: fazendaMembros.papel,
+      nome: usuarios.nome,
+      avatarUrl: usuarios.avatarUrl,
+    })
+    .from(fazendaMembros)
+    .leftJoin(usuarios, eq(usuarios.id, fazendaMembros.usuarioId))
+    .where(and(eq(fazendaMembros.fazendaId, fazendaId), isNull(fazendaMembros.removedAt)))
+    .orderBy(asc(usuarios.nome));
+  return linhas.map((l) => ({ id: l.id, papel: l.papel, nome: l.nome ?? '', avatarUrl: l.avatarUrl ?? null }));
+}
+
+/**
+ * Pessoas que recebem tarefas (M6): os membros da fazenda, com quem está com o
+ * celular primeiro.
+ */
+export async function listarColaboradores(): Promise<Usuario[]> {
   const eu = usuarioAtual();
-  return [eu, ...COLABORADORES_EXEMPLO.filter((c) => c.id !== eu.id)];
+  const membros = await listarMembros();
+  const euNaLista = membros.find((m) => m.id === eu.id);
+  return [euNaLista ?? eu, ...membros.filter((m) => m.id !== eu.id)];
 }

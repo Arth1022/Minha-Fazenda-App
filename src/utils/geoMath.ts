@@ -4,7 +4,7 @@ import { centroid } from '@turf/centroid';
 import { polygon } from '@turf/helpers';
 import { kinks } from '@turf/kinks';
 
-import type { GeometriaPoligono } from '@/database/schema';
+import type { GeometriaPoligono } from '@/database';
 
 /** Coordenada GeoJSON no padrão [longitude, latitude]. */
 export type Coordenada = [number, number];

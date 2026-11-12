@@ -1,6 +1,6 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 
-import { abastecimentos, db, leiturasHorimetro } from '@/database';
+import { abastecimentos, daFazenda, db, leiturasHorimetro, novoRegistro } from '@/database';
 import type { Abastecimento, OrigemAbastecimento } from '@/dtos';
 import { usuarioAtual, type Usuario } from '@/services/usuario';
 import type { Posicao } from './usos';
@@ -32,10 +32,10 @@ export async function registrarAbastecimento(
 ): Promise<Abastecimento> {
   if (!(dados.litros > 0)) throw new Error('Informe quantos litros foram abastecidos');
   const operador = dados.operador ?? usuarioAtual();
-  return db.transaction((tx) => {
-    const abastecimento = tx
+  return db.transaction(async (tx) => {
+    const [abastecimento] = await tx
       .insert(abastecimentos)
-      .values({
+      .values(novoRegistro({
         maquinaId: dados.maquinaId,
         usoId: dados.usoId ?? null,
         operador: operador.nome,
@@ -48,22 +48,21 @@ export async function registrarAbastecimento(
         lng: dados.posicao?.lng ?? null,
         fotoUri: dados.fotoUri ?? null,
         abastecidoEm: agora,
-      })
-      .returning()
-      .get();
+      }))
+      .returning();
     if (dados.horimetroH !== null && dados.horimetroH !== undefined) {
-      tx.insert(leiturasHorimetro)
-        .values({
+      await tx.insert(leiturasHorimetro).values(
+        novoRegistro({
           maquinaId: dados.maquinaId,
           usoId: dados.usoId ?? null,
           operador: operador.nome,
           operadorId: operador.id,
           valorH: dados.horimetroH,
           estimadoH: dados.horimetroEstimadoH ?? null,
-          origem: 'abastecimento',
+          origem: 'abastecimento' as const,
           lidoEm: agora,
         })
-        .run();
+      );
     }
     return abastecimento;
   });
@@ -74,7 +73,7 @@ export function abastecimentosDaMaquina(maquinaId: string, limite = 10) {
   return db
     .select()
     .from(abastecimentos)
-    .where(eq(abastecimentos.maquinaId, maquinaId))
+    .where(and(daFazenda(abastecimentos), eq(abastecimentos.maquinaId, maquinaId)))
     .orderBy(desc(abastecimentos.abastecidoEm))
     .limit(limite);
 }

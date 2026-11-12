@@ -1,6 +1,6 @@
 import { desc, eq, max, sql } from 'drizzle-orm';
 
-import { db, ordenhas } from '@/database';
+import { atualizar, daFazenda, db, novoRegistro, ordenhas } from '@/database';
 import type { NovaOrdenha } from '@/dtos';
 
 /**
@@ -20,6 +20,7 @@ export function todasOrdenhas() {
       updatedAt: ordenhas.updatedAt,
     })
     .from(ordenhas)
+    .where(daFazenda(ordenhas))
     .groupBy(ordenhas.periodo)
     .orderBy(desc(max(ordenhas.dataRegistro)));
 }
@@ -30,8 +31,11 @@ export async function salvarOrdenha(
   existenteId?: string
 ): Promise<void> {
   if (existenteId) {
-    await db.update(ordenhas).set(dados).where(eq(ordenhas.id, existenteId));
+    await db.update(ordenhas).set(atualizar(dados)).where(eq(ordenhas.id, existenteId));
   } else {
-    await db.insert(ordenhas).values(dados);
+    await db.insert(ordenhas).values(novoRegistro(dados));
   }
 }
+
+/** Turno com o registro mais recente (linha de `todasOrdenhas`). */
+export type OrdenhaDoTurno = Awaited<ReturnType<typeof todasOrdenhas>>[number];

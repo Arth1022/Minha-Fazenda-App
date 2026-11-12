@@ -11,7 +11,7 @@ import { pesagensDoAnimal } from '@/features/rebanho/data/pesagens';
 import { createReproducao } from '@/features/rebanho/data/reproducoes';
 import { createTratamento, nomesDeMedicamentos } from '@/features/rebanho/data/tratamentos';
 import { inicioDoDia } from '@/utils/date';
-import { animais, db, initTestDatabase, pesagens } from './support/database';
+import { animais, db, initTestDatabase, pesagens, fecharTestDatabase } from './support/database';
 
 function check(condition: boolean, message: string) {
   if (!condition) throw new Error(message);
@@ -153,7 +153,7 @@ async function runCadastroTest() {
   console.log('\n🎉 CADASTRO OK!\n');
 }
 
-runCadastroTest().catch((error) => {
+runCadastroTest().then(fecharTestDatabase).catch((error) => {
   console.error('❌ Falha nos testes de cadastro:', error);
   process.exit(1);
 });

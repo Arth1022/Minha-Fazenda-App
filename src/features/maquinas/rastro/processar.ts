@@ -1,10 +1,10 @@
 import type { LocationObject } from 'expo-location';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
-import { db, maquinas, usosMaquina } from '@/database';
+import { daFazenda, db, maquinas, usosMaquina } from '@/database';
 import type { UsoMaquina } from '@/dtos';
 // Direto do arquivo (não do índice do mapa): roda na tarefa de segundo plano, sem telas
-import { obterFazendaMapa } from '@/features/mapa/data/fazendaMapa';
+import { carregarFazendaMapa } from '@/features/mapa/data/fazendaMapa';
 import { usuarioAtual } from '@/services/usuario';
 import {
   fecharUso,
@@ -73,7 +73,7 @@ async function gravarEAvaliar(localizacoes: LocationObject[]): Promise<void> {
 
 /** Aplica as regras automáticas ao uso aberto (também chamado ao abrir o app). */
 export async function aplicarRegras(uso: UsoMaquina, agora = new Date()): Promise<DecisaoAutomatica> {
-  const maquina = await db.select().from(maquinas).where(eq(maquinas.id, uso.maquinaId)).get();
+  const maquina = await db.select().from(maquinas).where(and(daFazenda(maquinas), eq(maquinas.id, uso.maquinaId))).get();
   if (!maquina) return { tipo: 'nada' };
   // Uso reaberto pelo "Desfazer": as regras recomeçam dali (não fecham de novo pelo mesmo motivo)
   const regrasDesde = uso.regrasDesde?.getTime() ?? 0;
@@ -82,7 +82,7 @@ export async function aplicarRegras(uso: UsoMaquina, agora = new Date()): Promis
     pausasDoUso(uso.id),
   ]);
   const pausaAberta = pausas.find((p) => p.fim === null);
-  const fazenda = obterFazendaMapa();
+  const fazenda = await carregarFazendaMapa();
   const decisao = decidirAutomacao({
     inicio: Math.max(uso.inicio.getTime(), regrasDesde),
     agora: agora.getTime(),
@@ -133,7 +133,7 @@ const respondidas = new Set<string>();
 export async function responderAviso(acao: AcaoAviso, usoId: string, chave: string, agora = new Date()): Promise<void> {
   if (respondidas.has(chave)) return;
   respondidas.add(chave);
-  const uso = await db.select().from(usosMaquina).where(eq(usosMaquina.id, usoId)).get();
+  const uso = await db.select().from(usosMaquina).where(and(daFazenda(usosMaquina), eq(usosMaquina.id, usoId))).get();
   await limparAvisoParada(usoId);
   if (!uso || uso.fim) return;
 
