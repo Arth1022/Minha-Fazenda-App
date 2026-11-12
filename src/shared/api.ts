@@ -11,6 +11,8 @@ const URL_BASE = (process.env.EXPO_PUBLIC_API_URL ?? '').replace(/\/+$/, '');
 const TEMPO_LIMITE_MS = 20_000;
 
 export const SEM_CONEXAO = 'SEM_CONEXAO';
+/** A requisição nem saiu do celular por um erro do app (não é falta de internet) */
+export const ERRO_NO_APP = 'ERRO_NO_APP';
 
 /** Erro no formato do contrato: `{ erro: "<CODIGO>", mensagem: "<texto para o usuário>" }`. */
 export class ErroApi extends Error {
@@ -96,11 +98,28 @@ async function enviar(caminho: string, opcoes: OpcoesApi, token: string | null):
       body: corpo,
       signal: controle.signal,
     });
-  } catch {
-    throw new ErroApi(0, SEM_CONEXAO, 'Sem conexão com a internet. Tente de novo quando tiver sinal.');
+  } catch (erro) {
+    if (controle.signal.aborted) {
+      throw new ErroApi(0, SEM_CONEXAO, 'A internet está lenta e o servidor não respondeu a tempo. Tente de novo.');
+    }
+    if (ehFalhaDeRede(erro)) {
+      throw new ErroApi(0, SEM_CONEXAO, 'Sem conexão com a internet. Tente de novo quando tiver sinal.');
+    }
+    // Ex.: corpo que o fetch não sabe montar. Antes virava "sem conexão" e escondia a causa
+    console.warn(`[API] ${opcoes.metodo ?? 'GET'} ${caminho} falhou antes de enviar:`, erro);
+    throw new ErroApi(0, ERRO_NO_APP, 'Não foi possível enviar agora. Tente de novo.');
   } finally {
     clearTimeout(limite);
   }
+}
+
+/**
+ * Falha de rede de verdade: o fetch do Expo (expo/fetch) lança "fetch failed: …";
+ * o do React Native, TypeError "Network request failed".
+ */
+function ehFalhaDeRede(erro: unknown): boolean {
+  if (!(erro instanceof Error)) return false;
+  return erro.message.startsWith('fetch failed') || erro.message.includes('Network request failed');
 }
 
 async function lerErro(resposta: Response): Promise<ErroApi> {

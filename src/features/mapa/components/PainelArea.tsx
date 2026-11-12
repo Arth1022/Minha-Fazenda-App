@@ -16,13 +16,11 @@ import { calculoCercaDaArea, TABELAS_CERCA } from '@/services/cercaService';
 import { inicioDoDia } from '@/utils/date';
 import { useAlturaTeclado } from '../hooks/useAlturaTeclado';
 import {
-  podeCercar,
   resumoDaArea,
   ROTULO_ESTADO_AREA,
   situacaoDaArea,
   type EstadoArea,
 } from '../services/areas';
-import { resumoDaCerca } from '../services/cerca';
 import { textoHa } from '../services/trajetos';
 import type { OcupacaoArea } from '../services/ocupacao';
 import { CoresTexto } from './elementos';
@@ -98,14 +96,15 @@ export function PainelArea({
   const insets = useSafeAreaInsets();
   const alturaTeclado = useAlturaTeclado();
   const { estado } = situacaoDaArea(area, ocupacao);
+  const cercando = vista === 'cercar';
+  // A cerca salva só é lida com o "Cercar" aberto (ele vem do menu ⋮ da área)
   const { dados: cercas } = useConsultaAoVivo<CalculoCerca[]>(
-    () => calculoCercaDaArea(area.id),
+    () => (cercando ? calculoCercaDaArea(area.id) : Promise.resolve([])),
     TABELAS_CERCA,
-    area.id,
+    cercando ? area.id : '',
     []
   );
   const cerca = cercas[0] ?? null;
-  const cercando = vista === 'cercar';
   // Máquinas que passaram na área (RF-066): a lista e o tempo de hoje, pelo índice da área
   const { dados: usos } = useConsultaAoVivo<UsoNaArea[]>(
     () => usosDaArea(area.id),
@@ -119,17 +118,6 @@ export function PainelArea({
     area.id,
     0
   );
-
-  // Cerca (RF-028 a RF-032): pasto, lavoura e reserva; "outro" não tem
-  const linhaCerca = !podeCercar(area.tipo) ? null : (
-      <LinhaNavegacao
-        icone="fence"
-        rotulo={cerca ? 'Cerca' : 'Cercar esta área'}
-        valor={cerca ? (cerca.desatualizado ? 'desatualizada' : resumoDaCerca(cerca)) : null}
-        alerta={cerca?.desatualizado ?? false}
-        onPress={() => onVista('cercar')}
-      />
-    );
 
   // "Horas de máquina — 52 min hoje" (tela 15); sem uso nenhum na área, não aparece
   const linhaMaquinas =
@@ -154,7 +142,6 @@ export function PainelArea({
     <>
       {linhaOcorrencia}
       {linhaMaquinas}
-      {linhaCerca}
     </>
   );
 

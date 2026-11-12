@@ -13,3 +13,4 @@ export { default as FazendasScreen } from './FazendasScreen';
 export { configDaFazenda, salvarTipoProducao } from './configFazenda';
 export { criarFazenda, criarFazendaLocal, renomearFazenda, validarNomeFazenda } from './servicoFazenda';
 export { useListaFazendas } from './useListaFazendas';
+export { ChipPapel, IconeFazenda, NOME_PAPEL } from './elementos';

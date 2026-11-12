@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from 'drizzle-orm';
+import { and, asc, count, eq, isNull } from 'drizzle-orm';
 
 import { db, fazendaDoContexto, fazendaMembros, usuarios, type Papel } from '@/database';
 import { usuarioAtual, type Usuario } from './usuarioAtual';
@@ -30,6 +30,17 @@ export async function listarMembros(): Promise<MembroDaFazenda[]> {
     .where(and(eq(fazendaMembros.fazendaId, fazendaId), isNull(fazendaMembros.removedAt)))
     .orderBy(asc(usuarios.nome));
   return linhas.map((l) => ({ id: l.id, papel: l.papel, nome: l.nome ?? '', avatarUrl: l.avatarUrl ?? null }));
+}
+
+/** Quantos membros ativos a fazenda ativa tem (o número no Perfil), sem ler a lista. */
+export async function contarMembros(): Promise<number> {
+  const fazendaId = fazendaDoContexto();
+  if (!fazendaId) return 0;
+  const [linha] = await db
+    .select({ total: count() })
+    .from(fazendaMembros)
+    .where(and(eq(fazendaMembros.fazendaId, fazendaId), isNull(fazendaMembros.removedAt)));
+  return linha?.total ?? 0;
 }
 
 /**

@@ -1,7 +1,6 @@
 export { AuthProvider, useConta, type ContaValor } from './AuthContext';
 export { alterarNome, enviarAvatar, escolherFotoDoAvatar, removerAvatar } from './avatarEPerfil';
 export { restaurarContextoSalvo } from './contextoSalvo';
-export { CredencialForm, type CredencialFormProps } from './CredencialForm';
 export { atualizarPerfilLocal, criarPerfilLocal, lerPerfilLocal } from './perfilLocal';
 export {
   atualizarUsuarioDaSessao,

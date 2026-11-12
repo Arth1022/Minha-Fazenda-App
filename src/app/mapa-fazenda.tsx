@@ -1,1 +1,1 @@
-export { default } from '@/features/mapa/screens/MapaCompletoScreen';
+export { default } from '@/features/mapa/screens/AbrirMapaScreen';

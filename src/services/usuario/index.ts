@@ -1,4 +1,4 @@
-export { listarColaboradores, listarMembros, TABELAS_MEMBROS, type MembroDaFazenda } from './colaboradores';
+export { contarMembros, listarColaboradores, listarMembros, TABELAS_MEMBROS, type MembroDaFazenda } from './colaboradores';
 export {
   podeAtribuirTarefas,
   podeCancelarTarefa,

@@ -15,10 +15,11 @@ export function useEntrarComCodigo() {
   const [entrando, setEntrando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  const entrar = async () => {
+  /** Devolve se entrou na fazenda (a folha do código fecha). */
+  const entrar = async (): Promise<boolean> => {
     if (!pareceCodigo(codigo)) {
       setErro('O código tem 6 letras e números.');
-      return;
+      return false;
     }
     setEntrando(true);
     setErro(null);
@@ -26,8 +27,10 @@ export function useEntrarComCodigo() {
       const { fazendaId } = await aceitarConvite(normalizarCodigo(codigo));
       setCodigo('');
       definirFazendaAtiva(fazendaId);
+      return true;
     } catch (e) {
       setErro(ehErroApi(e) && e.status === 410 ? MENSAGEM_CODIGO_INVALIDO : mensagemDoErro(e));
+      return false;
     } finally {
       setEntrando(false);
     }

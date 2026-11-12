@@ -54,17 +54,20 @@ export type ModoBuscaMapa =
       onEscolherAnimal: (animal: AnimalBuscado) => void;
     };
 
-/** Voltar + campo de busca, com a lista de resultados embaixo. */
+/** Voltar (opcional) + campo de busca, com a lista de resultados embaixo. */
 export function BarraBuscaMapa({
   topo,
   onVoltar,
   modo,
   controles,
+  autoFocus = false,
 }: {
   topo: number;
-  onVoltar: () => void;
+  /** Sem ele, a barra fica só com o campo (ex.: procurando a terra na aba Mapa) */
+  onVoltar?: () => void;
   modo: ModoBuscaMapa;
   controles: React.ReactNode;
+  autoFocus?: boolean;
 }) {
   const [texto, setTexto] = useState('');
   const [buscando, setBuscando] = useState(false);
@@ -160,13 +163,15 @@ export function BarraBuscaMapa({
   return (
     <View style={[estilos.topo, { top: topo }]} pointerEvents="box-none">
       <View style={estilos.linhaBusca}>
-        <Pressable
-          onPress={onVoltar}
-          accessibilityRole="button"
-          accessibilityLabel="Voltar"
-          style={({ pressed }) => [estilos.botaoVoltar, pressed && estilos.pressionado]}>
-          <AppIcon name="arrowLeft" size={24} color={CoresTexto.escuro} />
-        </Pressable>
+        {onVoltar ? (
+          <Pressable
+            onPress={onVoltar}
+            accessibilityRole="button"
+            accessibilityLabel="Voltar"
+            style={({ pressed }) => [estilos.botaoVoltar, pressed && estilos.pressionado]}>
+            <AppIcon name="arrowLeft" size={24} color={CoresTexto.escuro} />
+          </Pressable>
+        ) : null}
         <View style={estilos.busca}>
           {buscando ? (
             <ActivityIndicator size="small" color={CoresTexto.suave} />
@@ -187,6 +192,7 @@ export function BarraBuscaMapa({
             placeholderTextColor={CoresTexto.suave}
             returnKeyType="search"
             autoCorrect={false}
+            autoFocus={autoFocus}
             accessibilityLabel={
               modo.tipo === 'locais' ? 'Buscar cidade, endereço ou coordenada' : 'Buscar área ou animal'
             }

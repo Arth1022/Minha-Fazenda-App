@@ -18,6 +18,7 @@ import {
   limparSessao,
   limparTokens,
   refreshTokenAtual,
+  salvarEmail,
   salvarModo,
   salvarTokens,
   salvarUsuario,
@@ -139,7 +140,7 @@ export function iniciarConta(): Promise<void> {
  * Depois do login ou do cadastro: guarda a sessão e liga o sync. Se outra
  * pessoa usava o celular, os dados dela saem antes (cada conta vê só as fazendas dela).
  */
-async function aplicarLogin(resposta: RespostaLogin): Promise<void> {
+async function aplicarLogin(resposta: RespostaLogin, email: string): Promise<void> {
   const usuario = comoUsuario(resposta.usuario);
   const anterior = sessaoEmMemoria().usuario;
   if (anterior && anterior.id !== usuario.id) {
@@ -148,6 +149,7 @@ async function aplicarLogin(resposta: RespostaLogin): Promise<void> {
   }
   await salvarTokens(resposta.accessToken, resposta.refreshToken);
   await salvarUsuario(usuario);
+  await salvarEmail(email.trim().toLowerCase());
   await salvarModo('logado');
   definirUsuarioAtual(usuario);
   definirEstadoDaConta('logado');
@@ -173,7 +175,7 @@ export async function registrar(dados: DadosCadastro): Promise<RespostaRegistro>
       conviteToken: conviteToken ?? null,
     },
   });
-  await aplicarLogin(resposta);
+  await aplicarLogin(resposta, dados.credencial.email);
   if (conviteToken) esquecerConvite();
   if (resposta.fazendaId) definirFazendaAtiva(resposta.fazendaId);
   return resposta;
@@ -186,7 +188,7 @@ export async function entrar(credencial: Credencial): Promise<ResultadoConvite> 
     autenticado: false,
     corpo: { credencial, deviceId: await obterDeviceId() },
   });
-  await aplicarLogin(resposta);
+  await aplicarLogin(resposta, credencial.email);
 
   const token = conviteGuardado();
   if (!token) return null;

@@ -58,3 +58,8 @@ export {
   type ConfirmacaoSheetProps,
   type ItemConfirmacao,
 } from './ConfirmacaoSheet';
+export {
+  posicionarBotoesFlutuantes,
+  useBotoesFlutuantes,
+  type PosicaoBotoesFlutuantes,
+} from './botoesFlutuantes';

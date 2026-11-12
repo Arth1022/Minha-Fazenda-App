@@ -1,5 +1,7 @@
+import { File } from 'expo-file-system';
+
 import { api } from '@/shared/api';
-import { tipoDoConteudo, type TipoMidia } from './valor';
+import type { TipoMidia } from './valor';
 
 /**
  * Rotas de mídia da API (`/fazendas/{fazendaId}/midias`). O arquivo vai para o bucket privado
@@ -30,9 +32,9 @@ export async function enviarMidia(
   const formulario = new FormData();
   formulario.append('tipo', tipo);
   formulario.append('id', id);
-  const nome = uriLocal.split('/').pop() ?? 'arquivo';
-  // No React Native o arquivo vai como { uri, name, type }
-  formulario.append('arquivo', { uri: uriLocal, name: nome, type: tipoDoConteudo(uriLocal) } as unknown as Blob);
+  // expo/fetch só aceita o arquivo como File do expo-file-system (nome e tipo vêm dele;
+  // a API confere o formato pelos bytes)
+  formulario.append('arquivo', new File(uriLocal));
   return api<MidiaEnviada>(`/fazendas/${fazendaId}/midias`, {
     metodo: 'POST',
     formulario,

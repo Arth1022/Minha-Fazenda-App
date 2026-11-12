@@ -4,26 +4,34 @@ import { Alert } from 'react-native';
 
 import { conviteGuardado, MENSAGEM_CODIGO_INVALIDO, pareceCodigo } from '@/features/convite';
 import { validarNomeFazenda } from '@/features/fazenda';
+import type { OrigemFoto } from '@/services/fotos';
 import { ehErroApi, mensagemDoErro } from '@/shared/api';
 import { enviarAvatar, escolherFotoDoAvatar } from './avatarEPerfil';
-import { registrar, type Credencial } from './servicoConta';
+import { registrar } from './servicoConta';
 import { campoDoErro, validarEmail, validarNome, validarSenha } from './validacao';
 
 type Campo = 'nome' | 'email' | 'senha' | 'nomeFazenda' | 'codigoConvite';
+/** Passo 2: criar a própria fazenda (vira dono) ou entrar na de alguém com o código */
+export type EscolhaFazenda = 'criar' | 'codigo';
+
+const CAMPOS_DO_PASSO_1: readonly Campo[] = ['nome', 'email', 'senha'];
 
 /**
- * Cadastro: nome, credencial, nome da fazenda (escondido com convite) e avatar
- * opcional. Ao concluir: registro, foto (se escolheu) e a fazenda devolvida.
+ * Cadastro em dois passos: 1) foto opcional, nome, e-mail e senha; 2) a
+ * fazenda (criar ou código). Com link de convite guardado, o passo 2 só
+ * confirma a fazenda do convite. Ao concluir: registro, foto e a fazenda devolvida.
  */
 export function useCadastro() {
   const router = useRouter();
-  // Link de convite guardado, ou código digitado: entra numa fazenda em vez de criar
   const [comLink] = useState(() => conviteGuardado() !== null);
+  const [passo, setPasso] = useState<1 | 2>(1);
+  const [escolha, setEscolha] = useState<EscolhaFazenda>('criar');
   const [codigoConvite, setCodigoConvite] = useState('');
-  const comCodigo = !comLink && codigoConvite.trim().length > 0;
+  const comCodigo = !comLink && escolha === 'codigo';
   const comConvite = comLink || comCodigo;
   const [nome, setNome] = useState('');
-  const [credencial, setCredencial] = useState<Credencial>({ tipo: 'senha', email: '', senha: '' });
+  const [email, setEmail] = useState('');
+  const [senha, setSenha] = useState('');
   const [nomeFazenda, setNomeFazenda] = useState('');
   const [fotoUri, setFotoUri] = useState<string | null>(null);
   const [erros, setErros] = useState<Partial<Record<Campo, string>>>({});
@@ -32,22 +40,36 @@ export function useCadastro() {
 
   const limparErro = (campo: Campo) => setErros((atual) => ({ ...atual, [campo]: undefined }));
 
-  const escolherFoto = async () => {
+  const escolherFoto = async (origem: OrigemFoto) => {
     try {
-      const uri = await escolherFotoDoAvatar();
+      const uri = await escolherFotoDoAvatar(origem);
       if (uri) setFotoUri(uri);
     } catch (e) {
-      setErroGeral(mensagemDoErro(e, 'Não foi possível abrir a galeria.'));
+      setErroGeral(mensagemDoErro(e, 'Não foi possível abrir a câmera ou a galeria.'));
     }
   };
 
-  const concluir = async () => {
+  /** Passo 1 → 2: confere nome, e-mail e senha antes (o e-mail repetido só a API sabe). */
+  const avancar = () => {
     const novos: Partial<Record<Campo, string>> = {
       nome: validarNome(nome) ?? undefined,
-      email: validarEmail(credencial.email) ?? undefined,
-      senha: validarSenha(credencial.senha) ?? undefined,
+      email: validarEmail(email) ?? undefined,
+      senha: validarSenha(senha) ?? undefined,
+    };
+    setErros(novos);
+    setErroGeral(null);
+    if (!Object.values(novos).some(Boolean)) setPasso(2);
+  };
+
+  const concluir = async () => {
+    const codigoVazio = comCodigo && codigoConvite.trim().length === 0;
+    const novos: Partial<Record<Campo, string>> = {
       nomeFazenda: comConvite ? undefined : (validarNomeFazenda(nomeFazenda) ?? undefined),
-      codigoConvite: comCodigo && !pareceCodigo(codigoConvite) ? 'O código tem 6 letras e números.' : undefined,
+      codigoConvite: codigoVazio
+        ? 'Digite o código que o dono da fazenda passou.'
+        : comCodigo && !pareceCodigo(codigoConvite)
+          ? 'O código tem 6 letras e números.'
+          : undefined,
     };
     setErros(novos);
     setErroGeral(null);
@@ -55,17 +77,26 @@ export function useCadastro() {
 
     setEnviando(true);
     try {
-      await registrar({ nome, credencial, nomeFazenda, codigoConvite: comCodigo ? codigoConvite : null });
+      await registrar({
+        nome,
+        credencial: { tipo: 'senha', email: email.trim(), senha },
+        nomeFazenda,
+        codigoConvite: comCodigo ? codigoConvite : null,
+      });
     } catch (e) {
+      setEnviando(false);
       if (comCodigo && ehErroApi(e) && e.status === 410) {
         setErros({ codigoConvite: MENSAGEM_CODIGO_INVALIDO });
-        setEnviando(false);
         return;
       }
       const campo = campoDoErro<Campo>(e, comConvite ? ['senha', 'email', 'nome'] : ['nomeFazenda', 'senha', 'email', 'nome']);
-      if (campo) setErros({ [campo]: mensagemDoErro(e) });
-      else setErroGeral(mensagemDoErro(e));
-      setEnviando(false);
+      if (campo) {
+        setErros({ [campo]: mensagemDoErro(e) });
+        // E-mail já cadastrado, por exemplo: volta para o passo do campo
+        if (CAMPOS_DO_PASSO_1.includes(campo)) setPasso(1);
+      } else {
+        setErroGeral(mensagemDoErro(e));
+      }
       return;
     }
     // A conta já existe: a foto é um extra (sem ela, fica a letra)
@@ -79,8 +110,19 @@ export function useCadastro() {
   };
 
   return {
-    comConvite,
+    passo,
+    avancar,
+    voltar: () => {
+      setErroGeral(null);
+      setPasso(1);
+    },
     comLink,
+    escolha,
+    setEscolha: (valor: EscolhaFazenda) => {
+      setEscolha(valor);
+      limparErro('nomeFazenda');
+      limparErro('codigoConvite');
+    },
     codigoConvite,
     setCodigoConvite: (valor: string) => {
       setCodigoConvite(valor.toUpperCase());
@@ -91,9 +133,14 @@ export function useCadastro() {
       setNome(valor);
       limparErro('nome');
     },
-    setCredencial: (valor: Credencial) => {
-      setCredencial(valor);
+    email,
+    setEmail: (valor: string) => {
+      setEmail(valor);
       limparErro('email');
+    },
+    senha,
+    setSenha: (valor: string) => {
+      setSenha(valor);
       limparErro('senha');
     },
     nomeFazenda,

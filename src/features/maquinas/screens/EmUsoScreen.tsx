@@ -106,7 +106,7 @@ export default function EmUsoScreen() {
         {rastro.length > 1 ? <DesenhoRastro pontos={rastro} altura={200} /> : null}
         {uso.rastreado ? (
           // Traçado ao vivo no mapa da fazenda, com as áreas (tela 24)
-          <Button label="Ver no mapa" variant="outline" fullWidth onPress={() => router.push('/mapa-fazenda' as Href)} />
+          <Button label="Ver no mapa" variant="outline" fullWidth onPress={() => router.navigate('/mapa' as Href)} />
         ) : null}
 
         <View style={styles.acoes}>

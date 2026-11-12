@@ -19,6 +19,8 @@ export interface SessaoSalva {
   refreshToken: string | null;
   usuario: UsuarioDaSessao | null;
   modo: ModoConta | null;
+  /** E-mail digitado no login ou no cadastro (a API não devolve): aparece no Perfil */
+  email: string | null;
 }
 
 const CHAVES = {
@@ -26,9 +28,10 @@ const CHAVES = {
   refresh: 'minhafazenda.refresh_token',
   usuario: 'minhafazenda.usuario',
   modo: 'minhafazenda.modo',
+  email: 'minhafazenda.email',
 } as const;
 
-const memoria: SessaoSalva = { accessToken: null, refreshToken: null, usuario: null, modo: null };
+const memoria: SessaoSalva = { accessToken: null, refreshToken: null, usuario: null, modo: null, email: null };
 
 function lerUsuario(bruto: string | null): UsuarioDaSessao | null {
   if (!bruto) return null;
@@ -43,12 +46,14 @@ function lerUsuario(bruto: string | null): UsuarioDaSessao | null {
 }
 
 export async function carregarSessao(): Promise<SessaoSalva> {
-  const [accessToken, refreshToken, usuario, modo] = await Promise.all([
+  const [accessToken, refreshToken, usuario, modo, email] = await Promise.all([
     SecureStore.getItemAsync(CHAVES.access),
     SecureStore.getItemAsync(CHAVES.refresh),
     SecureStore.getItemAsync(CHAVES.usuario),
     SecureStore.getItemAsync(CHAVES.modo),
+    SecureStore.getItemAsync(CHAVES.email),
   ]);
+  memoria.email = email;
   memoria.accessToken = accessToken;
   memoria.refreshToken = refreshToken;
   memoria.usuario = lerUsuario(usuario);
@@ -82,6 +87,11 @@ export async function salvarUsuario(usuario: UsuarioDaSessao): Promise<void> {
   await SecureStore.setItemAsync(CHAVES.usuario, JSON.stringify(usuario));
 }
 
+export async function salvarEmail(email: string): Promise<void> {
+  memoria.email = email;
+  await SecureStore.setItemAsync(CHAVES.email, email);
+}
+
 export async function salvarModo(modo: ModoConta): Promise<void> {
   memoria.modo = modo;
   await SecureStore.setItemAsync(CHAVES.modo, modo);
@@ -103,5 +113,6 @@ export async function limparTokens(): Promise<void> {
 export async function limparSessao(): Promise<void> {
   await limparTokens();
   memoria.usuario = null;
-  await SecureStore.deleteItemAsync(CHAVES.usuario);
+  memoria.email = null;
+  await Promise.all([SecureStore.deleteItemAsync(CHAVES.usuario), SecureStore.deleteItemAsync(CHAVES.email)]);
 }

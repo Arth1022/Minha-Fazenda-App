@@ -32,7 +32,7 @@ export interface ConteudoLavouraProps {
   area: Talhao;
   /** Cabeçalho da área (nome, selo, "⋮", X): só no resumo */
   cabecalho: React.ReactNode;
-  /** "Horas de máquina" e "Cercar esta área", no fim da lista */
+  /** "Relatar problema" e "Horas de máquina", no fim da lista */
   linhasDoFim: React.ReactNode;
   alturaTeclado: number;
   /** Admin cria cultura nova no "Plantar" (RF-042) */

@@ -5,6 +5,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { type Href, Tabs, router, usePathname } from 'expo-router';
 
 import { AppIcon, type AppIconName } from '@/components/ui/AppIcon';
+import { useBotoesFlutuantes } from '@/components/ui/botoesFlutuantes';
 import { FloatingActionButton } from '@/components/ui/FloatingActionButton';
 import { AgroColors, MaxContentWidth, Shadows, Spacing } from '@/constants/theme';
 import { AcoesMaquinaModal, useQrCodeMaquina } from '@/features/maquinas';
@@ -142,7 +143,11 @@ export default function TabsLayout() {
   };
 
   // Botões flutuantes empilhados no canto inferior direito, logo acima da barra de abas
-  const baseBotoes = insets.bottom + TAB_BAR_HEIGHT + Spacing.three;
+  // (ou acima do painel que a tela abriu no rodapé, como a lista de áreas do mapa)
+  const posicaoBotoes = useBotoesFlutuantes();
+  const baseBotoes = insets.bottom + TAB_BAR_HEIGHT + Spacing.three + posicaoBotoes.elevacao;
+  // Escondidos ficam montados: o leitor de QR aberto não pode sumir no meio
+  const visibilidadeBotoes = posicaoBotoes.ocultos ? styles.oculto : null;
 
   return (
     <RelatarProblemaProvider>
@@ -162,6 +167,7 @@ export default function TabsLayout() {
         <BotaoRelatarProblema
           style={{
             ...styles.botaoFlutuante,
+            ...visibilidadeBotoes,
             right: margemLateral,
             bottom: baseBotoes + BOTAO_FLUTUANTE + Spacing.two,
           }}
@@ -174,6 +180,7 @@ export default function TabsLayout() {
           opcoes={{ titulo: 'Ler QR Code ou brinco', modoTexto: 'Número do brinco' }}
           style={{
             ...styles.botaoFlutuante,
+            ...visibilidadeBotoes,
             right: margemLateral,
             bottom: baseBotoes,
           }}
@@ -206,6 +213,9 @@ const styles = StyleSheet.create({
   },
   botaoFlutuante: {
     position: 'absolute',
+  },
+  oculto: {
+    display: 'none',
   },
   outerBarWrapper: {
     width: '100%',

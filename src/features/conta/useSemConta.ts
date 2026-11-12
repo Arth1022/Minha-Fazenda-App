@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { validarNomeFazenda } from '@/features/fazenda';
+import type { OrigemFoto } from '@/services/fotos';
 import { mensagemDoErro } from '@/shared/api';
 import { escolherFotoDoAvatar } from './avatarEPerfil';
 import { entrarSemConta } from './servicoConta';
@@ -9,12 +10,11 @@ import { validarNome } from './validacao';
 type Campo = 'nome' | 'nomeFazenda';
 
 /**
- * Entrar sem conta: primeiro o aviso (dados só neste celular), depois o perfil
- * local (nome obrigatório, foto opcional) e a fazenda local (nome obrigatório).
- * Nenhuma requisição à API.
+ * Entrar sem conta (o aviso de dados só neste celular vem antes, nas boas-vindas):
+ * perfil local (nome obrigatório, foto opcional) e a fazenda local (nome
+ * obrigatório). Nenhuma requisição à API.
  */
 export function useSemConta() {
-  const [etapa, setEtapa] = useState<'aviso' | 'dados'>('aviso');
   const [nome, setNome] = useState('');
   const [nomeFazenda, setNomeFazenda] = useState('');
   const [fotoUri, setFotoUri] = useState<string | null>(null);
@@ -41,8 +41,6 @@ export function useSemConta() {
   };
 
   return {
-    etapa,
-    continuar: () => setEtapa('dados'),
     nome,
     setNome: (valor: string) => {
       setNome(valor);
@@ -54,14 +52,15 @@ export function useSemConta() {
       setErros((e) => ({ ...e, nomeFazenda: undefined }));
     },
     fotoUri,
-    escolherFoto: async () => {
+    escolherFoto: async (origem: OrigemFoto) => {
       try {
-        const uri = await escolherFotoDoAvatar();
+        const uri = await escolherFotoDoAvatar(origem);
         if (uri) setFotoUri(uri);
       } catch (e) {
-        setErroGeral(mensagemDoErro(e, 'Não foi possível abrir a galeria.'));
+        setErroGeral(mensagemDoErro(e, 'Não foi possível abrir a câmera ou a galeria.'));
       }
     },
+    tirarFoto: () => setFotoUri(null),
     erros,
     erroGeral,
     salvando,

@@ -53,11 +53,60 @@ export type AppIconName =
   | 'ruler'
   | 'calendar'
   | 'megaphone'
-  | 'cloud';
+  | 'cloud'
+  | 'list'
+  | 'mail'
+  | 'lock'
+  | 'key'
+  | 'home'
+  | 'camera'
+  | 'users'
+  | 'arrowLeftRight'
+  | 'cloudOff'
+  | 'smartphone'
+  | 'image';
 
 /** Ícones só de traços (Lucide), desenhados pela lista de caminhos. */
 const PATH_ICONS: Partial<Record<AppIconName, string[]>> = {
   megaphone: ['m3 11 18-5v12L3 14v-3z', 'M11.6 16.8a3 3 0 1 1-5.8-1.6'],
+  // Telas de conta (Lucide; círculos e retângulos escritos como caminho)
+  mail: [
+    'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z',
+    'm22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7',
+  ],
+  lock: ['M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2Z', 'M7 11V7a5 5 0 0 1 10 0v4'],
+  key: [
+    'M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z',
+    'M16 7.5a.5.5 0 1 0 1 0a.5.5 0 1 0 -1 0z',
+  ],
+  home: [
+    'M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8',
+    'M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+  ],
+  camera: [
+    'M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z',
+    'M9 13a3 3 0 1 0 6 0a3 3 0 1 0 -6 0z',
+  ],
+  users: [
+    'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2',
+    'M5 7a4 4 0 1 0 8 0a4 4 0 1 0 -8 0z',
+    'M22 21v-2a4 4 0 0 0-3-3.87',
+    'M16 3.13a4 4 0 0 1 0 7.75',
+  ],
+  arrowLeftRight: ['m16 3 4 4-4 4', 'M20 7H4', 'm8 21-4-4 4-4', 'M4 17h16'],
+  cloudOff: [
+    'm2 2 20 20',
+    'M5.782 5.782A7 7 0 0 0 9 19h8.5a4.5 4.5 0 0 0 1.307-.193',
+    'M21.532 16.5A4.5 4.5 0 0 0 17.5 10h-1.79A7.008 7.008 0 0 0 10 5.07',
+  ],
+  image: [
+    'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z',
+    'M7 9a2 2 0 1 0 4 0a2 2 0 1 0 -4 0z',
+    'm21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21',
+  ],
+  smartphone: ['M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z', 'M12 18h.01'],
+  // Lucide "list" (abre a lista de áreas no mapa)
+  list: ['M3 12h.01', 'M3 18h.01', 'M3 6h.01', 'M8 12h13', 'M8 18h13', 'M8 6h13'],
   // Lucide "cloud" (estado do sync no cabeçalho)
   cloud: ['M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z'],
   // Lucide "calendar" (o retângulo de cantos arredondados escrito como caminho)

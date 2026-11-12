@@ -8,11 +8,12 @@ import {
   enviarAvatar,
   escolherFotoDoAvatar,
   removerAvatar,
+  sessaoEmMemoria,
   useConta,
   validarNome,
 } from '@/features/conta';
-import { limparFazendaAtiva } from '@/features/fazenda';
 import { contarPendentes } from '@/features/sync';
+import type { OrigemFoto } from '@/services/fotos';
 import { definirUsuarioAtual } from '@/services/usuario';
 import { ehErroApi, mensagemDoErro, SEM_CONEXAO } from '@/shared/api';
 
@@ -69,30 +70,23 @@ export function usePerfil() {
     }
   };
 
-  const escolherDaGaleria = async () => {
+  /** Câmera ou galeria (escolhida na folha "Foto do perfil") e já envia. */
+  const escolherFoto = async (origem: OrigemFoto) => {
     try {
-      const uri = await escolherFotoDoAvatar();
+      const uri = await escolherFotoDoAvatar(origem);
       if (uri) await trocarFoto(uri);
     } catch (e) {
-      setErro(mensagemDoErro(e, 'Não foi possível abrir a galeria.'));
+      setErro(mensagemDoErro(e, 'Não foi possível abrir a câmera ou a galeria.'));
     }
   };
 
-  /** Toque no avatar: Escolher da galeria e, com foto, Remover foto. */
-  const abrirOpcoesDaFoto = () => {
-    Alert.alert('Foto do perfil', undefined, [
-      { text: 'Escolher da galeria', onPress: () => void escolherDaGaleria() },
-      ...(temFoto ? [{ text: 'Remover foto', style: 'destructive' as const, onPress: () => void trocarFoto(null) }] : []),
-      { text: 'Cancelar', style: 'cancel' as const },
-    ]);
-  };
-
-  const salvarNome = async () => {
+  /** Devolve se o nome foi salvo (a folha de editar fecha). */
+  const salvarNome = async (): Promise<boolean> => {
     const invalido = validarNome(nome);
     setErroNome(invalido);
     setErro(null);
     setAviso(null);
-    if (invalido) return;
+    if (invalido) return false;
     setSalvandoNome(true);
     try {
       if (semConta) {
@@ -102,10 +96,11 @@ export function usePerfil() {
         await alterarNome(nome);
       }
       setAviso('Nome salvo.');
+      return true;
     } catch (e) {
-      const mensagem = semInternet(e, 'mudar o nome');
-      if (ehErroApi(e, 'VALIDACAO')) setErroNome(mensagem);
-      else setErro(mensagem);
+      // O erro aparece no campo da folha de editar, que continua aberta
+      setErroNome(semInternet(e, 'mudar o nome'));
+      return false;
     } finally {
       setSalvandoNome(false);
     }
@@ -131,10 +126,17 @@ export function usePerfil() {
 
   return {
     usuario,
+    /** E-mail digitado ao entrar (a API não devolve); null sem conta */
+    email: semConta ? null : sessaoEmMemoria().email,
     semConta,
     nome,
     setNome: (valor: string) => {
       setNome(valor);
+      setErroNome(null);
+    },
+    /** Abre a edição do nome com o nome atual */
+    comecarEdicaoDoNome: () => {
+      setNome(usuario.nome);
       setErroNome(null);
     },
     erroNome,
@@ -142,13 +144,13 @@ export function usePerfil() {
     aviso,
     enviandoFoto,
     salvandoNome,
-    abrirOpcoesDaFoto,
+    temFoto,
+    escolherFoto,
+    removerFoto: () => void trocarFoto(null),
     salvarNome,
     sairDaConta,
-    trocarDeFazenda: () => {
-      limparFazendaAtiva();
-      router.replace({ pathname: '/fazendas', params: { trocar: '1' } });
-    },
+    // A fazenda atual fica aberta (marcada na lista) até a pessoa escolher outra
+    trocarDeFazenda: () => router.push({ pathname: '/fazendas', params: { trocar: '1' } }),
     abrirMembros: () => router.push('/membros'),
   };
 }

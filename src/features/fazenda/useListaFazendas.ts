@@ -37,11 +37,12 @@ export function useListaFazendas({ trocando = false }: { trocando?: boolean } = 
   const [criando, setCriando] = useState(false);
   const [avisoNova, setAvisoNova] = useState<string | null>(null);
 
-  const criar = async () => {
+  /** Devolve se a fazenda foi criada (a folha de "Nova fazenda" fecha). */
+  const criar = async (): Promise<boolean> => {
     const erro = validarNomeFazenda(nomeNova);
     if (erro) {
       setErroNova(erro);
-      return;
+      return false;
     }
     setCriando(true);
     setErroNova(null);
@@ -50,10 +51,12 @@ export function useListaFazendas({ trocando = false }: { trocando?: boolean } = 
       setNomeNova('');
       setAvisoNova(`${criada.nome} foi criada. Ela abre assim que sincronizar.`);
       definirFazendaAtiva(criada.id);
+      return true;
     } catch (e) {
       setErroNova(
         ehErroApi(e, SEM_CONEXAO) ? 'Conecte-se à internet para criar a fazenda.' : mensagemDoErro(e)
       );
+      return false;
     } finally {
       setCriando(false);
     }
