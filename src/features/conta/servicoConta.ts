@@ -1,4 +1,4 @@
-import { conviteGuardado, esquecerConvite, aceitarConvite } from '@/features/convite';
+import { conviteGuardado, esquecerConvite, aceitarConvite, normalizarCodigo } from '@/features/convite';
 import {
   carregarFazendaAtiva,
   criarFazendaLocal,
@@ -52,6 +52,8 @@ export interface DadosCadastro {
   credencial: Credencial;
   /** Obrigatório sem convite; ignorado com convite */
   nomeFazenda: string;
+  /** Código de convite digitado no cadastro (no lugar do nome da fazenda) */
+  codigoConvite?: string | null;
 }
 
 /** Como ficou o convite guardado depois de entrar. */
@@ -158,7 +160,8 @@ async function aplicarLogin(resposta: RespostaLogin): Promise<void> {
  * Abre a fazenda devolvida em `fazendaId`.
  */
 export async function registrar(dados: DadosCadastro): Promise<RespostaRegistro> {
-  const conviteToken = conviteGuardado();
+  const codigo = dados.codigoConvite?.trim();
+  const conviteToken = codigo ? normalizarCodigo(codigo) : conviteGuardado();
   const resposta = await api<RespostaRegistro>('/auth/registro', {
     metodo: 'POST',
     autenticado: false,

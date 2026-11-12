@@ -1,30 +1,19 @@
 import { Image } from 'expo-image';
 import * as Location from 'expo-location';
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { ChipSelector, CustomInput, SwitchField, type ChipOption } from '@/components/forms';
 import {
-  AppIcon,
-  BottomSheet,
-  Button,
-  type AppIconName,
-} from '@/components/ui';
+  CheckboxField,
+  ChipSelector,
+  CustomInput,
+  SelectField,
+  SwitchField,
+  type ChipOption,
+} from '@/components/forms';
+import { AppIcon, BottomSheet, Button } from '@/components/ui';
 import { AgroColors, Radius, Spacing, Typography } from '@/constants/theme';
-import {
-  CATEGORIAS_TAREFA,
-  useConsultaAoVivo,
-  useLiveQuery,
-  type CategoriaTarefa,
-  type Talhao,
-} from '@/database';
+import { CATEGORIAS_TAREFA, useConsultaAoVivo, useLiveQuery, type CategoriaTarefa } from '@/database';
 import { listarMaquinas } from '@/features/maquinas/data/maquinas';
 import { listarAnimais } from '@/features/rebanho/data/animais';
 import { escolherFoto, guardarFoto, type OrigemFoto } from '@/services/fotos';
@@ -34,7 +23,6 @@ import {
   identificarAreaNoPonto,
   LIMITE_FOTOS_OCORRENCIA,
   ROTULO_CATEGORIA_TAREFA,
-  type AlvoQrOcorrencia,
 } from '@/services/ocorrenciaService';
 import { listarTalhoesAtivos } from '@/services/talhaoService';
 import {
@@ -44,45 +32,84 @@ import {
   useUsuarioAtual,
   type Usuario,
 } from '@/services/usuario';
+import { ICONE_CATEGORIA_TAREFA } from './categorias';
 import { NotaVozField } from './NotaVozField';
 
-export const ICONE_CATEGORIA_TAREFA: Record<CategoriaTarefa, AppIconName> = {
-  cerca: 'fence',
-  animal: 'cow',
-  maquina: 'tractor',
-  agua: 'milk',
-  pasto: 'sprout',
-  outro: 'wrench',
-};
+/** O que já vem escolhido ao abrir o relato (ex.: pela ficha do animal ou pela área no mapa). */
+export interface PedidoRelato {
+  areaId?: string;
+  animalId?: string;
+  maquinaId?: string;
+}
 
-const OPCOES_BOTAO_FOTO: {
-  label: string;
-  origem: OrigemFoto;
-  variant: 'outline' | 'secondary';
-}[] = [
+type AbrirRelato = (pedido?: PedidoRelato) => void;
+
+const RelatarProblemaContext = createContext<AbrirRelato | null>(null);
+
+/** Tempo da animação de saída da folha antes de desmontar o formulário */
+const DURACAO_FECHAR_MS = 350;
+
+const OPCOES_BOTAO_FOTO: { label: string; origem: OrigemFoto; variant: 'outline' | 'secondary' }[] = [
   { label: 'Tirar foto', origem: 'camera', variant: 'outline' },
   { label: 'Da galeria', origem: 'galeria', variant: 'secondary' },
 ];
 
-export interface OpcoesAbrirRelato {
-  area?: Talhao;
-  alvoQr?: AlvoQrOcorrencia;
-  responsavelPadraoId?: string | null;
-}
-
-type AbrirRelatoFn = (opcoes?: OpcoesAbrirRelato) => Promise<void>;
-
-const RelatarProblemaContext = createContext<AbrirRelatoFn | null>(null);
-
-export function useRelatarProblema(): AbrirRelatoFn {
-  const ctx = useContext(RelatarProblemaContext);
-  if (!ctx) {
-    throw new Error('useRelatarProblema deve ser usado dentro de RelatarProblemaProvider');
-  }
-  return ctx;
-}
-
+/**
+ * Formulário "Relatar problema" disponível em qualquer aba. O formulário (e as
+ * consultas de áreas, animais, máquinas e equipe) só fica montado enquanto a
+ * folha está aberta, para não manter consultas ao vivo no banco à toa.
+ */
 export function RelatarProblemaProvider({ children }: { children: React.ReactNode }) {
+  const [pedido, setPedido] = useState<(PedidoRelato & { chave: number }) | null>(null);
+  const [visivel, setVisivel] = useState(false);
+  const timerFechar = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const abrir = useCallback<AbrirRelato>((novo) => {
+    if (timerFechar.current) clearTimeout(timerFechar.current);
+    setPedido({ ...novo, chave: Date.now() });
+    setVisivel(true);
+  }, []);
+
+  const fechar = useCallback(() => {
+    setVisivel(false);
+    timerFechar.current = setTimeout(() => setPedido(null), DURACAO_FECHAR_MS);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (timerFechar.current) clearTimeout(timerFechar.current);
+    },
+    []
+  );
+
+  return (
+    <RelatarProblemaContext.Provider value={abrir}>
+      {children}
+      {pedido ? (
+        <FormularioRelato key={pedido.chave} pedido={pedido} visivel={visivel} onFechar={fechar} />
+      ) : null}
+    </RelatarProblemaContext.Provider>
+  );
+}
+
+/** Abre o formulário "Relatar problema", opcionalmente já com área, animal ou máquina. */
+export function useRelatarProblema(): AbrirRelato {
+  const abrir = useContext(RelatarProblemaContext);
+  if (!abrir) throw new Error('useRelatarProblema precisa estar dentro de RelatarProblemaProvider');
+  return abrir;
+}
+
+function rotuloAnimal(a: { nome: string | null; brinco: string }) {
+  return a.nome ? `${a.nome} (#${a.brinco})` : `Brinco #${a.brinco}`;
+}
+
+interface FormularioRelatoProps {
+  pedido: PedidoRelato;
+  visivel: boolean;
+  onFechar: () => void;
+}
+
+function FormularioRelato({ pedido, visivel, onFechar }: FormularioRelatoProps) {
   const eu = useUsuarioAtual();
   const ehAdmin = podeAtribuirTarefas(eu);
   const { data: talhoes } = useLiveQuery(listarTalhoesAtivos());
@@ -96,52 +123,71 @@ export function RelatarProblemaProvider({ children }: { children: React.ReactNod
   );
   const temEquipe = colaboradores.length > 1;
 
-  const [modalVisivel, setModalVisivel] = useState(false);
-  const [novaCategoria, setNovaCategoria] = useState<CategoriaTarefa>('cerca');
-  const [novoTitulo, setNovoTitulo] = useState('');
-  const [tituloEditadoManualmente, setTituloEditadoManualmente] = useState(false);
-  const [novaUrgente, setNovaUrgente] = useState(false);
-  const [novaDescricao, setNovaDescricao] = useState('');
-  const [novoResponsavelId, setNovoResponsavelId] = useState<string | null>(null);
-  const [novasFotos, setNovasFotos] = useState<string[]>([]);
-  const [novoAudioUri, setNovoAudioUri] = useState<string | null>(null);
-  const [novoAnimalId, setNovoAnimalId] = useState<string | null>(null);
-  const [novaMaquinaId, setNovaMaquinaId] = useState<string | null>(null);
-  const [novaMaquinaParada, setNovaMaquinaParada] = useState(false);
-  const [pontoGps, setPontoGps] = useState<{ lat: number; lng: number } | null>(null);
-  const [areaDetectada, setAreaDetectada] = useState<{ id: string; nome: string } | null>(null);
-  const [salvando, setSalvando] = useState(false);
-  const modalAbertoRef = useRef(false);
-
-  const rotuloVinculoAtual = useCallback(
-    (cat: CategoriaTarefa, animId: string | null, maqId: string | null, nomeArea?: string | null) => {
-      if (cat === 'animal' && animId) {
-        const a = animaisAtivos.find((x) => x.id === animId);
-        if (a) return a.nome ? `${a.nome} (#${a.brinco})` : `Brinco #${a.brinco}`;
-      }
-      if (cat === 'maquina' && maqId) {
-        const m = listaMaquinas.find((x) => x.id === maqId);
-        if (m) return `${m.nome} (${m.codigo})`;
-      }
-      return nomeArea ?? null;
-    },
-    [animaisAtivos, listaMaquinas]
+  const [categoria, setCategoria] = useState<CategoriaTarefa>(
+    pedido.animalId ? 'animal' : pedido.maquinaId ? 'maquina' : 'cerca'
   );
+  const [animalId, setAnimalId] = useState<string | null>(pedido.animalId ?? null);
+  const [maquinaId, setMaquinaId] = useState<string | null>(pedido.maquinaId ?? null);
+  const [maquinaParada, setMaquinaParada] = useState(false);
+  const [areaId, setAreaId] = useState<string | null>(pedido.areaId ?? null);
+  const [pontoGps, setPontoGps] = useState<{ lat: number; lng: number } | null>(null);
+  /** Título digitado pela pessoa; enquanto for null, vale o título sugerido */
+  const [tituloManual, setTituloManual] = useState<string | null>(null);
+  const [urgente, setUrgente] = useState(false);
+  const [descricao, setDescricao] = useState('');
+  // Nasce sem responsável: o admin escolhe alguém ou a própria pessoa assume
+  const [responsavelId, setResponsavelId] = useState<string | null>(null);
+  const [fotos, setFotos] = useState<string[]>([]);
+  const [audioUri, setAudioUri] = useState<string | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  const montado = useRef(true);
 
-  const selecionarCategoriaModal = (cat: CategoriaTarefa) => {
-    setNovaCategoria(cat);
-    if (cat !== 'maquina') setNovaMaquinaParada(false);
-    if (!tituloEditadoManualmente) {
-      setNovoTitulo(
-        gerarTituloOcorrencia(
-          cat,
-          rotuloVinculoAtual(cat, novoAnimalId, novaMaquinaId, areaDetectada?.nome)
-        )
-      );
+  const area = areaId ? talhoes.find((t) => t.id === areaId) : undefined;
+
+  // Sem área escolhida de antemão, tenta o GPS para marcar o ponto e achar a área
+  useEffect(() => {
+    montado.current = true;
+    if (pedido.areaId) {
+      return () => {
+        montado.current = false;
+      };
     }
-  };
+    void (async () => {
+      try {
+        const perm = await Location.requestForegroundPermissionsAsync();
+        if (!perm.granted || !montado.current) return;
+        const pos =
+          (await Location.getLastKnownPositionAsync({ maxAge: 60_000 })) ??
+          (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
+        if (!montado.current) return;
+        const { latitude: lat, longitude: lng } = pos.coords;
+        setPontoGps({ lat, lng });
+        const achada = await identificarAreaNoPonto(lat, lng);
+        if (achada && montado.current) setAreaId((atual) => atual ?? achada.id);
+      } catch {
+        // Sem sinal de GPS: o relato segue normalmente sem coordenada
+      }
+    })();
+    return () => {
+      montado.current = false;
+    };
+  }, [pedido.areaId]);
 
-  const opcoesAreaModal = useMemo<ChipOption<string>[]>(
+  const rotuloVinculo = useMemo(() => {
+    if (categoria === 'animal' && animalId) {
+      const a = animaisAtivos.find((x) => x.id === animalId);
+      if (a) return rotuloAnimal(a);
+    }
+    if (categoria === 'maquina' && maquinaId) {
+      const m = listaMaquinas.find((x) => x.id === maquinaId);
+      if (m) return `${m.nome} (${m.codigo})`;
+    }
+    return area?.nome ?? null;
+  }, [categoria, animalId, maquinaId, animaisAtivos, listaMaquinas, area?.nome]);
+
+  const titulo = tituloManual ?? gerarTituloOcorrencia(categoria, rotuloVinculo);
+
+  const opcoesArea = useMemo<ChipOption<string>[]>(
     () => [
       { label: 'Sem área / GPS', value: 'nenhuma' },
       ...talhoes.map((t) => ({ label: t.nome, value: t.id })),
@@ -149,24 +195,18 @@ export function RelatarProblemaProvider({ children }: { children: React.ReactNod
     [talhoes]
   );
 
-  const opcoesAnimalModal = useMemo<ChipOption<string>[]>(
+  const opcoesAnimal = useMemo<ChipOption<string>[]>(
     () => [
       { label: 'Sem animal específico', value: 'nenhum' },
-      ...animaisAtivos.map((a) => ({
-        label: a.nome ? `${a.nome} (#${a.brinco})` : `Brinco #${a.brinco}`,
-        value: a.id,
-      })),
+      ...animaisAtivos.map((a) => ({ label: rotuloAnimal(a), value: a.id })),
     ],
     [animaisAtivos]
   );
 
-  const opcoesMaquinaModal = useMemo<ChipOption<string>[]>(
+  const opcoesMaquina = useMemo<ChipOption<string>[]>(
     () => [
       { label: 'Sem máquina específica', value: 'nenhuma' },
-      ...listaMaquinas.map((m) => ({
-        label: `${m.nome} (${m.codigo})`,
-        value: m.id,
-      })),
+      ...listaMaquinas.map((m) => ({ label: `${m.nome} (${m.codigo})`, value: m.id })),
     ],
     [listaMaquinas]
   );
@@ -182,343 +222,233 @@ export function RelatarProblemaProvider({ children }: { children: React.ReactNod
     [colaboradores, eu.id]
   );
 
-  const selecionarAreaModal = (valor: string) => {
+  const selecionarCategoria = (cat: CategoriaTarefa) => {
+    setCategoria(cat);
+    if (cat !== 'maquina') setMaquinaParada(false);
+  };
+
+  const selecionarArea = (valor: string) => {
     if (valor === 'nenhuma') {
-      setAreaDetectada(null);
-      if (!tituloEditadoManualmente) {
-        setNovoTitulo(
-          gerarTituloOcorrencia(
-            novaCategoria,
-            rotuloVinculoAtual(novaCategoria, novoAnimalId, novaMaquinaId, null)
-          )
-        );
-      }
+      setAreaId(null);
       return;
     }
     const escolhida = talhoes.find((t) => t.id === valor);
     if (!escolhida) return;
-    setAreaDetectada({ id: escolhida.id, nome: escolhida.nome });
+    setAreaId(escolhida.id);
     setPontoGps({ lat: escolhida.centroLat, lng: escolhida.centroLng });
-    if (!tituloEditadoManualmente) {
-      setNovoTitulo(
-        gerarTituloOcorrencia(
-          novaCategoria,
-          rotuloVinculoAtual(novaCategoria, novoAnimalId, novaMaquinaId, escolhida.nome)
-        )
-      );
-    }
   };
 
-  const selecionarAnimalModal = (valor: string) => {
-    const id = valor === 'nenhum' ? null : valor;
-    setNovoAnimalId(id);
-    if (!tituloEditadoManualmente) {
-      setNovoTitulo(
-        gerarTituloOcorrencia(
-          novaCategoria,
-          rotuloVinculoAtual(novaCategoria, id, novaMaquinaId, areaDetectada?.nome)
-        )
-      );
-    }
-  };
-
-  const selecionarMaquinaModal = (valor: string) => {
+  const selecionarMaquina = (valor: string) => {
     const id = valor === 'nenhuma' ? null : valor;
-    setNovaMaquinaId(id);
-    if (!id) setNovaMaquinaParada(false);
-    if (!tituloEditadoManualmente) {
-      setNovoTitulo(
-        gerarTituloOcorrencia(
-          novaCategoria,
-          rotuloVinculoAtual(novaCategoria, novoAnimalId, id, areaDetectada?.nome)
-        )
-      );
-    }
+    setMaquinaId(id);
+    if (!id) setMaquinaParada(false);
   };
-
-  const abrirModalRelato = useCallback(
-    async (opcoes?: OpcoesAbrirRelato) => {
-      modalAbertoRef.current = true;
-      const areaInicial = opcoes?.area;
-      const alvoQr = opcoes?.alvoQr;
-      const catInicial: CategoriaTarefa = alvoQr ? alvoQr.categoria : 'cerca';
-      const animId = alvoQr?.tipo === 'animal' ? alvoQr.animalId : null;
-      const maqId = alvoQr?.tipo === 'maquina' ? alvoQr.maquinaId : null;
-      const complementoInicial = alvoQr?.identificacao ?? areaInicial?.nome ?? null;
-
-      setNovaCategoria(catInicial);
-      setNovoAnimalId(animId);
-      setNovaMaquinaId(maqId);
-      setNovaMaquinaParada(false);
-      setNovoAudioUri(null);
-      setNovoTitulo(gerarTituloOcorrencia(catInicial, complementoInicial));
-      setTituloEditadoManualmente(false);
-      setNovaUrgente(false);
-      setNovaDescricao('');
-      setNovoResponsavelId(opcoes?.responsavelPadraoId ?? null);
-      setNovasFotos([]);
-      setPontoGps(areaInicial ? { lat: areaInicial.centroLat, lng: areaInicial.centroLng } : null);
-      setAreaDetectada(areaInicial ? { id: areaInicial.id, nome: areaInicial.nome } : null);
-      setModalVisivel(true);
-
-      if (areaInicial) return;
-
-      try {
-        const perm = await Location.requestForegroundPermissionsAsync();
-        if (!perm.granted || !modalAbertoRef.current) return;
-        const pos =
-          (await Location.getLastKnownPositionAsync({ maxAge: 60_000 })) ??
-          (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
-        if (!modalAbertoRef.current) return;
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        setPontoGps({ lat, lng });
-
-        const area = await identificarAreaNoPonto(lat, lng);
-        if (area && modalAbertoRef.current) {
-          setAreaDetectada(area);
-          if (!alvoQr) {
-            setNovoTitulo((atual) =>
-              atual === gerarTituloOcorrencia(catInicial, null)
-                ? gerarTituloOcorrencia(catInicial, area.nome)
-                : atual
-            );
-          }
-        }
-      } catch {
-        // Sem sinal de GPS: o relato segue normalmente sem coordenada
-      }
-    },
-    []
-  );
 
   const adicionarFoto = async (origem: OrigemFoto) => {
-    if (novasFotos.length >= LIMITE_FOTOS_OCORRENCIA) return;
+    if (fotos.length >= LIMITE_FOTOS_OCORRENCIA) return;
     try {
       const uri = await escolherFoto(origem);
-      if (uri) {
-        setNovasFotos((atuais) => [...atuais, uri].slice(0, LIMITE_FOTOS_OCORRENCIA));
-      }
+      if (uri) setFotos((atuais) => [...atuais, uri].slice(0, LIMITE_FOTOS_OCORRENCIA));
     } catch (erro) {
       Alert.alert('Foto', erro instanceof Error ? erro.message : 'Não foi possível obter a foto.');
     }
   };
 
   const removerFoto = (indice: number) => {
-    setNovasFotos((atuais) => atuais.filter((_, idx) => idx !== indice));
+    setFotos((atuais) => atuais.filter((_, idx) => idx !== indice));
   };
 
-  const salvarRelato = async () => {
+  const salvar = async () => {
     setSalvando(true);
     try {
-      const fotosGuardadas = (
-        await Promise.all(novasFotos.map((uri) => guardarFoto(uri)))
-      ).filter((u): u is string => Boolean(u));
-
+      const fotosGuardadas = (await Promise.all(fotos.map((uri) => guardarFoto(uri)))).filter(
+        (u): u is string => Boolean(u)
+      );
       await criarOcorrencia({
-        titulo: novoTitulo,
-        categoria: novaCategoria,
-        urgente: novaUrgente,
-        descricao: novaDescricao,
-        responsavelId: ehAdmin && temEquipe ? novoResponsavelId : novoResponsavelId,
-        areaId: areaDetectada?.id ?? null,
-        animalId: novaCategoria === 'animal' ? novoAnimalId : null,
-        maquinaId: novaCategoria === 'maquina' ? novaMaquinaId : null,
-        maquinaParada: novaCategoria === 'maquina' && Boolean(novaMaquinaId) && novaMaquinaParada,
-        audioUri: novoAudioUri,
+        titulo,
+        categoria,
+        urgente,
+        descricao,
+        responsavelId,
+        areaId,
+        animalId: categoria === 'animal' ? animalId : null,
+        maquinaId: categoria === 'maquina' ? maquinaId : null,
+        maquinaParada: categoria === 'maquina' && Boolean(maquinaId) && maquinaParada,
+        audioUri,
+        // Sem GPS, o serviço marca o centro da área escolhida
         pontoLat: pontoGps?.lat ?? null,
         pontoLng: pontoGps?.lng ?? null,
         fotos: fotosGuardadas,
         autor: eu,
       });
-      modalAbertoRef.current = false;
-      setModalVisivel(false);
+      onFechar();
     } catch (erro) {
-      Alert.alert(
-        'Erro ao salvar',
-        erro instanceof Error ? erro.message : 'Tente novamente.'
-      );
+      Alert.alert('Erro ao salvar', erro instanceof Error ? erro.message : 'Tente novamente.');
     } finally {
       setSalvando(false);
     }
   };
 
   return (
-    <RelatarProblemaContext.Provider value={abrirModalRelato}>
-      {children}
-
-      <BottomSheet
-        visible={modalVisivel}
-        title="Relatar problema"
-        subtitle={
-          areaDetectada
-            ? `Local identificado pelo GPS: ${areaDetectada.nome}`
-            : pontoGps
-              ? 'Localização GPS capturada'
-              : 'Escolha a categoria do chamado no campo'
-        }
-        alturaMaxima={0.88}
-        onClose={() => {
-          modalAbertoRef.current = false;
-          setModalVisivel(false);
-        }}>
-        <View style={styles.modalBody}>
-          <Text style={styles.secaoLabel}>Categoria *</Text>
-          <View style={styles.gridCategorias}>
-            {CATEGORIAS_TAREFA.map((cat) => {
-              const selecionada = novaCategoria === cat;
-              return (
-                <Pressable
-                  key={cat}
-                  onPress={() => selecionarCategoriaModal(cat)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: selecionada }}
-                  style={[
-                    styles.itemCategoria,
-                    selecionada && styles.itemCategoriaAtiva,
-                  ]}>
-                  <AppIcon
-                    name={ICONE_CATEGORIA_TAREFA[cat]}
-                    size={26}
-                    color={selecionada ? AgroColors.forest : AgroColors.textSecondary}
-                  />
-                  <Text
-                    style={[
-                      styles.textoCategoria,
-                      selecionada && styles.textoCategoriaAtiva,
-                    ]}>
-                    {ROTULO_CATEGORIA_TAREFA[cat]}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          {novaCategoria === 'animal' && animaisAtivos.length > 0 ? (
-            <ChipSelector
-              label="Animal do Rebanho"
-              options={opcoesAnimalModal}
-              value={novoAnimalId ?? 'nenhum'}
-              onChange={selecionarAnimalModal}
-            />
-          ) : null}
-
-          {novaCategoria === 'maquina' && listaMaquinas.length > 0 ? (
-            <>
-              <ChipSelector
-                label="Máquina / Implemento"
-                options={opcoesMaquinaModal}
-                value={novaMaquinaId ?? 'nenhuma'}
-                onChange={selecionarMaquinaModal}
-              />
-              {novaMaquinaId ? (
-                <SwitchField
-                  label="Máquina parada"
-                  helperText="Atualiza o status da máquina para Em manutenção no banco local"
-                  value={novaMaquinaParada}
-                  onChange={setNovaMaquinaParada}
+    <BottomSheet
+      visible={visivel}
+      title="Relatar problema"
+      subtitle={
+        area
+          ? `Local: ${area.nome}`
+          : pontoGps
+            ? 'Localização GPS capturada'
+            : 'Escolha a categoria do chamado no campo'
+      }
+      alturaMaxima={1}
+      onClose={onFechar}>
+      <View style={styles.corpo}>
+        <Text style={styles.secaoLabel}>Categoria *</Text>
+        <View style={styles.gridCategorias}>
+          {CATEGORIAS_TAREFA.map((cat) => {
+            const selecionada = categoria === cat;
+            return (
+              <Pressable
+                key={cat}
+                onPress={() => selecionarCategoria(cat)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: selecionada }}
+                style={[styles.itemCategoria, selecionada && styles.itemCategoriaAtiva]}>
+                <AppIcon
+                  name={ICONE_CATEGORIA_TAREFA[cat]}
+                  size={26}
+                  color={selecionada ? AgroColors.forest : AgroColors.textSecondary}
                 />
-              ) : null}
-            </>
-          ) : null}
-
-          {talhoes.length > 0 ? (
-            <ChipSelector
-              label="Área / Talhão"
-              options={opcoesAreaModal}
-              value={areaDetectada?.id ?? 'nenhuma'}
-              onChange={selecionarAreaModal}
-            />
-          ) : null}
-
-          <CustomInput
-            label="Título"
-            placeholder="Ex.: Cerca — Pasto 2"
-            value={novoTitulo}
-            onChangeText={(txt) => {
-              setTituloEditadoManualmente(true);
-              setNovoTitulo(txt);
-            }}
-          />
-
-          <SwitchField
-            label="Urgente"
-            helperText="Destaca no topo da lista e em vermelho no mapa"
-            value={novaUrgente}
-            onChange={setNovaUrgente}
-          />
-
-          {ehAdmin && temEquipe ? (
-            <ChipSelector
-              label="Responsável (opcional)"
-              options={opcoesResponsavel}
-              value={novoResponsavelId ?? 'nenhum'}
-              onChange={(valor) => setNovoResponsavelId(valor === 'nenhum' ? null : valor)}
-            />
-          ) : null}
-
-          <View style={styles.fotosBloco}>
-            <Text style={styles.secaoLabel}>
-              Fotos ({novasFotos.length}/{LIMITE_FOTOS_OCORRENCIA})
-            </Text>
-            {novasFotos.length > 0 ? (
-              <View style={styles.fotosLinha}>
-                {novasFotos.map((uri, idx) => (
-                  <View key={`${uri}-${idx}`} style={styles.fotoItem}>
-                    <Image source={{ uri }} style={styles.fotoMiniatura} contentFit="cover" />
-                    <Pressable
-                      onPress={() => removerFoto(idx)}
-                      accessibilityRole="button"
-                      accessibilityLabel="Remover foto"
-                      style={styles.botaoRemoverFoto}>
-                      <AppIcon name="x" size={14} color={AgroColors.textInverse} />
-                    </Pressable>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-
-            {novasFotos.length < LIMITE_FOTOS_OCORRENCIA ? (
-              <View style={styles.botoesFoto}>
-                {OPCOES_BOTAO_FOTO.map((btn) => (
-                  <Button
-                    key={btn.origem}
-                    label={btn.label}
-                    variant={btn.variant}
-                    size="sm"
-                    onPress={() => adicionarFoto(btn.origem)}
-                    style={styles.botaoAcao}
-                  />
-                ))}
-              </View>
-            ) : null}
-          </View>
-
-          <NotaVozField audioUri={novoAudioUri} onChange={setNovoAudioUri} />
-
-          <CustomInput
-            label="Observação (opcional)"
-            placeholder="Ex.: Dois fios arrebentados perto da porteira..."
-            value={novaDescricao}
-            onChangeText={setNovaDescricao}
-            multiline
-          />
-
-          <Button
-            label="Registrar ocorrência"
-            fullWidth
-            size="lg"
-            loading={salvando}
-            onPress={salvarRelato}
-          />
+                <Text style={[styles.textoCategoria, selecionada && styles.textoCategoriaAtiva]}>
+                  {ROTULO_CATEGORIA_TAREFA[cat]}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
-      </BottomSheet>
-    </RelatarProblemaContext.Provider>
+
+        {categoria === 'animal' && animaisAtivos.length > 0 ? (
+          <ChipSelector
+            label="Animal do Rebanho"
+            options={opcoesAnimal}
+            value={animalId ?? 'nenhum'}
+            onChange={(valor) => setAnimalId(valor === 'nenhum' ? null : valor)}
+          />
+        ) : null}
+
+        {categoria === 'maquina' && listaMaquinas.length > 0 ? (
+          <>
+            <ChipSelector
+              label="Máquina / Implemento"
+              options={opcoesMaquina}
+              value={maquinaId ?? 'nenhuma'}
+              onChange={selecionarMaquina}
+            />
+            {maquinaId ? (
+              <SwitchField
+                label="Máquina parada"
+                helperText="Atualiza o status da máquina para Em manutenção no banco local"
+                value={maquinaParada}
+                onChange={setMaquinaParada}
+              />
+            ) : null}
+          </>
+        ) : null}
+
+        {talhoes.length > 0 ? (
+          <SelectField
+            label="Área / Talhão"
+            options={opcoesArea}
+            value={areaId ?? 'nenhuma'}
+            onChange={selecionarArea}
+          />
+        ) : null}
+
+        <CustomInput
+          label="Título"
+          placeholder="Ex.: Cerca — Pasto 2"
+          value={titulo}
+          onChangeText={setTituloManual}
+        />
+
+        <SwitchField
+          label="Urgente"
+          helperText="Destaca no topo da lista e em vermelho no mapa"
+          value={urgente}
+          onChange={setUrgente}
+        />
+
+        {ehAdmin && temEquipe ? (
+          <ChipSelector
+            label="Responsável (opcional)"
+            options={opcoesResponsavel}
+            value={responsavelId ?? 'nenhum'}
+            onChange={(valor) => setResponsavelId(valor === 'nenhum' ? null : valor)}
+          />
+        ) : (
+          <CheckboxField
+            label="Atribuir a mim mesmo"
+            helperText="Sem isso, a tarefa fica livre para alguém pegar"
+            value={responsavelId === eu.id}
+            onChange={(assumir) => setResponsavelId(assumir ? eu.id : null)}
+          />
+        )}
+
+        <View style={styles.fotosBloco}>
+          <Text style={styles.secaoLabel}>
+            Fotos ({fotos.length}/{LIMITE_FOTOS_OCORRENCIA})
+          </Text>
+          {fotos.length > 0 ? (
+            <View style={styles.fotosLinha}>
+              {fotos.map((uri, idx) => (
+                <View key={`${uri}-${idx}`}>
+                  <Image source={{ uri }} style={styles.fotoMiniatura} contentFit="cover" />
+                  <Pressable
+                    onPress={() => removerFoto(idx)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Remover foto"
+                    style={styles.botaoRemoverFoto}>
+                    <AppIcon name="x" size={14} color={AgroColors.textInverse} />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          {fotos.length < LIMITE_FOTOS_OCORRENCIA ? (
+            <View style={styles.botoesFoto}>
+              {OPCOES_BOTAO_FOTO.map((btn) => (
+                <Button
+                  key={btn.origem}
+                  label={btn.label}
+                  variant={btn.variant}
+                  size="sm"
+                  onPress={() => adicionarFoto(btn.origem)}
+                  style={styles.botaoFoto}
+                />
+              ))}
+            </View>
+          ) : null}
+        </View>
+
+        <NotaVozField audioUri={audioUri} onChange={setAudioUri} />
+
+        <CustomInput
+          label="Observação (opcional)"
+          placeholder="Ex.: Dois fios arrebentados perto da porteira..."
+          value={descricao}
+          onChangeText={setDescricao}
+          multiline
+        />
+
+        <Button label="Registrar ocorrência" fullWidth size="lg" loading={salvando} onPress={salvar} />
+      </View>
+    </BottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  modalBody: {
+  corpo: {
     gap: Spacing.md,
     paddingTop: Spacing.xs,
   },
@@ -566,9 +496,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing.sm,
   },
-  fotoItem: {
-    position: 'relative',
-  },
   fotoMiniatura: {
     width: 72,
     height: 72,
@@ -590,7 +517,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing.sm,
   },
-  botaoAcao: {
+  botaoFoto: {
     flex: 1,
   },
 });

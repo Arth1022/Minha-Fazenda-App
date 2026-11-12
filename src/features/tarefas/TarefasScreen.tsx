@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 
 import { ChipSelector, CustomInput, type ChipOption } from '@/components/forms';
 import {
@@ -9,6 +9,7 @@ import {
   BottomSheet,
   Button,
   Card,
+  COR_BADGE_SOLIDO,
   EmptyState,
   Header,
   ScreenContainer,
@@ -16,16 +17,13 @@ import {
   type BadgeVariant,
   type SegmentedTabItem,
 } from '@/components/ui';
-import { AgroColors, Radius, Shadows, Spacing, Typography } from '@/constants/theme';
+import { AgroColors, Radius, Spacing, Typography } from '@/constants/theme';
 import {
-  CATEGORIAS_TAREFA,
   useConsultaAoVivo,
   useLiveQuery,
-  type CategoriaTarefa,
   type StatusTarefa,
   type TarefaOcorrencia,
 } from '@/database';
-import { listarMaquinas } from '@/features/maquinas/data/maquinas';
 import { NovoTratamentoForm } from '@/features/rebanho/components/NovoTratamentoForm';
 import { listarAnimais } from '@/features/rebanho/data/animais';
 import {
@@ -37,49 +35,30 @@ import {
   listarMinhasTarefas,
   listarTodasTarefas,
   pegarTarefa,
-  resolverQrCodeParaOcorrencia,
   ROTULO_CATEGORIA_TAREFA,
   ROTULO_STATUS_TAREFA,
   soltarTarefa,
   TABELAS_OCORRENCIAS,
 } from '@/services/ocorrenciaService';
-import { useLeitorQrCode } from '@/services/qrcode';
-import { listarTalhoesAtivos } from '@/services/talhaoService';
 import {
   listarColaboradores,
   podeAtribuirTarefas,
-  podeCancelarOuEditarTarefa,
+  podeCancelarTarefa,
   podeSoltarTarefa,
   TABELAS_MEMBROS,
   useUsuarioAtual,
   type Usuario,
 } from '@/services/usuario';
 import { formatDiaMes } from '@/utils/date';
+import { ICONE_CATEGORIA_TAREFA } from './categorias';
 import { PlayerNotaVozCompacto } from './NotaVozField';
-import { ICONE_CATEGORIA_TAREFA, useRelatarProblema } from './RelatarProblemaProvider';
-
-export { ICONE_CATEGORIA_TAREFA };
+import { useRelatarProblema } from './RelatarProblemaProvider';
 
 type AbaPrincipal = 'minhas' | 'todas';
-type FiltroRapido = 'todas' | 'sem_responsavel' | 'abertas';
 
 const ABAS: SegmentedTabItem<AbaPrincipal>[] = [
   { key: 'minhas', label: 'Minhas tarefas' },
   { key: 'todas', label: 'Todas as tarefas' },
-];
-
-const OPCOES_FILTRO_RAPIDO: ChipOption<FiltroRapido>[] = [
-  { label: 'Todas', value: 'todas' },
-  { label: 'Sem responsável', value: 'sem_responsavel' },
-  { label: 'Abertas', value: 'abertas' },
-];
-
-const OPCOES_CATEGORIA: ChipOption<'todas' | CategoriaTarefa>[] = [
-  { label: 'Todas categorias', value: 'todas' },
-  ...CATEGORIAS_TAREFA.map((cat) => ({
-    label: ROTULO_CATEGORIA_TAREFA[cat],
-    value: cat,
-  })),
 ];
 
 const VARIANTE_STATUS: Record<StatusTarefa, BadgeVariant> = {
@@ -124,21 +103,30 @@ const CardTarefa = React.memo(function CardTarefa({
   const podePegar = tarefa.status === 'aberta' && semDono;
   const podeSoltar = podeSoltarTarefa(tarefa, usuarioContexto);
   const podeIniciar = tarefa.status === 'aberta' && ehDonoOuAdmin && !semDono;
-  const podeConcluir =
-    (tarefa.status === 'aberta' || tarefa.status === 'em_andamento') && ehDonoOuAdmin && !semDono;
+  // Concluir só depois de iniciar: no primeiro contato as opções são Iniciar ou Desistir
+  const podeConcluir = tarefa.status === 'em_andamento' && ehDonoOuAdmin && !semDono;
   const podeAtribuir =
     ehAdmin && temEquipe && (tarefa.status === 'aberta' || tarefa.status === 'em_andamento');
-  const podeCancelar = podeCancelarOuEditarTarefa(tarefa, usuarioContexto);
+  const podeCancelar = podeCancelarTarefa(tarefa, usuarioContexto);
 
   return (
-    <Card style={tarefa.urgente ? [styles.card, styles.cardUrgente] : styles.card}>
+    <Card
+      style={[
+        styles.card,
+        // Faixa à esquerda na mesma cor do selo de estado (urgente sobrepõe)
+        {
+          borderLeftColor: tarefa.urgente
+            ? COR_BADGE_SOLIDO.danger
+            : COR_BADGE_SOLIDO[VARIANTE_STATUS[tarefa.status]],
+        },
+      ]}>
       <View style={styles.cardHeader}>
         <View
           style={[styles.categoriaIcone, tarefa.urgente && styles.categoriaIconeUrgente]}>
           <AppIcon
             name={ICONE_CATEGORIA_TAREFA[tarefa.categoria]}
-            size={20}
-            color={tarefa.urgente ? AgroColors.danger : AgroColors.forest}
+            size={22}
+            color={AgroColors.textInverse}
           />
         </View>
 
@@ -158,22 +146,21 @@ const CardTarefa = React.memo(function CardTarefa({
       ) : null}
 
       <View style={styles.badgesRow}>
-        {tarefa.urgente ? <Badge label="Urgente" variant="danger" dot /> : null}
+        {tarefa.urgente ? <Badge label="Urgente" variant="danger" dot solid /> : null}
         <Badge
           label={ROTULO_STATUS_TAREFA[tarefa.status]}
           variant={VARIANTE_STATUS[tarefa.status]}
+          solid
         />
-        {tarefa.maquinaParada ? <Badge label="Máquina parada" variant="danger" /> : null}
+        {tarefa.maquinaParada ? <Badge label="Máquina parada" variant="danger" solid /> : null}
         {tarefa.audioUri ? <Badge label="Nota de voz" variant="info" /> : null}
         {tarefa.pontoLat !== null && tarefa.pontoLng !== null ? (
           <Badge label="No mapa" variant="info" />
         ) : null}
-        {tarefa.syncStatus === 'pendente' ? (
-          <Badge label="Não sincronizado" variant="neutral" />
-        ) : null}
       </View>
 
-      {podePegar || podeIniciar || podeConcluir ? (
+      {/* Todas as ações numa linha só, para economizar espaço */}
+      {podePegar || podeIniciar || podeConcluir || podeSoltar || podeAtribuir || podeCancelar ? (
         <View style={styles.acoesRow}>
           {podePegar ? (
             <Button
@@ -208,14 +195,10 @@ const CardTarefa = React.memo(function CardTarefa({
               style={styles.botaoAcao}
             />
           ) : null}
-        </View>
-      ) : null}
 
-      {podeSoltar || podeAtribuir || podeCancelar ? (
-        <View style={styles.acoesRow}>
           {podeSoltar ? (
             <Button
-              label="Soltar"
+              label="Desistir"
               size="sm"
               variant="outline"
               loading={carregando}
@@ -254,16 +237,14 @@ const CardTarefa = React.memo(function CardTarefa({
 export default function TarefasScreen() {
   const eu = useUsuarioAtual();
   const ehAdmin = podeAtribuirTarefas(eu);
-  const lerQrCode = useLeitorQrCode();
-  const abrirModalRelato = useRelatarProblema();
+  const relatarProblema = useRelatarProblema();
+  // Outras telas (mapa, ficha do animal, máquina) pedem o relato por parâmetro de rota
   const { relatarAreaId, relatarAnimalId, relatarMaquinaId } = useLocalSearchParams<{
     relatarAreaId?: string;
     relatarAnimalId?: string;
     relatarMaquinaId?: string;
   }>();
-  const { data: talhoes } = useLiveQuery(listarTalhoesAtivos());
   const { data: animaisAtivos } = useLiveQuery(listarAnimais());
-  const { data: listaMaquinas } = useLiveQuery(listarMaquinas());
   const { dados: colaboradores } = useConsultaAoVivo<Usuario[]>(
     listarColaboradores,
     TABELAS_MEMBROS,
@@ -277,8 +258,6 @@ export default function TarefasScreen() {
   );
 
   const [abaAtiva, setAbaAtiva] = useState<AbaPrincipal>('minhas');
-  const [filtroRapido, setFiltroRapido] = useState<FiltroRapido>('todas');
-  const [filtroCategoria, setFiltroCategoria] = useState<'todas' | CategoriaTarefa>('todas');
   const [processandoId, setProcessandoId] = useState<string | null>(null);
 
   // Modais de Atribuição (admin) e Cancelamento (com motivo obrigatório)
@@ -300,18 +279,23 @@ export default function TarefasScreen() {
     );
   }, []);
 
-  const chaveConsulta = `${abaAtiva}:${eu.id}:${filtroRapido}:${filtroCategoria}`;
+  useEffect(() => {
+    if (!relatarAreaId && !relatarAnimalId && !relatarMaquinaId) return;
+    router.setParams({
+      relatarAreaId: undefined,
+      relatarAnimalId: undefined,
+      relatarMaquinaId: undefined,
+    });
+    relatarProblema({
+      areaId: relatarAreaId,
+      animalId: relatarAnimalId,
+      maquinaId: relatarMaquinaId,
+    });
+  }, [relatarAreaId, relatarAnimalId, relatarMaquinaId, relatarProblema]);
+
+  const chaveConsulta = `${abaAtiva}:${eu.id}`;
   const { dados: listaTarefas, carregado } = useConsultaAoVivo<TarefaOcorrencia[]>(
-    () => {
-      if (abaAtiva === 'minhas') {
-        return listarMinhasTarefas(eu.id);
-      }
-      return listarTodasTarefas({
-        status: filtroRapido === 'abertas' ? 'aberta' : undefined,
-        semResponsavel: filtroRapido === 'sem_responsavel' ? true : undefined,
-        categoria: filtroCategoria === 'todas' ? undefined : filtroCategoria,
-      });
-    },
+    () => (abaAtiva === 'minhas' ? listarMinhasTarefas(eu.id) : listarTodasTarefas()),
     TABELAS_OCORRENCIAS,
     chaveConsulta,
     []
@@ -411,124 +395,9 @@ export default function TarefasScreen() {
     [colaboradores, eu.id]
   );
 
-  const escanearQrParaOcorrencia = useCallback(async () => {
-    const valor = await lerQrCode({
-      titulo: 'Ler QR Code de Animal ou Máquina',
-    });
-    if (!valor) return;
-    const alvo = await resolverQrCodeParaOcorrencia(valor);
-    if (!alvo) {
-      Alert.alert(
-        'QR Code não encontrado',
-        'Nenhum animal ou máquina cadastrado corresponde a este QR Code.'
-      );
-      return;
-    }
-    await abrirModalRelato({
-      alvoQr: alvo,
-      responsavelPadraoId: abaAtiva === 'minhas' ? eu.id : null,
-    });
-  }, [lerQrCode, abrirModalRelato, abaAtiva, eu.id]);
-
-  useEffect(() => {
-    if (relatarAreaId && talhoes.length > 0) {
-      const alvo = talhoes.find((t) => t.id === relatarAreaId);
-      if (alvo) {
-        router.setParams({ relatarAreaId: undefined });
-        void abrirModalRelato({
-          area: alvo,
-          responsavelPadraoId: abaAtiva === 'minhas' ? eu.id : null,
-        });
-      }
-    }
-  }, [relatarAreaId, talhoes, abrirModalRelato, abaAtiva, eu.id]);
-
-  useEffect(() => {
-    if (relatarAnimalId && animaisAtivos.length > 0) {
-      const animal = animaisAtivos.find((a) => a.id === relatarAnimalId);
-      if (animal) {
-        router.setParams({ relatarAnimalId: undefined });
-        void abrirModalRelato({
-          alvoQr: {
-            tipo: 'animal',
-            animalId: animal.id,
-            identificacao: animal.nome ? `${animal.nome} (#${animal.brinco})` : `Brinco #${animal.brinco}`,
-            categoria: 'animal',
-          },
-          responsavelPadraoId: abaAtiva === 'minhas' ? eu.id : null,
-        });
-      }
-    }
-  }, [relatarAnimalId, animaisAtivos, abrirModalRelato, abaAtiva, eu.id]);
-
-  useEffect(() => {
-    if (relatarMaquinaId && listaMaquinas.length > 0) {
-      const maq = listaMaquinas.find((m) => m.id === relatarMaquinaId);
-      if (maq) {
-        router.setParams({ relatarMaquinaId: undefined });
-        void abrirModalRelato({
-          alvoQr: {
-            tipo: 'maquina',
-            maquinaId: maq.id,
-            identificacao: `${maq.nome} (${maq.codigo})`,
-            categoria: 'maquina',
-          },
-          responsavelPadraoId: abaAtiva === 'minhas' ? eu.id : null,
-        });
-      }
-    }
-  }, [relatarMaquinaId, listaMaquinas, abrirModalRelato, abaAtiva, eu.id]);
-
   return (
     <ScreenContainer header={<Header title="Tarefas e Ocorrências" />}>
       <SegmentedTabs tabs={ABAS} activeTab={abaAtiva} onTabChange={setAbaAtiva} />
-
-      {abaAtiva === 'todas' ? (
-        <View style={styles.filtrosBloco}>
-          <ChipSelector
-            label="Situação"
-            options={OPCOES_FILTRO_RAPIDO}
-            value={filtroRapido}
-            onChange={setFiltroRapido}
-          />
-          <ChipSelector
-            label="Categoria"
-            options={OPCOES_CATEGORIA}
-            value={filtroCategoria}
-            onChange={setFiltroCategoria}
-          />
-        </View>
-      ) : null}
-
-      <View style={styles.topoAcoesRow}>
-        <Pressable
-          onPress={() =>
-            void abrirModalRelato({
-              responsavelPadraoId: abaAtiva === 'minhas' ? eu.id : null,
-            })
-          }
-          accessibilityRole="button"
-          accessibilityLabel="Relatar problema"
-          style={({ pressed }) => [styles.fabInline, pressed && styles.fabPressed]}>
-          <View style={styles.fabIconWrap}>
-            <AppIcon name="plus" size={20} color={AgroColors.textInverse} />
-          </View>
-          <View style={styles.fabTextCol}>
-            <Text style={styles.fabTitle}>Relatar problema</Text>
-            <Text style={styles.fabSubtitle}>GPS, foto ou nota de voz</Text>
-          </View>
-          <AppIcon name="chevronRight" size={20} color={AgroColors.textInverse} />
-        </Pressable>
-
-        <Pressable
-          onPress={() => void escanearQrParaOcorrencia()}
-          accessibilityRole="button"
-          accessibilityLabel="Ler QR Code de animal ou máquina"
-          style={({ pressed }) => [styles.botaoQrTopo, pressed && styles.fabPressed]}>
-          <AppIcon name="qrcode" size={24} color={AgroColors.forest} />
-          <Text style={styles.textoBotaoQr}>QR Code</Text>
-        </Pressable>
-      </View>
 
       {carregado && listaTarefas.length === 0 ? (
         <EmptyState
@@ -651,80 +520,19 @@ export default function TarefasScreen() {
 }
 
 const styles = StyleSheet.create({
-  filtrosBloco: {
-    gap: Spacing.sm,
-    backgroundColor: AgroColors.cardBg,
-    padding: Spacing.md,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: AgroColors.border,
-  },
-  topoAcoesRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: Spacing.sm,
-  },
-  fabInline: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-    backgroundColor: AgroColors.forest,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 14,
-    borderRadius: Radius.lg,
-    ...Shadows.md,
-  },
-  botaoQrTopo: {
-    width: 78,
-    borderRadius: Radius.lg,
-    backgroundColor: AgroColors.mintBg,
-    borderWidth: 1,
-    borderColor: AgroColors.mintBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingHorizontal: Spacing.xs,
-  },
-  textoBotaoQr: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: AgroColors.forest,
-  },
-  fabPressed: {
-    opacity: 0.9,
-  },
-  fabIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fabTextCol: {
-    flex: 1,
-    gap: 2,
-  },
-  fabTitle: {
-    color: AgroColors.textInverse,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  fabSubtitle: {
-    color: 'rgba(255, 255, 255, 0.85)',
-    fontSize: 12.5,
-  },
   lista: {
     gap: Spacing.md,
   },
+  // Card liso: sem a sombra (no Android vira um brilho em volta da borda)
+  // Card forte sem sombra (no Android a sombra vira brilho): borda grossa e faixa de estado
   card: {
     gap: Spacing.sm,
     padding: Spacing.md,
-  },
-  cardUrgente: {
-    borderColor: AgroColors.danger,
+    elevation: 0,
+    shadowOpacity: 0,
     borderWidth: 1.5,
+    borderColor: AgroColors.borderStrong,
+    borderLeftWidth: 6,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -732,15 +540,15 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
   categoriaIcone: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: AgroColors.forestTint,
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
+    backgroundColor: AgroColors.forest,
     alignItems: 'center',
     justifyContent: 'center',
   },
   categoriaIconeUrgente: {
-    backgroundColor: AgroColors.dangerBg,
+    backgroundColor: AgroColors.danger,
   },
   cardTextos: {
     flex: 1,
@@ -748,17 +556,20 @@ const styles = StyleSheet.create({
   },
   cardTitulo: {
     ...Typography.bodyBold,
-    fontSize: 16,
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: '800',
     color: AgroColors.textPrimary,
   },
   cardMeta: {
     ...Typography.caption,
-    color: AgroColors.textMuted,
+    fontWeight: '600',
+    color: AgroColors.textSecondary,
   },
   cardDescricao: {
-    fontSize: 14,
+    fontSize: 14.5,
     lineHeight: 20,
-    color: AgroColors.textSecondary,
+    color: AgroColors.textPrimary,
   },
   badgesRow: {
     flexDirection: 'row',

@@ -3,10 +3,10 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 
 import { AppIcon, Header, ScreenContainer } from '@/components/ui';
-import { APP_NAME } from '@/constants/app';
 import { COR_POR_TIPO_AREA } from '@/constants/areas';
 import { AgroColors, Radius, Spacing } from '@/constants/theme';
 import { useConsultaAoVivo, useLiveQuery, type Talhao } from '@/database';
+import { useFazendaAtiva } from '@/features/fazenda';
 import { TABELAS_TAREFAS, tarefasDe, type Tarefa } from '@/services/cicloService';
 import { ocupacaoDasAreas, TABELAS_OCUPACAO } from '@/services/movimentacaoService';
 import { listarTalhoesAtivos } from '@/services/talhaoService';
@@ -40,6 +40,7 @@ function abrirMapa(opcoes: { talhao?: string; desenhar?: 'divisa' | 'area' } = {
 export default function MapeamentoScreen() {
   const { data: talhoes, updatedAt, error } = useLiveQuery(listarTalhoesAtivos());
   const fazenda = useFazendaMapa();
+  const nomeFazenda = useFazendaAtiva().fazenda?.nome ?? fazenda?.nome ?? '';
   const eu = useUsuarioAtual();
   const admin = podeEditarGeometria(eu);
   const { dados: linhasOcupacao } = useConsultaAoVivo<LinhaOcupacao[]>(
@@ -64,9 +65,13 @@ export default function MapeamentoScreen() {
   const chavePrevia = JSON.stringify(vista);
 
   return (
-    <ScreenContainer header={<Header title={APP_NAME} showMenu />}>
+    <ScreenContainer header={<Header title="Mapa da fazenda" />}>
       <View style={estilos.titulos}>
-        <Text style={estilos.titulo}>Mapa da fazenda</Text>
+        {nomeFazenda ? (
+          <Text style={estilos.nomeFazenda} numberOfLines={2}>
+            {nomeFazenda}
+          </Text>
+        ) : null}
         <Text style={estilos.subtitulo}>{carregado ? resumoFazenda(fazenda, talhoes) : '…'}</Text>
       </View>
 
@@ -121,7 +126,7 @@ export default function MapeamentoScreen() {
           <View style={estilos.tarefasTextos}>
             <Text style={estilos.tarefasTitulo}>Minhas tarefas</Text>
             <Text style={estilos.tarefasSub}>
-              {paraFazer === 0 ? 'Nada para fazer agora' : paraFazer === 1 ? '1 para fazer' : `${paraFazer} para fazer`}
+              {paraFazer === 0 ? 'Sem tarefas' : paraFazer === 1 ? '1 para fazer' : `${paraFazer} para fazer`}
             </Text>
           </View>
           <AppIcon name="chevronRight" size={20} color={CoresTexto.suave} />
@@ -179,12 +184,7 @@ function ListaAreas({
 }) {
   return (
     <View style={estilos.cartao}>
-      <View>
-        <Text style={estilos.cartaoTitulo}>Áreas da fazenda</Text>
-        <Text style={estilos.cartaoDica}>
-          Toque numa área para abrir no mapa e ver o que dá para fazer nela.
-        </Text>
-      </View>
+      <Text style={estilos.cartaoTitulo}>Áreas da fazenda</Text>
       <View>
         {talhoes.map((talhao, indice) => (
           <Pressable
@@ -249,12 +249,12 @@ const estilos = StyleSheet.create({
   tarefasTextos: { flex: 1 },
   tarefasTitulo: { fontSize: 16.5, lineHeight: 22, fontWeight: '600', color: CoresTexto.escuro },
   tarefasSub: { fontSize: 13.5, lineHeight: 18, color: CoresTexto.suave },
-  titulos: { gap: 2, marginTop: Spacing.two },
-  titulo: {
-    fontSize: 25,
-    lineHeight: 31,
+  titulos: { gap: 2 },
+  nomeFazenda: {
+    fontSize: 24,
+    lineHeight: 30,
     fontWeight: '700',
-    letterSpacing: -0.4,
+    letterSpacing: -0.3,
     color: CoresTexto.escuro,
   },
   subtitulo: { fontSize: 15, lineHeight: 20, color: CoresTexto.suave },
@@ -291,7 +291,6 @@ const estilos = StyleSheet.create({
   },
   cartaoTitulo: { fontSize: 19, lineHeight: 25, fontWeight: '700', color: CoresTexto.escuro },
   cartaoTexto: { fontSize: 15, lineHeight: 21, color: CoresTexto.suave, marginTop: -6 },
-  cartaoDica: { fontSize: 13.5, lineHeight: 18, color: CoresTexto.suave },
   passos: { flexDirection: 'row', gap: Spacing.sm, marginVertical: Spacing.xs },
   passo: { flex: 1, gap: Spacing.sm },
   passoNumero: {

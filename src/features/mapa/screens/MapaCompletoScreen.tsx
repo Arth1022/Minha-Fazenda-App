@@ -22,9 +22,10 @@ import {
   type Talhao,
   type TarefaOcorrencia,
 } from '@/database';
-import { ICONE_CATEGORIA_TAREFA } from '@/features/tarefas/TarefasScreen';
+import { ICONE_CATEGORIA_TAREFA } from '@/features/tarefas';
 import {
   concluirOcorrencia,
+  iniciarOcorrencia,
   listarOcorrenciasNoMapa,
   ROTULO_CATEGORIA_TAREFA,
   TABELAS_OCORRENCIAS,
@@ -1073,17 +1074,30 @@ export default function MapaCompletoScreen() {
                     }}
                     style={estilos.acao}
                   />
+                  {/* Concluir só depois de iniciar */}
                   {podeIniciarOuConcluirTarefa(ocorrenciaSelecionada, eu) ? (
-                    <BotaoMapa
-                      rotulo="Concluir"
-                      icone="check"
-                      onPress={async () => {
-                        const id = ocorrenciaSelecionada.id;
-                        setOcorrenciaId(null);
-                        await concluirOcorrencia(id, { autor: eu });
-                      }}
-                      style={estilos.acao}
-                    />
+                    ocorrenciaSelecionada.status === 'em_andamento' ? (
+                      <BotaoMapa
+                        rotulo="Concluir"
+                        icone="check"
+                        onPress={async () => {
+                          const id = ocorrenciaSelecionada.id;
+                          setOcorrenciaId(null);
+                          await concluirOcorrencia(id, { autor: eu });
+                        }}
+                        style={estilos.acao}
+                      />
+                    ) : (
+                      <BotaoMapa
+                        rotulo="Iniciar"
+                        onPress={async () => {
+                          const id = ocorrenciaSelecionada.id;
+                          setOcorrenciaId(null);
+                          await iniciarOcorrencia(id, eu);
+                        }}
+                        style={estilos.acao}
+                      />
+                    )
                   ) : null}
                 </View>
               </>

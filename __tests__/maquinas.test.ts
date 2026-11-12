@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 
 import { anotacoesDaMaquina, criarAnotacao } from '@/features/maquinas/data/anotacoes';
 import {
@@ -340,6 +340,11 @@ async function auditoria(tratorId: string, outroTratorId: string) {
   const descartado = await encerrarUso(tratorId, { fim: new Date(T + 30 * MIN + 30 * SEG) });
   check(descartado.descartado && descartado.uso === null, 'ligou sem querer (30 s): uso descartado');
   check((await usosRecentes(tratorId, 1))[0]?.id === u.id, 'uso descartado não aparece nos últimos usos');
+  const semFim = await db
+    .select({ id: usosMaquina.id })
+    .from(usosMaquina)
+    .where(and(eq(usosMaquina.maquinaId, tratorId), isNull(usosMaquina.fim)));
+  check(semFim.length === 0, 'uso descartado também é fechado (fim preenchido): a máquina não fica "em uso" em nenhuma consulta');
 
   // Troca de turno: Beta assume o uso do João
   const doJoao = await iniciarUso(outroTratorId, { operador: joao }, new Date(T + 40 * MIN));

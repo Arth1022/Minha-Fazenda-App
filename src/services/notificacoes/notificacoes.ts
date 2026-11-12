@@ -1,4 +1,5 @@
 import * as Notifications from 'expo-notifications';
+import { IosAuthorizationStatus } from 'expo-notifications';
 
 import type {
   DadosNotificacao,
@@ -66,9 +67,9 @@ function statusDe(resposta: Notifications.NotificationPermissionsStatus): Status
   const ios = resposta.ios?.status;
   if (
     resposta.granted ||
-    ios === Notifications.IosAuthorizationStatus.AUTHORIZED ||
-    ios === Notifications.IosAuthorizationStatus.PROVISIONAL ||
-    ios === Notifications.IosAuthorizationStatus.EPHEMERAL
+    ios === IosAuthorizationStatus.AUTHORIZED ||
+    ios === IosAuthorizationStatus.PROVISIONAL ||
+    ios === IosAuthorizationStatus.EPHEMERAL
   ) {
     return 'concedida';
   }

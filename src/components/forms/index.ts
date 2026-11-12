@@ -33,6 +33,8 @@ export {
   type OrigemAnimalFieldProps,
   type OrigemAnimalValue,
 } from './OrigemAnimalField';
+export { CheckboxField, type CheckboxFieldProps } from './CheckboxField';
+export { SelectField, type SelectFieldProps } from './SelectField';
 export { SwitchField, type SwitchFieldProps } from './SwitchField';
 export {
   TODOS_OS_DIAS,

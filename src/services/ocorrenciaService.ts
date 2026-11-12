@@ -18,14 +18,11 @@ import {
   type TarefaEvento,
   type TarefaOcorrencia,
 } from '@/database';
-import { buscarMaquinaPorReferencia } from '@/features/maquinas/data/maquinas';
-import { lerQrMaquina } from '@/features/maquinas/services/qrCode';
-import { buscarAnimalPorReferencia } from '@/features/rebanho/data/animais';
-import { lerQrAnimal } from '@/features/rebanho/services/qrCode';
 import {
   podeAtribuirTarefas,
-  podeCancelarOuEditarTarefa,
+  podeCancelarTarefa,
   podeCriarTarefaManual,
+  podeEditarTarefa,
   podeIniciarOuConcluirTarefa,
   usuarioAtual,
   type Usuario,
@@ -100,55 +97,9 @@ export interface FiltrosTodasTarefas {
   maquinaId?: string;
 }
 
-export type AlvoQrOcorrencia =
-  | { tipo: 'animal'; animalId: string; identificacao: string; categoria: 'animal' }
-  | { tipo: 'maquina'; maquinaId: string; identificacao: string; categoria: 'maquina' };
-
 function formatarIdentificacaoAnimal(animal: { nome: string | null; brinco: string }): string {
   const num = animal.brinco.replace(/^#/, '');
   return animal.nome ? `${animal.nome} (#${num})` : `Brinco #${num}`;
-}
-
-/**
- * Resolve o conteúdo de um QR Code de animal ou máquina para pré-preencher a ocorrência.
- */
-export async function resolverQrCodeParaOcorrencia(
-  valorQr: string
-): Promise<AlvoQrOcorrencia | null> {
-  const refMaq = lerQrMaquina(valorQr);
-  if (refMaq) {
-    const maq = await buscarMaquinaPorReferencia(refMaq);
-    if (maq) {
-      return {
-        tipo: 'maquina',
-        maquinaId: maq.id,
-        identificacao: `${maq.nome} (${maq.codigo})`,
-        categoria: 'maquina',
-      };
-    }
-  }
-
-  const refAnimal = lerQrAnimal(valorQr);
-  if (refAnimal) {
-    const animal =
-      (await buscarAnimalPorReferencia(refAnimal)) ??
-      (refAnimal.tipo === 'brinco'
-        ? await buscarAnimalPorReferencia({
-            tipo: 'brinco',
-            brinco: refAnimal.brinco.replace(/^#/, ''),
-          })
-        : undefined);
-    if (animal) {
-      return {
-        tipo: 'animal',
-        animalId: animal.id,
-        identificacao: formatarIdentificacaoAnimal(animal),
-        categoria: 'animal',
-      };
-    }
-  }
-
-  return null;
 }
 
 function limparAudioUri(uri?: string | null): string | null {
@@ -441,7 +392,10 @@ export async function soltarTarefa(
   if (tarefa.responsavelId !== autorId) {
     throw new Error('Só o próprio responsável pode soltar a tarefa.');
   }
-  if (tarefa.status !== 'aberta' && tarefa.status !== 'em_andamento') {
+  if (tarefa.status === 'aberta') {
+    throw new Error('Só dá para desistir de uma tarefa depois de iniciá-la.');
+  }
+  if (tarefa.status !== 'em_andamento') {
     throw new Error('Tarefa encerrada não pode ser solta.');
   }
   return transicionar(tarefaId, { responsavelId: null, status: 'aberta' }, { tipo: 'liberada', autorId }, agora);
@@ -491,7 +445,10 @@ export async function concluirOcorrencia(
   const autor = opcoes?.autor ?? usuarioAtual();
   const agora = opcoes?.agora ?? new Date();
   const tarefa = await buscarTarefaOuFalhar(tarefaId);
-  if (tarefa.status !== 'aberta' && tarefa.status !== 'em_andamento') {
+  if (tarefa.status === 'aberta') {
+    throw new Error('Inicie a tarefa antes de concluí-la.');
+  }
+  if (tarefa.status !== 'em_andamento') {
     throw new Error('Tarefa já está encerrada.');
   }
   if (!podeIniciarOuConcluirTarefa(tarefa, autor)) {
@@ -564,8 +521,8 @@ export async function cancelarOcorrencia(
   if (tarefa.status !== 'aberta' && tarefa.status !== 'em_andamento') {
     throw new Error('Apenas tarefas abertas ou em andamento podem ser canceladas.');
   }
-  if (!podeCancelarOuEditarTarefa(tarefa, autor)) {
-    throw new Error('Só o admin ou quem relatou enquanto aberta pode cancelar a tarefa.');
+  if (!podeCancelarTarefa(tarefa, autor)) {
+    throw new Error('Só quem criou a tarefa pode cancelá-la.');
   }
   return transicionar(tarefaId, { status: 'cancelada' }, { tipo: 'cancelada', autorId: autor.id, texto: motivoLimpo }, agora);
 }
@@ -581,7 +538,7 @@ export async function editarOcorrencia(
   agora = new Date()
 ): Promise<TarefaOcorrencia> {
   const tarefa = await buscarTarefaOuFalhar(tarefaId);
-  if (!podeCancelarOuEditarTarefa(tarefa, autor)) {
+  if (!podeEditarTarefa(tarefa, autor)) {
     throw new Error('Só o admin ou quem relatou enquanto aberta pode editar a tarefa.');
   }
   if (

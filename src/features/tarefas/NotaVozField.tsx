@@ -17,6 +17,7 @@ import {
   guardarAudio,
   LIMITE_SEGUNDOS_VOZ,
 } from '@/services/audio';
+import { useMidia } from '@/services/midia';
 
 export interface NotaVozFieldProps {
   audioUri: string | null;
@@ -39,9 +40,11 @@ export function PlayerNotaVozCompacto({
   audioUri: string;
   onExcluir?: () => void;
 }) {
-  const player = useAudioPlayer(audioUri);
+  // `midia:` (enviado por outro celular) vira arquivo local: baixa uma vez e toca offline depois
+  const midia = useMidia(audioUri);
+  const player = useAudioPlayer(midia.uri);
   const status = useAudioPlayerStatus(player);
-  const duracaoSalva = extrairDuracaoAudioSeg(audioUri);
+  const duracaoSalva = status.duration ? Math.round(status.duration) : extrairDuracaoAudioSeg(audioUri);
   const duracaoTotal = Math.max(1, Math.round(status.duration || duracaoSalva));
 
   const alternar = () => {
@@ -88,7 +91,7 @@ export function PlayerNotaVozCompacto({
 }
 
 /**
- * Gravação rápida de nota de voz (até 60s) com áudio real via expo-audio,
+ * Gravação rápida de nota de voz (até LIMITE_SEGUNDOS_VOZ) com áudio real via expo-audio,
  * indicador visual de gravação e reprodução simples.
  * Salva o arquivo diretamente no diretório local do app (`Documents/audios/`).
  */
@@ -185,7 +188,7 @@ export function NotaVozField({ audioUri, onChange }: NotaVozFieldProps) {
         <PlayerNotaVozCompacto audioUri={audioUri} onExcluir={removerAudio} />
       ) : (
         <Button
-          label="Gravar nota de voz (até 60s)"
+          label={`Gravar nota de voz (até ${LIMITE_SEGUNDOS_VOZ}s)`}
           variant="outline"
           size="sm"
           onPress={() => void iniciarGravacao()}

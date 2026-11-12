@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
 
 import { CustomInput } from '@/components/forms';
 import { Badge, Button, Card, Header, ScreenContainer } from '@/components/ui';
@@ -9,6 +8,13 @@ import { Avatar } from '@/shared/Avatar';
 import { useMembros } from './useMembros';
 
 const NOME_PAPEL = { owner: 'Dono', collaborator: 'Colaborador' } as const;
+
+/** "13/11 às 14:05" */
+function formatarValidade(iso: string): string {
+  const data = new Date(iso);
+  const dois = (n: number) => String(n).padStart(2, '0');
+  return `${dois(data.getDate())}/${dois(data.getMonth() + 1)} às ${dois(data.getHours())}:${dois(data.getMinutes())}`;
+}
 
 /** Membros da fazenda, convites e papéis. Layout básico (o visual será refeito). */
 export default function MembrosScreen() {
@@ -71,17 +77,24 @@ export default function MembrosScreen() {
         {m.ehDono ? (
           <Card>
             <Text style={Typography.sectionTitle}>Convidar</Text>
-            {m.convite ? (
+            {m.codigo ? (
               <View style={estilos.convite}>
-                {/* TODO(decisao): o `url` é https://<dominio>/convite/<token>; abrir o app por ele precisa
-                    de App Links (intent filter + assetlinks.json) no domínio da API */}
-                <QRCode value={m.convite.url} size={200} ecl="M" quietZone={12} />
-                <Text style={Typography.caption}>Válido por 48 horas, para 1 pessoa</Text>
+                <Text style={Typography.caption}>Código de convite</Text>
+                <Text
+                  style={estilos.codigo}
+                  selectable
+                  accessibilityLabel={`Código de convite ${m.codigo.codigo.split('').join(' ')}`}>
+                  {m.codigo.codigo}
+                </Text>
+                <Text style={Typography.caption}>
+                  Vale até {formatarValidade(m.codigo.expiraEm)}, para 1 pessoa. Ela digita o código em
+                  &quot;Entrar com código&quot;.
+                </Text>
                 <Button label="Compartilhar" onPress={m.compartilhar} fullWidth />
-                <Button label="Revogar convite" variant="outline" onPress={m.revogar} disabled={m.ocupado} fullWidth />
+                <Button label="Gerar outro código" variant="outline" onPress={m.gerarCodigo} disabled={m.ocupado} fullWidth />
               </View>
             ) : (
-              <Button label="Convidar colaborador" onPress={m.convidar} loading={m.ocupado} fullWidth />
+              <Button label="Gerar código de convite" onPress={m.gerarCodigo} loading={m.ocupado} fullWidth />
             )}
           </Card>
         ) : null}
@@ -98,5 +111,6 @@ const estilos = StyleSheet.create({
   nome: { flex: 1, gap: Spacing.one, alignItems: 'flex-start' },
   acoes: { flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.two, flexWrap: 'wrap' },
   convite: { alignItems: 'center', gap: Spacing.two, marginTop: Spacing.two },
+  codigo: { fontSize: 36, fontWeight: '700', letterSpacing: 6, color: AgroColors.forest },
   erro: { ...Typography.body, color: AgroColors.danger },
 });

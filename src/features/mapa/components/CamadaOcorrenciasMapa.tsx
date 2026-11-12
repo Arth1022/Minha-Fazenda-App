@@ -4,7 +4,7 @@ import Mapbox from '@rnmapbox/maps';
 
 import { AppIcon } from '@/components/ui';
 import { AgroColors, Shadows } from '@/constants/theme';
-import { ICONE_CATEGORIA_TAREFA } from '@/features/tarefas/TarefasScreen';
+import { ICONE_CATEGORIA_TAREFA } from '@/features/tarefas';
 import { ROTULO_CATEGORIA_TAREFA, type OcorrenciaNoMapa } from '@/services/ocorrenciaService';
 
 export interface CamadaOcorrenciasMapaProps {

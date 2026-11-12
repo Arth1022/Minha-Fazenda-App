@@ -1,7 +1,7 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import { useMemo } from 'react';
 
-import { db, maquinas, useLiveQuery, usosMaquina } from '@/database';
+import { daFazenda, db, maquinas, naoApagado, useLiveQuery, usosMaquina } from '@/database';
 import type { Maquina, OcorrenciaMaquina, UsoMaquina } from '@/dtos';
 import { usuarioAtual } from '@/services/usuario';
 import { problemasAbertos } from '../data/ocorrencias';
@@ -18,11 +18,14 @@ export interface SituacaoMaquina {
   engatadoEm: Pick<Maquina, 'id' | 'nome'> | null;
 }
 
+// daFazenda também tira os apagados: um uso descartado (ligado sem querer) fica
+// com deleted_at e, nos dados antigos, sem fim; sem o filtro a máquina aparecia
+// "em uso" para sempre e o "Desligar" falhava com "A máquina não está em uso".
 function usoAbertoNaMaquina(maquinaId: string) {
   return db
     .select()
     .from(usosMaquina)
-    .where(and(eq(usosMaquina.maquinaId, maquinaId), isNull(usosMaquina.fim)))
+    .where(and(daFazenda(usosMaquina), eq(usosMaquina.maquinaId, maquinaId), isNull(usosMaquina.fim)))
     .limit(1);
 }
 
@@ -30,8 +33,8 @@ function engateAberto(implementoId: string) {
   return db
     .select({ id: maquinas.id, nome: maquinas.nome })
     .from(usosMaquina)
-    .innerJoin(maquinas, eq(maquinas.id, usosMaquina.maquinaId))
-    .where(and(eq(usosMaquina.implementoId, implementoId), isNull(usosMaquina.fim)))
+    .innerJoin(maquinas, and(eq(maquinas.id, usosMaquina.maquinaId), naoApagado(maquinas)))
+    .where(and(daFazenda(usosMaquina), eq(usosMaquina.implementoId, implementoId), isNull(usosMaquina.fim)))
     .limit(1);
 }
 

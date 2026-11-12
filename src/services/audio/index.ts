@@ -1,7 +1,7 @@
 import { Directory, File, Paths } from 'expo-file-system';
 
-/** Limite máximo de gravação de nota de voz (60 segundos). */
-export const LIMITE_SEGUNDOS_VOZ = 60;
+/** Limite máximo de gravação de nota de voz (15 segundos). */
+export const LIMITE_SEGUNDOS_VOZ = 15;
 
 const PASTA_AUDIOS = 'audios';
 

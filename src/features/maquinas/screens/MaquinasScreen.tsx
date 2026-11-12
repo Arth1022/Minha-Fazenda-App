@@ -129,7 +129,7 @@ export default function MaquinasScreen() {
   return (
     <ScreenContainer
       header={
-        <Header title="Máquinas e Frota" showBack />
+        <Header title="Máquinas e Frota" />
       }>
       <SegmentedTabs
         tabs={tabs}

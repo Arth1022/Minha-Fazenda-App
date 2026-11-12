@@ -70,6 +70,8 @@ export interface OpcoesApi {
   corpo?: unknown;
   /** Corpo multipart (ex.: avatar no campo "arquivo") */
   formulario?: FormData;
+  /** Tempo máximo da requisição (padrão 20 s; envio de arquivo precisa de mais) */
+  tempoLimiteMs?: number;
   /** Rotas de `/auth/*` (menos logout e powersync-token) vão sem token */
   autenticado?: boolean;
 }
@@ -86,7 +88,7 @@ async function enviar(caminho: string, opcoes: OpcoesApi, token: string | null):
     corpo = JSON.stringify(opcoes.corpo);
   }
   const controle = new AbortController();
-  const limite = setTimeout(() => controle.abort(), TEMPO_LIMITE_MS);
+  const limite = setTimeout(() => controle.abort(), opcoes.tempoLimiteMs ?? TEMPO_LIMITE_MS);
   try {
     return await fetch(`${URL_BASE}${caminho}`, {
       method: opcoes.metodo ?? 'GET',

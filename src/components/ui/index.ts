@@ -1,5 +1,5 @@
 export { AppIcon, type AppIconProps, type AppIconName } from './AppIcon';
-export { Badge, type BadgeProps, type BadgeVariant } from './Badge';
+export { Badge, COR_BADGE_SOLIDO, type BadgeProps, type BadgeVariant } from './Badge';
 export { BottomSheet, type BottomSheetProps } from './BottomSheet';
 export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from './Button';
 export { Card, type CardProps, type CardVariant } from './Card';

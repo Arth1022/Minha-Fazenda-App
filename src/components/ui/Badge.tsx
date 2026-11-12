@@ -11,6 +11,16 @@ export type BadgeVariant =
   | 'neutral'
   | 'overlayLight';
 
+/** Fundo do badge sólido (texto branco): tons escuros o bastante para o branco ler bem */
+export const COR_BADGE_SOLIDO: Record<BadgeVariant, string> = {
+  success: AgroColors.primary,
+  warning: AgroColors.health,
+  danger: AgroColors.danger,
+  info: AgroColors.breeding,
+  neutral: AgroColors.textSecondary,
+  overlayLight: AgroColors.textPrimary,
+};
+
 export interface BadgeProps {
   /** Texto do badge */
   label: string;
@@ -22,6 +32,8 @@ export interface BadgeProps {
   dotColor?: string;
   /** Ícone textual/emoji opcional à esquerda */
   icon?: string;
+  /** Fundo cheio na cor da variante e texto branco (mais destaque) */
+  solid?: boolean;
   /** Estilo customizado */
   style?: ViewStyle;
 }
@@ -35,6 +47,7 @@ export function Badge({
   dot = false,
   dotColor,
   icon,
+  solid = false,
   style,
 }: BadgeProps) {
   const defaultDotColor = {
@@ -47,17 +60,24 @@ export function Badge({
   }[variant];
 
   return (
-    <View style={[styles.base, styles[`bg_${variant}`], style]}>
+    <View
+      style={[
+        styles.base,
+        solid ? [styles.baseSolido, { backgroundColor: COR_BADGE_SOLIDO[variant] }] : styles[`bg_${variant}`],
+        style,
+      ]}>
       {dot ? (
         <View
           style={[
             styles.dot,
-            { backgroundColor: dotColor ?? defaultDotColor },
+            { backgroundColor: solid ? AgroColors.textInverse : (dotColor ?? defaultDotColor) },
           ]}
         />
       ) : null}
       {icon ? <Text style={styles.icon}>{icon}</Text> : null}
-      <Text style={[styles.text, styles[`text_${variant}`]]}>{label}</Text>
+      <Text style={[styles.text, solid ? styles.textSolido : styles[`text_${variant}`]]}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -71,6 +91,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: Radius.xs,
+  },
+  baseSolido: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  textSolido: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: AgroColors.textInverse,
   },
   dot: {
     width: 7,

@@ -23,7 +23,7 @@ import { AgroColors, Radius, Shadows, Spacing, Typography } from '@/constants/th
 import { useConsultaAoVivo, type CategoriaTarefa } from '@/database';
 import { useFazendaAtiva } from '@/features/fazenda';
 import { CardUsoAtual } from '@/features/maquinas';
-import { ICONE_CATEGORIA_TAREFA } from '@/features/tarefas/RelatarProblemaProvider';
+import { ICONE_CATEGORIA_TAREFA } from '@/features/tarefas';
 import { useUsuarioAtual } from '@/services/usuario';
 import {
   arquivarAvisoFazenda,

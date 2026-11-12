@@ -20,7 +20,10 @@ export interface BottomSheetProps {
   title: string;
   subtitle?: string;
   onClose: () => void;
-  /** Fração da altura da tela que o conteúdo pode ocupar antes de rolar (padrão 0,6) */
+  /**
+   * Fração da altura da tela que o conteúdo pode ocupar antes de rolar (padrão 0,6).
+   * Com 1, a folha cresce até quase a tela inteira (só a faixa de cima fica livre).
+   */
   alturaMaxima?: number;
   children: React.ReactNode;
 }
@@ -58,7 +61,16 @@ export function BottomSheet({
           accessibilityLabel="Fechar"
         />
 
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + Spacing.lg }]}>
+        {/* A folha inteira (cabeçalho incluso) nunca passa da tela: sobra uma faixa
+            em cima, abaixo da barra de status, e o conteúdo rola por dentro */}
+        <View
+          style={[
+            styles.sheet,
+            {
+              paddingBottom: insets.bottom + Spacing.lg,
+              maxHeight: height - insets.top - Spacing.five,
+            },
+          ]}>
           <View style={styles.handle} />
 
           <View style={styles.header}>
@@ -78,7 +90,7 @@ export function BottomSheet({
 
           {/* Rola quando a lista passa de ~60% da tela (ex.: muitas crias ou pesagens) */}
           <ScrollView
-            style={{ maxHeight: height * alturaMaxima }}
+            style={[styles.rolagem, { maxHeight: height * alturaMaxima }]}
             contentContainerStyle={styles.body}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}>
@@ -142,6 +154,9 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.7,
+  },
+  rolagem: {
+    flexShrink: 1,
   },
   body: {
     gap: Spacing.sm,
