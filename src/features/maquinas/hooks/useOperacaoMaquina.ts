@@ -54,8 +54,14 @@ export function useOperacaoMaquina() {
 
   const desligarSemTela = useCallback(async (maquinaId: string): Promise<UsoEncerrado> => {
     const posicao = await posicaoRapida();
-    const resultado = await encerrarUso(maquinaId, { posicao });
-    await pararRastro();
+    let resultado: UsoEncerrado;
+    try {
+      resultado = await encerrarUso(maquinaId, { posicao });
+    } finally {
+      // O GPS para mesmo se o uso já tiver sido fechado (por outra pessoa, pela
+      // regra automática ou pelo sync): nunca rastreia fora de um uso
+      await pararRastro();
+    }
     if (resultado.uso) await limparAvisoParada(resultado.uso.id);
     const maquina = await db.select().from(maquinas).where(and(daFazenda(maquinas), eq(maquinas.id, maquinaId))).get();
     if (maquina) publicar(maquina, false);

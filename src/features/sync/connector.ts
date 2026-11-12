@@ -8,6 +8,9 @@ import { api, ehErroApi } from '@/shared/api';
 import { marcarAppDesatualizado } from './estadoSync';
 import { descreverRejeicao, montarUpload, type RespostaUpload } from './upload';
 
+/** Escritas por `POST /sync/upload`. */
+const OPERACOES_POR_LOTE = 200;
+
 interface TokenPowerSync {
   endpoint: string;
   token: string;
@@ -17,7 +20,7 @@ interface TokenPowerSync {
 /**
  * Liga o PowerSync à API: o token do PowerSync vem de `/auth/powersync-token`
  * (a URL do PowerSync também, nunca fixa no app) e a fila de escritas sobe
- * por `POST /sync/upload`, uma transação por vez.
+ * por `POST /sync/upload`, em lotes de até `OPERACOES_POR_LOTE` operações.
  */
 export class ConectorApi implements PowerSyncBackendConnector {
   constructor(private readonly aoAppDesatualizado: () => void = () => undefined) {}
@@ -39,7 +42,10 @@ export class ConectorApi implements PowerSyncBackendConnector {
   }
 
   async uploadData(database: CommonPowerSyncDatabase): Promise<void> {
-    const transacao = await database.getNextCrudTransaction();
+    // Lote de várias transações por requisição: a API aplica tudo em ordem numa
+    // transação do Postgres (e repetir o lote é seguro). Uma fila offline de 300
+    // escritas sobe em 2 requisições em vez de 300.
+    const transacao = await database.getCrudBatch(OPERACOES_POR_LOTE);
     if (!transacao) return;
 
     const { corpo } = montarUpload(transacao.crud);
@@ -65,6 +71,8 @@ export class ConectorApi implements PowerSyncBackendConnector {
 
     await transacao.complete();
     if (resposta?.rejeitadas?.length) {
+      // A API guarda cada recusa em sync_rejeicoes (com os dados). O registro
+      // recusado some do celular no próximo download: o servidor não o tem.
       console.warn('[Sync] Operações recusadas pela API:', resposta.rejeitadas.map(descreverRejeicao));
     }
   }

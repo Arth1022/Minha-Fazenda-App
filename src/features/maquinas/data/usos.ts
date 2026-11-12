@@ -3,6 +3,7 @@ import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, ne, or, sq
 import {
   apagar,
   atualizar,
+  camposApagado,
   daFazenda,
   db,
   maquinas,
@@ -288,7 +289,12 @@ export async function fecharUso(uso: UsoMaquina, opcoes: OpcoesEncerrar = {}): P
 
   if (deveDescartar(fim.getTime() - uso.inicio.getTime(), resumo?.kmTotal ?? null)) {
     await db.transaction(async (tx) => {
-      await apagar(tx, usosMaquina, uso.id);
+      // Fecha e apaga juntos: um uso apagado sem fim continuava "aberto" para
+      // qualquer consulta (ou aparelho) que olhasse só `fim IS NULL`
+      await tx
+        .update(usosMaquina)
+        .set({ ...camposApagado(), fim, fimMotivo: opcoes.motivo ?? 'manual' })
+        .where(eq(usosMaquina.id, uso.id));
       await apagar(tx, paradasUso, eq(paradasUso.usoId, uso.id));
       await tx.delete(pontosGps).where(eq(pontosGps.usoId, uso.id));
     });
