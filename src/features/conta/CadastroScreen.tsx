@@ -31,7 +31,7 @@ export default function CadastroScreen() {
           autoCapitalize="words"
           required
         />
-        <CredencialForm onChange={c.setCredencial} erro={c.erros.email} />
+        <CredencialForm onChange={c.setCredencial} erro={c.erros.email} erroSenha={c.erros.senha} novaSenha />
         {c.comConvite ? (
           <Text style={Typography.caption}>Você vai entrar na fazenda do convite.</Text>
         ) : (

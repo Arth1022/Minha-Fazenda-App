@@ -7,9 +7,9 @@ import { validarNomeFazenda } from '@/features/fazenda';
 import { mensagemDoErro } from '@/shared/api';
 import { enviarAvatar, escolherFotoDoAvatar } from './avatarEPerfil';
 import { registrar, type Credencial } from './servicoConta';
-import { campoDoErro, validarEmail, validarNome } from './validacao';
+import { campoDoErro, validarEmail, validarNome, validarSenha } from './validacao';
 
-type Campo = 'nome' | 'email' | 'nomeFazenda';
+type Campo = 'nome' | 'email' | 'senha' | 'nomeFazenda';
 
 /**
  * Cadastro: nome, credencial, nome da fazenda (escondido com convite) e avatar
@@ -19,7 +19,7 @@ export function useCadastro() {
   const router = useRouter();
   const [comConvite] = useState(() => conviteGuardado() !== null);
   const [nome, setNome] = useState('');
-  const [credencial, setCredencial] = useState<Credencial>({ tipo: 'dev', email: '' });
+  const [credencial, setCredencial] = useState<Credencial>({ tipo: 'senha', email: '', senha: '' });
   const [nomeFazenda, setNomeFazenda] = useState('');
   const [fotoUri, setFotoUri] = useState<string | null>(null);
   const [erros, setErros] = useState<Partial<Record<Campo, string>>>({});
@@ -41,6 +41,7 @@ export function useCadastro() {
     const novos: Partial<Record<Campo, string>> = {
       nome: validarNome(nome) ?? undefined,
       email: validarEmail(credencial.email) ?? undefined,
+      senha: validarSenha(credencial.senha) ?? undefined,
       nomeFazenda: comConvite ? undefined : (validarNomeFazenda(nomeFazenda) ?? undefined),
     };
     setErros(novos);
@@ -51,7 +52,7 @@ export function useCadastro() {
     try {
       await registrar({ nome, credencial, nomeFazenda });
     } catch (e) {
-      const campo = campoDoErro<Campo>(e, comConvite ? ['nome', 'email'] : ['nomeFazenda', 'email', 'nome']);
+      const campo = campoDoErro<Campo>(e, comConvite ? ['senha', 'email', 'nome'] : ['nomeFazenda', 'senha', 'email', 'nome']);
       if (campo) setErros({ [campo]: mensagemDoErro(e) });
       else setErroGeral(mensagemDoErro(e));
       setEnviando(false);
@@ -77,6 +78,7 @@ export function useCadastro() {
     setCredencial: (valor: Credencial) => {
       setCredencial(valor);
       limparErro('email');
+      limparErro('senha');
     },
     nomeFazenda,
     setNomeFazenda: (valor: string) => {

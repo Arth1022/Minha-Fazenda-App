@@ -16,10 +16,24 @@ export function validarEmail(email: string): string | null {
   return null;
 }
 
+/** Senha nova (cadastro): mínimo 8 caracteres e no máximo 72 bytes, como a API. */
+export function validarSenha(senha: string): string | null {
+  if (!senha) return 'Crie uma senha.';
+  if (senha.length < 8) return 'A senha precisa ter pelo menos 8 caracteres.';
+  if (new TextEncoder().encode(senha).length > 72) return 'A senha está longa demais.';
+  return null;
+}
+
+/** Senha no login: só não pode estar vazia (quem confere é a API). */
+export function validarSenhaInformada(senha: string): string | null {
+  return senha ? null : 'Informe sua senha.';
+}
+
 /** Palavras que a API usa na mensagem de cada campo ("campo inválido: a mensagem diz qual"). */
 const PALAVRAS_DO_CAMPO: Record<string, readonly string[]> = {
   nomeFazenda: ['fazenda'],
-  email: ['e-mail', 'email', 'credencial'],
+  senha: ['senha'],
+  email: ['e-mail', 'email'],
   nome: ['nome'],
 };
 

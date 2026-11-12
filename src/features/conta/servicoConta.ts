@@ -29,11 +29,8 @@ import {
  * o estado guardado em `services/usuario` (o AuthContext só lê e repassa).
  */
 
-/**
- * Credencial do login. Só a versão dev (e-mail) por enquanto.
- * TODO(decisao): método de login (o "code"): e-mail + código, Google ou Firebase.
- */
-export type Credencial = { tipo: 'dev'; email: string };
+/** Credencial do login e do cadastro: e-mail e senha (`tipo: "senha"` no contrato da API). */
+export type Credencial = { tipo: 'senha'; email: string; senha: string };
 
 interface RespostaTokens {
   accessToken: string;

@@ -12,7 +12,7 @@ export default function EntrarScreen() {
   return (
     <ScreenContainer withTabInset={false} header={<Header title="Entrar" showBack />}>
       <View style={estilos.conteudo}>
-        <CredencialForm onChange={e.setCredencial} erro={e.erroEmail} />
+        <CredencialForm onChange={e.setCredencial} erro={e.erroEmail} erroSenha={e.erroSenha} />
         {e.erroGeral ? <Text style={estilos.erro}>{e.erroGeral}</Text> : null}
         <Button label="Entrar" onPress={e.concluir} loading={e.enviando} fullWidth />
       </View>
