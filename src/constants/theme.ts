@@ -45,6 +45,7 @@ export const AgroColors = {
   warningBg: '#FEF3C7',        // Fundo badge de estoque baixo
   warningBorder: '#FDE68A',    // Borda alerta
   danger: '#DC2626',           // Erro de validação / Crítico
+  reportOrange: '#C2410C',     // Botão flutuante "Relatar problema"
   dangerBg: '#FEE2E2',         // Fundo de erro
   soilBrown: '#78350F',        // Detalhes de insumos / terra
   purpleMed: '#7C3AED',        // Ícone de antibióticos

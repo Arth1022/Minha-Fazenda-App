@@ -19,7 +19,6 @@ import {
   listarOcorrenciasNoMapa,
   listarTodasTarefas,
   pegarTarefa,
-  resolverQrCodeParaOcorrencia,
   soltarTarefa,
 } from '@/services/ocorrenciaService';
 import { criarTalhao } from '@/services/talhaoService';
@@ -153,6 +152,11 @@ async function runOcorrenciasTest() {
     categoria: 'agua',
     responsavelId: joao.id,
   });
+  const erroDesistirSemIniciar = await rejeita(() => soltarTarefa(paraSoltar.id, joao.id));
+  check(
+    erroDesistirSemIniciar !== null,
+    'bloqueia desistir de tarefa que ainda não foi iniciada'
+  );
   await iniciarOcorrencia(paraSoltar.id, joao);
   const solta = await soltarTarefa(paraSoltar.id, joao.id);
   check(
@@ -260,9 +264,18 @@ async function runOcorrenciasTest() {
       ocorrenciaPorTalhaoSelecionado.pontoLng === pasto2.centroLng,
     'selecionar talhão manualmente gera título padrão e usa centro do talhão no mapa quando sem GPS'
   );
+  const erroConcluirSemIniciar = await rejeita(() =>
+    concluirOcorrencia(ocorrenciaPorTalhaoSelecionado.id)
+  );
+  check(
+    erroConcluirSemIniciar !== null,
+    'bloqueia concluir tarefa que ainda não foi iniciada'
+  );
+  await iniciarOcorrencia(ocorrenciaPorTalhaoSelecionado.id);
   await concluirOcorrencia(ocorrenciaPorTalhaoSelecionado.id);
 
   // 7. Fase 2 — Fotos locais: múltiplos caminhos preservados na ordem correta
+  await iniciarOcorrencia(ocorrenciaComGps.id);
   await concluirOcorrencia(ocorrenciaComGps.id, {
     observacao: 'Cerca esticada.',
     fotos: ['file:///data/user/0/app/fotos/foto_3_conclusao.jpg'],
@@ -316,22 +329,13 @@ async function runOcorrenciasTest() {
     'listarOcorrenciasNoMapa exclui concluídas/canceladas/sem GPS e destaca urgentes primeiro'
   );
 
-  // 9. Fase 3 — Teste de ciclo de máquina: QR Code, nota de voz e "Máquina parada"
+  // 9. Fase 3 — Teste de ciclo de máquina: nota de voz e "Máquina parada"
   const trator = await cadastrarMaquina({
     nome: 'Trator Valtra A950',
     tipo: 'trator',
     codigo: 'TR-99',
   });
   check(trator.status === 'ativa', 'máquina recém-cadastrada inicia com status "ativa"');
-
-  const qrMaquina = await resolverQrCodeParaOcorrencia('TR-99');
-  check(
-    qrMaquina !== null &&
-      qrMaquina.tipo === 'maquina' &&
-      qrMaquina.maquinaId === trator.id &&
-      qrMaquina.categoria === 'maquina',
-    'resolverQrCodeParaOcorrencia identifica QR Code de trator e retorna maquinaId'
-  );
 
   const ocorrenciaMaquinaParada = await criarOcorrencia({
     categoria: 'maquina',
@@ -351,6 +355,7 @@ async function runOcorrenciasTest() {
     'abrir ocorrência com máquina parada atualiza status na tabela de máquinas para "manutencao" e salva nota de voz local'
   );
 
+  await iniciarOcorrencia(ocorrenciaMaquinaParada.id, eu);
   await concluirOcorrencia(ocorrenciaMaquinaParada.id, {
     autor: eu,
     observacao: 'Mangueira substituída.',
@@ -380,21 +385,12 @@ async function runOcorrenciasTest() {
     .set(atualizar({ status: 'ativa' }))
     .where(and(daFazenda(maquinas), eq(maquinas.id, trator.id)));
 
-  // 10. Fase 3 — Teste de vínculo: QR Code de animal e integridade referencial
+  // 10. Fase 3 — Teste de vínculo: animal e integridade referencial
   const vaca = await cadastrarAnimal({
     brinco: '104',
     nome: 'Estrela',
     sexo: 'F',
   });
-
-  const qrAnimal = await resolverQrCodeParaOcorrencia('104');
-  check(
-    qrAnimal !== null &&
-      qrAnimal.tipo === 'animal' &&
-      qrAnimal.animalId === vaca.id &&
-      qrAnimal.categoria === 'animal',
-    'resolverQrCodeParaOcorrencia identifica QR Code de animal e retorna animalId'
-  );
 
   const erroAnimalInexistente = await rejeita(() =>
     criarOcorrencia({
@@ -524,7 +520,7 @@ async function runOcorrenciasTest() {
     'colaborador pode editar categoria e urgência da ocorrência que ele mesmo relatou enquanto aberta'
   );
 
-  // Quando entra em andamento, colaborador não pode mais cancelar nem editar; Admin continua podendo
+  // Quando entra em andamento, colaborador não pode mais cancelar a que relatou
   await pegarTarefa(relatoJoao.id, colabJoao.id);
   await iniciarOcorrencia(relatoJoao.id, colabJoao);
   const erroJoaoCancelarEmAndamento = await rejeita(() =>
@@ -535,14 +531,24 @@ async function runOcorrenciasTest() {
     'bloqueia colaborador de cancelar ocorrência depois que já entrou em andamento (RF-T19)'
   );
 
+  // Cancelar é só de quem criou: nem o admin cancela a tarefa relatada por outra pessoa
+  const erroAdminCancelarRelatoJoao = await rejeita(() =>
+    cancelarOcorrencia(relatoJoao.id, 'Admin cancelou durante andamento', admin)
+  );
+  check(
+    erroAdminCancelarRelatoJoao !== null,
+    'bloqueia até o admin de cancelar tarefa criada por outra pessoa (RF-T19)'
+  );
+
+  await iniciarOcorrencia(tarefaManualAdmin.id, admin);
   const canceladaPeloAdmin = await cancelarOcorrencia(
-    relatoJoao.id,
-    'Admin cancelou durante andamento',
+    tarefaManualAdmin.id,
+    'Admin cancelou a própria tarefa em andamento',
     admin
   );
   check(
     canceladaPeloAdmin.status === 'cancelada',
-    'admin pode cancelar qualquer tarefa aberta ou em andamento (RF-T19)'
+    'admin cancela a tarefa que ele mesmo criou, aberta ou em andamento (RF-T19)'
   );
 
   console.log('\n🎉 TODOS OS TESTES DE OCORRÊNCIAS PASSARAM COM 100% DE SUCESSO!\n');

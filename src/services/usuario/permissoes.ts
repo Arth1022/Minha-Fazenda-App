@@ -45,26 +45,41 @@ export function podeIniciarOuConcluirTarefa(
 }
 
 /**
- * Soltar uma tarefa que está consigo mesmo (RF-T15, RN-T04):
- * Tanto admin quanto colaborador podem soltar uma tarefa aberta ou em andamento atribuída a si.
+ * Desistir de uma tarefa que está consigo mesmo (RF-T15, RN-T04):
+ * só depois de iniciada (no primeiro contato as opções são Iniciar ou Cancelar).
+ * Tanto admin quanto colaborador podem desistir de uma tarefa em andamento atribuída a si.
  */
 export function podeSoltarTarefa(
   tarefa: { status: string; responsavelId: string | null },
   usuario: Usuario = usuarioAtual()
 ): boolean {
   return (
-    (tarefa.status === 'aberta' || tarefa.status === 'em_andamento') &&
+    tarefa.status === 'em_andamento' &&
     Boolean(usuario.id) &&
     tarefa.responsavelId === usuario.id
   );
 }
 
 /**
- * Cancelar ou editar categoria/local/vínculos da tarefa (RF-T19, Tabela de Permissões):
+ * Cancelar tarefa (RF-T19): só quem a criou, nem o admin cancela a de outra
+ * pessoa (nela ele só inicia, conclui ou desiste). O admin cancela a sua aberta
+ * ou em andamento; o colaborador, a sua enquanto aberta.
+ */
+export function podeCancelarTarefa(
+  tarefa: { status: string; createdBy: string | null },
+  usuario: Usuario = usuarioAtual()
+): boolean {
+  if (!usuario.id || tarefa.createdBy !== usuario.id) return false;
+  if (tarefa.status === 'aberta') return true;
+  return tarefa.status === 'em_andamento' && ehAdmin(usuario);
+}
+
+/**
+ * Editar categoria/local/vínculos da tarefa (RN-T09, Tabela de Permissões):
  * Admin pode em qualquer tarefa aberta ou em andamento;
  * colaborador apenas nas que ele mesmo relatou, enquanto estiverem abertas.
  */
-export function podeCancelarOuEditarTarefa(
+export function podeEditarTarefa(
   tarefa: { status: string; createdBy: string | null },
   usuario: Usuario = usuarioAtual()
 ): boolean {
@@ -72,4 +87,3 @@ export function podeCancelarOuEditarTarefa(
   if (ehAdmin(usuario)) return true;
   return tarefa.status === 'aberta' && Boolean(usuario.id) && tarefa.createdBy === usuario.id;
 }
-

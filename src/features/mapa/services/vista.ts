@@ -37,5 +37,6 @@ export function resumoFazenda(fazenda: FazendaMapa | null, talhoes: Talhao[]): s
       ? 'nenhuma área'
       : `${talhoes.length} ${talhoes.length === 1 ? 'área' : 'áreas'}`;
   if (!fazenda) return `divisa não marcada · ${qtd}`;
-  return `${fazenda.nome} · ${formatarHectares(fazenda.areaHectares)} · ${qtd}`;
+  // O nome da fazenda aparece em destaque à parte, acima deste resumo
+  return `${formatarHectares(fazenda.areaHectares)} · ${qtd}`;
 }

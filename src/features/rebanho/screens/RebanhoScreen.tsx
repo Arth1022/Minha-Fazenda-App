@@ -22,7 +22,6 @@ import { AnimalCard } from '../components/AnimalCard';
 import { BuscarAnimalModal } from '../components/BuscarAnimalModal';
 import { LotesCard } from '../components/lotes/LotesCard';
 import { NovoAnimalForm } from '../components/NovoAnimalForm';
-import { ResumoAnimalCard } from '../components/ResumoAnimalCard';
 import { useRebanho } from '../hooks/useRebanho';
 import { calcularFase } from '../services/fase';
 
@@ -59,7 +58,6 @@ export default function RebanhoScreen() {
   const rebanho = useRebanho();
 
   const [activeTab, setActiveTab] = useState<Grupo>('vacas');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [onlyHighMilkFilter, setOnlyHighMilkFilter] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [searchVisible, setSearchVisible] = useState(false);
@@ -82,23 +80,13 @@ export default function RebanhoScreen() {
     return onlyHighMilkFilter ? doGrupo.filter(isAltaProducao) : doGrupo;
   }, [rebanho, onlyHighMilkFilter, activeTab]);
 
-  const selectedAnimal: AnimalComFase | null =
-    filteredAnimais.find((animal) => animal.id === selectedId) ??
-    filteredAnimais[0] ??
-    null;
-
-  // Um toque abre a ficha; o resumo abaixo da lista fica com o último aberto
+  // Um toque abre a ficha do animal
   const handleAnimalPress = (animal: Animal) => {
-    setSelectedId(animal.id);
     router.push({ pathname: '/animal/[id]', params: { id: animal.id } });
   };
 
-  // Achado na busca: a lista vai para a aba dele (sem o filtro que o esconderia)
-  // para o resumo mostrar o animal aberto ao voltar da ficha
   const handleSearchSelect = (animal: AnimalComFase) => {
     setSearchVisible(false);
-    setActiveTab(GRUPO_DA_FASE[animal.fase]);
-    if (!isAltaProducao(animal)) setOnlyHighMilkFilter(false);
     handleAnimalPress(animal);
   };
 
@@ -109,15 +97,15 @@ export default function RebanhoScreen() {
       ultimoParto: null,
       jaPariu: animal.jaPariu,
     });
+    // A lista vai para a aba do animal recém-cadastrado
     setActiveTab(GRUPO_DA_FASE[fase]);
-    setSelectedId(animal.id);
     setModalVisible(false);
   };
 
   return (
     <ScreenContainer
       header={
-        <Header title="Gerenciamento Rebanho" showBack />
+        <Header title="Rebanho" />
       }>
       <SegmentedTabs
         tabs={tabs}
@@ -155,8 +143,6 @@ export default function RebanhoScreen() {
           )}
         />
       )}
-
-      {selectedAnimal && <ResumoAnimalCard animal={selectedAnimal} />}
 
       <LotesCard />
 

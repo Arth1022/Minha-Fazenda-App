@@ -10,6 +10,7 @@ import { AgroColors, MaxContentWidth, Shadows, Spacing } from '@/constants/theme
 import { AcoesMaquinaModal, useQrCodeMaquina } from '@/features/maquinas';
 import { LeituraBrincoModais, useLeituraBrinco, useQrCodeAnimal } from '@/features/rebanho';
 import { BannerAppDesatualizado } from '@/features/sync';
+import { BotaoRelatarProblema, RelatarProblemaProvider } from '@/features/tarefas';
 import { BotaoLerQrCode } from '@/services/qrcode';
 
 interface TabConfig {
@@ -116,6 +117,9 @@ function TabBar() {
 /** Altura da linha de abas (tabBarRow), sem a área segura de baixo */
 const TAB_BAR_HEIGHT = 66;
 
+/** Lado dos botões flutuantes redondos (QR Code e Relatar problema) */
+const BOTAO_FLUTUANTE = 52;
+
 /** QR Code que nenhum fluxo reconheceu: só mostra o que foi lido. */
 function mostrarQrCodeLido(valor: string) {
   Alert.alert('QR Code lido', valor);
@@ -137,41 +141,55 @@ export default function TabsLayout() {
     mostrarQrCodeLido(valor);
   };
 
+  // Botões flutuantes empilhados no canto inferior direito, logo acima da barra de abas
+  const baseBotoes = insets.bottom + TAB_BAR_HEIGHT + Spacing.three;
+
   return (
-    <View style={styles.root}>
-      <SafeAreaView edges={['top']} style={styles.banner}>
-        <BannerAppDesatualizado />
-      </SafeAreaView>
-      <Tabs screenOptions={{ headerShown: false }} tabBar={() => <TabBar />}>
-        <Tabs.Screen name="index" options={{ title: 'Início' }} />
-        <Tabs.Screen name="mapa" options={{ title: 'Mapa' }} />
-        <Tabs.Screen name="rebanho" options={{ title: 'Rebanho' }} />
-        <Tabs.Screen name="estoque" options={{ title: 'Tarefas' }} />
-        <Tabs.Screen name="maquinas" options={{ title: 'Máquinas' }} />
-      </Tabs>
+    <RelatarProblemaProvider>
+      <View style={styles.root}>
+        <SafeAreaView edges={['top']} style={styles.banner}>
+          <BannerAppDesatualizado />
+        </SafeAreaView>
+        <Tabs screenOptions={{ headerShown: false }} tabBar={() => <TabBar />}>
+          <Tabs.Screen name="index" options={{ title: 'Início' }} />
+          <Tabs.Screen name="mapa" options={{ title: 'Mapa' }} />
+          <Tabs.Screen name="rebanho" options={{ title: 'Rebanho' }} />
+          <Tabs.Screen name="estoque" options={{ title: 'Tarefas' }} />
+          <Tabs.Screen name="maquinas" options={{ title: 'Máquinas' }} />
+        </Tabs>
 
-      {/* Leitor de QR Code: canto inferior direito, logo acima da barra de abas */}
-      <BotaoLerQrCode
-        onLido={aoLerQrCode}
-        onTextoLido={leituraBrinco.tratarTextos}
-        opcoes={{ titulo: 'Ler QR Code ou brinco', modoTexto: 'Número do brinco' }}
-        style={{
-          ...styles.qrButton,
-          right: margemLateral,
-          bottom: insets.bottom + TAB_BAR_HEIGHT + Spacing.three,
-        }}
-      />
+        {/* Relatar problema: sempre à mão, logo acima do leitor de QR Code */}
+        <BotaoRelatarProblema
+          style={{
+            ...styles.botaoFlutuante,
+            right: margemLateral,
+            bottom: baseBotoes + BOTAO_FLUTUANTE + Spacing.two,
+          }}
+        />
 
-      <AcoesMaquinaModal maquinaId={qrMaquina.maquinaId} onClose={qrMaquina.fechar} />
+        {/* Leitor de QR Code: canto inferior direito, logo acima da barra de abas */}
+        <BotaoLerQrCode
+          onLido={aoLerQrCode}
+          onTextoLido={leituraBrinco.tratarTextos}
+          opcoes={{ titulo: 'Ler QR Code ou brinco', modoTexto: 'Número do brinco' }}
+          style={{
+            ...styles.botaoFlutuante,
+            right: margemLateral,
+            bottom: baseBotoes,
+          }}
+        />
 
-      <LeituraBrincoModais
-        estado={leituraBrinco.estado}
-        onAbrir={leituraBrinco.abrirFicha}
-        onDigitar={leituraBrinco.digitar}
-        onBuscar={leituraBrinco.buscarDigitado}
-        onFechar={leituraBrinco.fechar}
-      />
-    </View>
+        <AcoesMaquinaModal maquinaId={qrMaquina.maquinaId} onClose={qrMaquina.fechar} />
+
+        <LeituraBrincoModais
+          estado={leituraBrinco.estado}
+          onAbrir={leituraBrinco.abrirFicha}
+          onDigitar={leituraBrinco.digitar}
+          onBuscar={leituraBrinco.buscarDigitado}
+          onFechar={leituraBrinco.fechar}
+        />
+      </View>
+    </RelatarProblemaProvider>
   );
 }
 
@@ -186,7 +204,7 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 10,
   },
-  qrButton: {
+  botaoFlutuante: {
     position: 'absolute',
   },
   outerBarWrapper: {

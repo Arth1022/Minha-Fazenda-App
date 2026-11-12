@@ -91,7 +91,7 @@ export function PlayerNotaVozCompacto({
 }
 
 /**
- * Gravação rápida de nota de voz (até 60s) com áudio real via expo-audio,
+ * Gravação rápida de nota de voz (até LIMITE_SEGUNDOS_VOZ) com áudio real via expo-audio,
  * indicador visual de gravação e reprodução simples.
  * Salva o arquivo diretamente no diretório local do app (`Documents/audios/`).
  */
@@ -188,7 +188,7 @@ export function NotaVozField({ audioUri, onChange }: NotaVozFieldProps) {
         <PlayerNotaVozCompacto audioUri={audioUri} onExcluir={removerAudio} />
       ) : (
         <Button
-          label="Gravar nota de voz (até 60s)"
+          label={`Gravar nota de voz (até ${LIMITE_SEGUNDOS_VOZ}s)`}
           variant="outline"
           size="sm"
           onPress={() => void iniciarGravacao()}
