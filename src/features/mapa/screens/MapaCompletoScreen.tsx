@@ -121,6 +121,7 @@ import {
 } from '../services/areas';
 import { formatarDistancia, formatarHectares } from '../services/calculos';
 import { identificacaoAnimal, mapaDeOcupacao, type LinhaOcupacao } from '../services/ocupacao';
+import { ocorrenciasNosRotulos } from '../services/rotulos';
 import {
   corDaMaquina,
   intervaloDoPeriodo,
@@ -353,6 +354,16 @@ export default function MapaCompletoScreen() {
 
   // Com a camada de áreas desligada, o desenho ainda mostra as vizinhas (evita sobrepor)
   const mostrarAreas = camadas.areas || modoDesenho;
+  // Rótulo em cima do mapa atrapalharia o toque nos cantos e no ponto de atenção
+  const mostrarRotulos = camadas.areas && !modoDesenho && !modoMarcador;
+  // Ocorrência relatada numa área sem GPS fica no centro dela, onde está o rótulo: vai presa nele
+  const ocorrenciasNoMapa = useMemo(
+    () =>
+      mostrarRotulos
+        ? ocorrenciasNosRotulos(ocorrenciasMapa, talhoes)
+        : { porArea: undefined, soltas: ocorrenciasMapa },
+    [mostrarRotulos, ocorrenciasMapa, talhoes],
+  );
   const selecionado = useMemo(
     () =>
       modoDesenho || modoMarcador || !camadas.areas
@@ -930,9 +941,11 @@ export default function MapaCompletoScreen() {
                     ocupacoes={ocupacoes}
                     selecionadoId={selecionado?.id ?? null}
                     destacadoId={destinoDestacado}
-                    // Rótulo em cima do mapa atrapalharia o toque nos cantos e no ponto de atenção
-                    mostrarNomes={!modoDesenho && !modoMarcador}
+                    mostrarNomes={mostrarRotulos}
                     mostrarRebanho={camadas.rebanho}
+                    ocorrenciasPorArea={camadas.ocorrencias ? ocorrenciasNoMapa.porArea : undefined}
+                    ocorrenciaSelecionadaId={ocorrenciaSelecionada?.id ?? null}
+                    onPressOcorrencia={selecionarOcorrencia}
                     onPressTalhao={selecionarTalhao}
                   />
                 ) : null}
@@ -964,7 +977,7 @@ export default function MapaCompletoScreen() {
                 ) : null}
                 {camadas.ocorrencias ? (
                   <CamadaOcorrenciasMapa
-                    ocorrencias={ocorrenciasMapa}
+                    ocorrencias={ocorrenciasNoMapa.soltas}
                     selecionadaId={ocorrenciaSelecionada?.id ?? null}
                     onPressOcorrencia={selecionarOcorrencia}
                   />

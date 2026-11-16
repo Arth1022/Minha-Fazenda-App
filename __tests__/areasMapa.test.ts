@@ -18,7 +18,15 @@ import {
   resumoDaSafra,
   situacaoDaArea,
 } from '@/features/mapa/services/areas';
+import {
+  faixaDoRotulo,
+  ocorrenciasNosRotulos,
+  PRIORIDADE_NO_MAPA,
+  ZOOM_MAXIMO_MAPA,
+  ZOOM_TODOS_OS_ROTULOS,
+} from '@/features/mapa/services/rotulos';
 import { contarPontosAbertos, criarMarcador, resolverMarcador } from '@/services/marcadorService';
+import type { OcorrenciaNoMapa } from '@/services/ocorrenciaService';
 import {
   atualizarTalhao,
   criarTalhao,
@@ -186,6 +194,106 @@ function regrasPuras() {
   );
 }
 
+/** Ocorrência aberta no mapa, montada à mão */
+function ocorrenciaFake(id: string, ponto: Coordenada | null, urgente = false): OcorrenciaNoMapa {
+  return {
+    id,
+    titulo: `Ocorrência ${id}`,
+    categoria: 'cerca',
+    urgente,
+    status: 'aberta',
+    responsavelId: null,
+    descricao: null,
+    pontoLng: ponto ? ponto[0] : null,
+    pontoLat: ponto ? ponto[1] : null,
+  };
+}
+
+function rotulosNoMapa() {
+  // Quando o rótulo aparece: de uns 28 dp de área na tela até ela tomar a largura da tela (~360 dp)
+  const media = faixaDoRotulo({ areaHectares: 3, centroLat: -21 });
+  check(
+    media.zoomMinimo > 13.3 && media.zoomMinimo < 13.8,
+    `pasto de 3 ha mostra o rótulo desde o zoom ${media.zoomMinimo.toFixed(2)} (a fazenda inteira na tela fica perto do 15)`
+  );
+  check(
+    media.zoomMaximo > 17 && media.zoomMaximo < 17.5,
+    `no zoom alto o rótulo do pasto de 3 ha some (zoom ${media.zoomMaximo.toFixed(2)}: a área já toma a tela)`
+  );
+  check(
+    Math.abs(media.zoomMaximo - media.zoomMinimo - Math.log2(360 / 28)) < 1e-9,
+    'a faixa visível tem sempre a mesma largura (de 28 a 360 dp de área)'
+  );
+  const grande = faixaDoRotulo({ areaHectares: 30, centroLat: -21 });
+  check(
+    grande.zoomMinimo < media.zoomMinimo && grande.zoomMaximo < media.zoomMaximo,
+    'área maior mostra o rótulo de mais longe e esconde antes ao aproximar'
+  );
+  const quatroVezes = faixaDoRotulo({ areaHectares: 12, centroLat: -21 });
+  check(
+    Math.abs(quatroVezes.zoomMinimo - (media.zoomMinimo - 1)) < 1e-9 &&
+      Math.abs(quatroVezes.zoomMaximo - (media.zoomMaximo - 1)) < 1e-9,
+    'área 4× maior (lado 2×) tem a faixa um zoom antes'
+  );
+  const minuscula = faixaDoRotulo({ areaHectares: 0.01, centroLat: -21 });
+  check(
+    minuscula.zoomMinimo === ZOOM_TODOS_OS_ROTULOS && minuscula.zoomMaximo > ZOOM_TODOS_OS_ROTULOS,
+    `área minúscula espera no máximo o zoom ${ZOOM_TODOS_OS_ROTULOS} e ainda tem rótulo depois dele`
+  );
+  check(
+    faixaDoRotulo({ areaHectares: 0.0001, centroLat: -21 }).zoomMaximo === ZOOM_MAXIMO_MAPA,
+    `o rótulo não some depois do maior zoom do mapa (${ZOOM_MAXIMO_MAPA})`
+  );
+  const semMedida = faixaDoRotulo({ areaHectares: 0, centroLat: -21 });
+  check(
+    semMedida.zoomMinimo === ZOOM_TODOS_OS_ROTULOS &&
+      semMedida.zoomMaximo > semMedida.zoomMinimo &&
+      faixaDoRotulo({ areaHectares: Number.NaN, centroLat: -21 }).zoomMinimo === ZOOM_TODOS_OS_ROTULOS,
+    'área sem medida não some do mapa: rótulo numa faixa fixa'
+  );
+  const enorme = faixaDoRotulo({ areaHectares: 100_000, centroLat: 0 });
+  check(
+    enorme.zoomMinimo > 0 && enorme.zoomMinimo < 8 && enorme.zoomMaximo > enorme.zoomMinimo,
+    `área enorme (100 mil ha) mostra o rótulo de muito longe (zoom ${enorme.zoomMinimo.toFixed(2)})`
+  );
+
+  // Ocorrência no centro da área vai presa no rótulo; com ponto próprio fica solta
+  const centro: Coordenada = [-47.0 + LADO / 2, LADO / 2];
+  const areas = [
+    areaFake({ id: 'a1' }),
+    areaFake({ id: 'a2', centroLng: -46.99, centroLat: 0.01 }),
+  ];
+  const { porArea, soltas } = ocorrenciasNosRotulos(
+    [
+      ocorrenciaFake('urgente', centro, true),
+      ocorrenciaFake('gps', [-47.0 + LADO / 4, LADO / 4]),
+      ocorrenciaFake('quaseNoCentro', [centro[0] + 4e-6, centro[1] - 4e-6]),
+      ocorrenciaFake('outraArea', [-46.99, 0.01]),
+      ocorrenciaFake('semPonto', null),
+    ],
+    areas
+  );
+  check(
+    porArea.get('a1')?.map((o) => o.id).join(',') === 'urgente,quaseNoCentro' &&
+      porArea.get('a2')?.map((o) => o.id).join(',') === 'outraArea',
+    'ocorrência no centro da área (até ~1 m) vai para o rótulo dela, na ordem recebida (urgente primeiro)'
+  );
+  check(
+    soltas.map((o) => o.id).join(',') === 'gps,semPonto',
+    'ocorrência com ponto próprio (GPS) fica com o pino solto no lugar marcado'
+  );
+  const semAreas = ocorrenciasNosRotulos([ocorrenciaFake('x', centro)], []);
+  check(semAreas.porArea.size === 0 && semAreas.soltas.length === 1, 'sem áreas, todo pino fica solto');
+
+  // Por cima no mapa: pino > rótulo aberto > rótulo
+  check(
+    PRIORIDADE_NO_MAPA.pinoAtivo > PRIORIDADE_NO_MAPA.pino &&
+      PRIORIDADE_NO_MAPA.pino > PRIORIDADE_NO_MAPA.rotuloAtivo &&
+      PRIORIDADE_NO_MAPA.rotuloAtivo > PRIORIDADE_NO_MAPA.rotulo,
+    'pinos (ocorrência, máquina) ficam por cima dos rótulos; a área aberta, por cima das vizinhas'
+  );
+}
+
 function permissoesECamadas() {
   check(podeEditarGeometria({ id: 'd1', nome: 'Beta', papel: 'owner' }), 'o dono pode desenhar e excluir áreas');
   check(!podeEditarGeometria({ id: 'c1', nome: 'João', papel: 'collaborator' }), 'colaborador não mexe no polígono');
@@ -244,6 +352,7 @@ async function banco() {
 async function runAreasMapaTest() {
   console.log('🗺️  MINHA FAZENDA - ÁREAS NO MAPA (FASE 1)\n');
   regrasPuras();
+  rotulosNoMapa();
   permissoesECamadas();
   await banco();
   console.log('\n🎉 ÁREAS NO MAPA OK!');
