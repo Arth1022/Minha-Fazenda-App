@@ -6,7 +6,7 @@ export const ICONE_CATEGORIA_TAREFA: Record<CategoriaTarefa, AppIconName> = {
   cerca: 'fence',
   animal: 'cow',
   maquina: 'tractor',
-  agua: 'milk',
+  agua: 'droplet',
   pasto: 'sprout',
-  outro: 'wrench',
+  outro: 'moreCircle',
 };

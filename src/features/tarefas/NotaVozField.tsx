@@ -9,10 +9,9 @@ import {
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { AppIcon, Button } from '@/components/ui';
+import { AppIcon } from '@/components/ui';
 import { AgroColors, Radius, Spacing, Typography } from '@/constants/theme';
 import {
-  apagarAudio,
   extrairDuracaoAudioSeg,
   guardarAudio,
   LIMITE_SEGUNDOS_VOZ,
@@ -90,47 +89,54 @@ export function PlayerNotaVozCompacto({
   );
 }
 
-/**
- * Gravação rápida de nota de voz (até LIMITE_SEGUNDOS_VOZ) com áudio real via expo-audio,
- * indicador visual de gravação e reprodução simples.
- * Salva o arquivo diretamente no diretório local do app (`Documents/audios/`).
- */
-export function NotaVozField({ audioUri, onChange }: NotaVozFieldProps) {
-  const [gravando, setGravando] = useState(false);
-  const [segundosGravados, setSegundosGravados] = useState(0);
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+/** Alturas das barrinhas da onda (decorativa) do player do relato */
+const ONDA = [10, 16, 12, 22, 14, 26, 18, 24, 12, 20, 14, 18];
 
-  const timerGravacaoRef = useRef<ReturnType<typeof setInterval> | null>(null);
+export interface GravacaoVoz {
+  gravando: boolean;
+  segundos: number;
+  iniciar: () => Promise<void>;
+  parar: () => Promise<void>;
+}
+
+/**
+ * Gravação rápida de nota de voz (até LIMITE_SEGUNDOS_VOZ) com expo-audio. O
+ * arquivo vai direto para o diretório local do app (`Documents/audios/`).
+ */
+export function useGravacaoVoz(onSalvo: (uri: string | null) => void): GravacaoVoz {
+  const [gravando, setGravando] = useState(false);
+  const [segundos, setSegundos] = useState(0);
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const duracaoRef = useRef(0);
+  const onSalvoRef = useRef(onSalvo);
+  useEffect(() => {
+    onSalvoRef.current = onSalvo;
+  }, [onSalvo]);
 
   const limparTimer = () => {
-    if (timerGravacaoRef.current) {
-      clearInterval(timerGravacaoRef.current);
-      timerGravacaoRef.current = null;
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
     }
   };
 
-  useEffect(() => {
-    return () => limparTimer();
-  }, []);
+  useEffect(() => () => limparTimer(), []);
 
-  const finalizarGravacao = async () => {
+  const parar = async () => {
     limparTimer();
     setGravando(false);
     const duracao = Math.max(1, duracaoRef.current);
     try {
       await recorder.stop();
-      const gravadoUri = recorder.uri;
-      const salvo = await guardarAudio(gravadoUri, duracao);
-      onChange(salvo);
+      onSalvoRef.current(await guardarAudio(recorder.uri, duracao));
     } catch {
       // Fallback para ambientes sem codec nativo (ex: testes/emulador restrito)
-      const salvo = await guardarAudio(null, duracao);
-      onChange(salvo);
+      onSalvoRef.current(await guardarAudio(null, duracao));
     }
   };
 
-  const iniciarGravacao = async () => {
+  const iniciar = async () => {
     try {
       const perm = await requestRecordingPermissionsAsync();
       if (!perm.granted) {
@@ -149,74 +155,140 @@ export function NotaVozField({ audioUri, onChange }: NotaVozFieldProps) {
 
     limparTimer();
     duracaoRef.current = 0;
-    setSegundosGravados(0);
+    setSegundos(0);
     setGravando(true);
-
-    timerGravacaoRef.current = setInterval(() => {
+    timerRef.current = setInterval(() => {
       duracaoRef.current += 1;
-      setSegundosGravados(duracaoRef.current);
-      if (duracaoRef.current >= LIMITE_SEGUNDOS_VOZ) {
-        void finalizarGravacao();
-      }
+      setSegundos(duracaoRef.current);
+      if (duracaoRef.current >= LIMITE_SEGUNDOS_VOZ) void parar();
     }, 1000);
   };
 
-  const removerAudio = () => {
-    limparTimer();
-    apagarAudio(audioUri);
-    onChange(null);
+  return { gravando, segundos, iniciar, parar };
+}
+
+/** Faixa "gravando" do relato: ponto vermelho, tempo e parar. */
+export function FaixaGravando({ segundos, onParar }: { segundos: number; onParar: () => void }) {
+  return (
+    <View style={[styles.faixa, styles.faixaGravando]}>
+      <View style={styles.bolinhaGravando} />
+      <Text style={styles.textoGravando}>
+        Gravando {formatarSegundos(segundos)} / {formatarSegundos(LIMITE_SEGUNDOS_VOZ)}
+      </Text>
+      <Pressable
+        onPress={onParar}
+        accessibilityRole="button"
+        accessibilityLabel="Parar gravação"
+        style={[styles.botaoRedondo, styles.botaoParar]}>
+        <View style={styles.quadradoParar} />
+      </Pressable>
+    </View>
+  );
+}
+
+/** Player da nota de voz do relato: play, onda, duração e lixeira. */
+export function PlayerNotaVozOnda({ audioUri, onExcluir }: { audioUri: string; onExcluir: () => void }) {
+  const midia = useMidia(audioUri);
+  const player = useAudioPlayer(midia.uri);
+  const status = useAudioPlayerStatus(player);
+  const duracaoSalva = extrairDuracaoAudioSeg(audioUri);
+  const duracaoTotal = Math.max(1, Math.round(status.duration || duracaoSalva));
+  const progresso = status.playing || status.currentTime > 0 ? status.currentTime / duracaoTotal : 0;
+
+  const alternar = () => {
+    if (status.playing) {
+      player.pause();
+      return;
+    }
+    if (status.currentTime >= duracaoTotal) player.seekTo(0);
+    player.play();
   };
 
-  return (
-    <View style={styles.bloco}>
-      <Text style={styles.label}>Nota de voz (opcional · máx. {LIMITE_SEGUNDOS_VOZ}s)</Text>
+  const tempo = status.playing ? status.currentTime : duracaoTotal;
 
-      {gravando ? (
-        <View style={styles.cardGravando}>
-          <View style={styles.bolinhaGravando} />
-          <Text style={styles.textoGravando}>
-            Gravando... {formatarSegundos(segundosGravados)} / {formatarSegundos(LIMITE_SEGUNDOS_VOZ)}
-          </Text>
-          <Button
-            label="Parar"
-            size="sm"
-            variant="danger"
-            onPress={() => void finalizarGravacao()}
+  return (
+    <View style={styles.faixa}>
+      <Pressable
+        onPress={alternar}
+        accessibilityRole="button"
+        accessibilityLabel={status.playing ? 'Pausar nota de voz' : 'Ouvir nota de voz'}
+        style={styles.botaoRedondo}>
+        <AppIcon name={status.playing ? 'pause' : 'play'} size={16} color={AgroColors.textInverse} />
+      </Pressable>
+      <View style={styles.onda}>
+        {ONDA.map((altura, i) => (
+          <View
+            key={i}
+            style={[
+              styles.barra,
+              { height: altura },
+              i / ONDA.length < progresso && styles.barraTocada,
+            ]}
           />
-        </View>
-      ) : audioUri ? (
-        <PlayerNotaVozCompacto audioUri={audioUri} onExcluir={removerAudio} />
-      ) : (
-        <Button
-          label={`Gravar nota de voz (até ${LIMITE_SEGUNDOS_VOZ}s)`}
-          variant="outline"
-          size="sm"
-          onPress={() => void iniciarGravacao()}
-        />
-      )}
+        ))}
+      </View>
+      <Text style={styles.duracao}>{formatarSegundos(tempo).replace(/^0/, '')}</Text>
+      <Pressable
+        onPress={onExcluir}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="Excluir nota de voz"
+        style={styles.botaoExcluir}>
+        <AppIcon name="trash" size={22} color={AgroColors.textSecondary} />
+      </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  bloco: {
-    gap: Spacing.xs,
-  },
-  label: {
-    ...Typography.caption,
-    color: AgroColors.textSecondary,
-    fontWeight: '600',
-  },
-  cardGravando: {
+  faixa: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: Radius.md,
+    gap: Spacing.md,
+    paddingLeft: Spacing.xs,
+    paddingRight: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radius.full,
+    backgroundColor: AgroColors.surfaceMuted,
+  },
+  faixaGravando: {
+    paddingLeft: Spacing.md,
     backgroundColor: AgroColors.dangerBg,
-    borderWidth: 1,
-    borderColor: AgroColors.danger,
+  },
+  botaoRedondo: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: AgroColors.forest,
+  },
+  botaoParar: {
+    backgroundColor: AgroColors.danger,
+  },
+  quadradoParar: {
+    width: 14,
+    height: 14,
+    borderRadius: 3,
+    backgroundColor: AgroColors.textInverse,
+  },
+  onda: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  barra: {
+    width: 3,
+    borderRadius: 2,
+    backgroundColor: AgroColors.textMuted,
+  },
+  barraTocada: {
+    backgroundColor: AgroColors.forest,
+  },
+  duracao: {
+    ...Typography.bodyMedium,
+    color: AgroColors.textPrimary,
   },
   bolinhaGravando: {
     width: 12,

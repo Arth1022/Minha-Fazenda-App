@@ -25,6 +25,11 @@ export interface BottomSheetProps {
    * Com 1, a folha cresce até quase a tela inteira (só a faixa de cima fica livre).
    */
   alturaMaxima?: number;
+  /**
+   * Troca o cabeçalho padrão (título + X) por outro (ex.: etapas do relato com
+   * voltar). `null` deixa a folha sem cabeçalho.
+   */
+  cabecalho?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -38,6 +43,7 @@ export function BottomSheet({
   subtitle,
   onClose,
   alturaMaxima = 0.6,
+  cabecalho,
   children,
 }: BottomSheetProps) {
   const insets = useSafeAreaInsets();
@@ -73,20 +79,24 @@ export function BottomSheet({
           ]}>
           <View style={styles.handle} />
 
-          <View style={styles.header}>
-            <View style={styles.titles}>
-              <Text style={styles.title}>{title}</Text>
-              {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+          {cabecalho !== undefined ? (
+            cabecalho
+          ) : (
+            <View style={styles.header}>
+              <View style={styles.titles}>
+                <Text style={styles.title}>{title}</Text>
+                {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+              </View>
+              <Pressable
+                onPress={onClose}
+                hitSlop={8}
+                style={({ pressed }) => [styles.closeBtn, pressed && styles.pressed]}
+                accessibilityRole="button"
+                accessibilityLabel="Fechar">
+                <AppIcon name="x" size={IconSize.lg} color={AgroColors.textSecondary} />
+              </Pressable>
             </View>
-            <Pressable
-              onPress={onClose}
-              hitSlop={8}
-              style={({ pressed }) => [styles.closeBtn, pressed && styles.pressed]}
-              accessibilityRole="button"
-              accessibilityLabel="Fechar">
-              <AppIcon name="x" size={IconSize.lg} color={AgroColors.textSecondary} />
-            </Pressable>
-          </View>
+          )}
 
           {/* Rola quando a lista passa de ~60% da tela (ex.: muitas crias ou pesagens) */}
           <ScrollView

@@ -64,10 +64,24 @@ export type AppIconName =
   | 'arrowLeftRight'
   | 'cloudOff'
   | 'smartphone'
-  | 'image';
+  | 'image'
+  | 'droplet'
+  | 'zap'
+  | 'mic'
+  | 'play'
+  | 'pause'
+  | 'pauseCircle'
+  | 'moreCircle';
 
 /** Ícones só de traços (Lucide), desenhados pela lista de caminhos. */
 const PATH_ICONS: Partial<Record<AppIconName, string[]>> = {
+  mic: ['M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z', 'M19 10v2a7 7 0 0 1-14 0v-2', 'M12 19v3'],
+  pauseCircle: ['M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0z', 'M10 15V9', 'M14 15V9'],
+  moreCircle: ['M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0z', 'M17 12h.01', 'M12 12h.01', 'M7 12h.01'],
+  droplet: ['M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z'],
+  zap: [
+    'M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z',
+  ],
   megaphone: ['m3 11 18-5v12L3 14v-3z', 'M11.6 16.8a3 3 0 1 1-5.8-1.6'],
   // Telas de conta (Lucide; círculos e retângulos escritos como caminho)
   mail: [
@@ -286,6 +300,22 @@ export function AppIcon({ name, size = IconSize.lg, color = '#64748B' }: AppIcon
         {paths.map((d) => (
           <Path key={d} d={d} />
         ))}
+      </Svg>
+    );
+  }
+
+  // Play e pause cheios (player da nota de voz)
+  if (name === 'play' || name === 'pause') {
+    return (
+      <Svg width={size} height={size} viewBox="0 0 24 24" fill={color} stroke={color} strokeWidth="2" strokeLinejoin="round">
+        {name === 'play' ? (
+          <Path d="M7 4.5v15a1 1 0 0 0 1.5.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5Z" />
+        ) : (
+          <>
+            <Rect x="6" y="4" width="4" height="16" rx="1" />
+            <Rect x="14" y="4" width="4" height="16" rx="1" />
+          </>
+        )}
       </Svg>
     );
   }
