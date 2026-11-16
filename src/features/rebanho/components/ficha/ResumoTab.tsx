@@ -16,6 +16,7 @@ import {
   type SituacaoReprodutiva,
 } from '../../services/ficha';
 import { historicoDePeso } from '../../services/indicadores';
+import { historicoDeLeite } from '../../services/leite';
 
 export const TOM_DA_SITUACAO: Record<SituacaoReprodutiva, TomFicha> = {
   vazia: 'neutro',
@@ -32,6 +33,9 @@ export interface ResumoTabProps {
   onRegistrarPeso: () => void;
   /** Abre o histórico de pesagens com as métricas */
   onVerPesagens: () => void;
+  onRegistrarLeite: () => void;
+  /** Abre o histórico dos registros de leite com as métricas */
+  onVerLeite: () => void;
   /** Abre a lista de crias (cada uma leva à ficha dela) */
   onVerCrias: () => void;
   onVerReproducao: () => void;
@@ -40,7 +44,7 @@ export interface ResumoTabProps {
   onVerLocal: () => void;
 }
 
-/** Aba Resumo: o alerta, o que fazer hoje, peso, crias e a reprodução em andamento. */
+/** Aba Resumo: o alerta, o que fazer hoje, peso, crias, leite e a reprodução em andamento. */
 export function ResumoTab({
   ficha,
   dosesHoje,
@@ -48,6 +52,8 @@ export function ResumoTab({
   onAplicar,
   onRegistrarPeso,
   onVerPesagens,
+  onRegistrarLeite,
+  onVerLeite,
   onVerCrias,
   onVerReproducao,
   local,
@@ -57,6 +63,8 @@ export function ResumoTab({
   // Métricas do período todo (primeira à última pesagem), não só a última variação
   const { ganhoTotalKg, periodoDias, gmdKg } = historicoDePeso(ficha.pesagens);
   const temCrias = ficha.crias.length > 0 || animal.criasAnteriores > 0;
+  // Vaca de fazenda que produz leite (a ficha só monta o resumo do leite para ela)
+  const leiteira = ficha.leite !== null;
 
   return (
     <View style={styles.coluna}>
@@ -175,31 +183,79 @@ export function ResumoTab({
         </Pressable>
       </FichaCard>
 
-      {animal.producaoLeiteL !== null || animal.racaoKgDia !== null ? (
-        <View style={styles.linha}>
-          {animal.producaoLeiteL !== null ? (
-            <FichaCard style={styles.metade}>
-              <View style={styles.metrica}>
-                <Text style={styles.metricaRotulo}>Leite</Text>
-                <Text style={styles.metricaValor}>{formatMedida(animal.producaoLeiteL, 'L/dia')}</Text>
-              </View>
-            </FichaCard>
-          ) : null}
-          {animal.racaoKgDia !== null ? (
-            <FichaCard style={styles.metade}>
-              <View style={styles.metrica}>
-                <Text style={styles.metricaRotulo}>Ração concentrado</Text>
-                <Text style={styles.metricaValor}>{formatMedida(animal.racaoKgDia, 'kg/dia')}</Text>
-              </View>
-            </FichaCard>
-          ) : null}
-        </View>
+      {leiteira || ficha.controlesLeiteiros.length > 0 || animal.producaoLeiteL !== null ? (
+        <LeiteCard ficha={ficha} leiteira={leiteira} onVer={onVerLeite} onRegistrar={onRegistrarLeite} />
       ) : null}
 
       {podeReproduzir ? (
         <ReproducaoResumoCard ficha={ficha} onVerReproducao={onVerReproducao} />
       ) : null}
     </View>
+  );
+}
+
+/**
+ * Card "Leite" do Resumo, no jeito do card de Peso: o último registro, a média
+ * de 30 dias, a variação desde o registro anterior e o "Registrar leite".
+ * Sem registro ainda, mostra o leite estimado no cadastro.
+ */
+function LeiteCard({
+  ficha,
+  leiteira,
+  onVer,
+  onRegistrar,
+}: {
+  ficha: FichaAnimal;
+  /** Só vaca de fazenda de leite registra; as outras mostram o que já tinham */
+  leiteira: boolean;
+  onVer: () => void;
+  onRegistrar: () => void;
+}) {
+  const { linhas, ultimoLitros, media30Dias } = historicoDeLeite(ficha.controlesLeiteiros);
+  const ultima = linhas[0] ?? null;
+  const litros = ultimoLitros ?? ficha.animal.producaoLeiteL;
+  const temRegistro = ultima !== null;
+
+  let detalhe: string | null = null;
+  if (ultima && ultima.variacaoL !== null && ultima.dias !== null) {
+    detalhe = textoDaVariacao(ultima.variacaoL, ultima.dias, 'L');
+  } else if (ultima) {
+    detalhe = `Registrado em ${formatDataBR(ultima.controle.data)}`;
+  } else if (litros !== null) {
+    detalhe = 'Estimado no cadastro';
+  }
+
+  return (
+    <FichaCard>
+      <Pressable
+        onPress={onVer}
+        disabled={!temRegistro}
+        style={({ pressed }) => [styles.metrica, pressed && styles.pressed]}
+        accessibilityRole="button"
+        accessibilityLabel="Ver registros de leite">
+        <View style={styles.rotuloLinha}>
+          <Text style={styles.metricaRotulo}>Leite</Text>
+          {temRegistro ? <AppIcon name="chevronRight" size={IconSize.md} color={AgroColors.textMuted} /> : null}
+        </View>
+        <Text style={litros !== null ? styles.metricaValor : styles.metricaVazia}>
+          {litros !== null ? formatMedida(litros, 'L/dia') : 'Sem registro'}
+        </Text>
+        {media30Dias !== null && linhas.length > 1 ? (
+          <Text style={styles.ganho}>Média de 30 dias: {formatDecimal(media30Dias)} L/dia</Text>
+        ) : null}
+        {detalhe ? <Text style={styles.metricaDetalhe}>{detalhe}</Text> : null}
+      </Pressable>
+      {leiteira ? (
+        <Pressable
+          onPress={onRegistrar}
+          hitSlop={8}
+          style={({ pressed }) => [styles.link, pressed && styles.pressed]}
+          accessibilityRole="button">
+          <AppIcon name="plus" size={IconSize.lg} color={AgroColors.primary} />
+          <Text style={styles.linkTexto}>Registrar leite</Text>
+        </Pressable>
+      ) : null}
+    </FichaCard>
   );
 }
 

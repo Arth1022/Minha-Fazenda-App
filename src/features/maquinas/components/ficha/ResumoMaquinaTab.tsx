@@ -80,7 +80,7 @@ export function ResumoMaquinaTab({ ficha, situacao, onRegistrar }: ResumoMaquina
         engatadoEm={situacao.engatadoEm?.nome ?? null}
       />
 
-      <ProblemasSecao problemas={situacao.problemas} />
+      <ProblemasSecao problemas={situacao.problemas} onRelatar={() => onRegistrar('problema')} />
 
       <UsoSemanalCard
         dias={ficha.usoSemanal}

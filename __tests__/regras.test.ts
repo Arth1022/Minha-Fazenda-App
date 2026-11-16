@@ -1,4 +1,4 @@
-import type { Animal, Pesagem, Reproducao, Tratamento, TratamentoAtivo } from '@/dtos';
+import type { Animal, ControleLeiteiro, Pesagem, Reproducao, Tratamento, TratamentoAtivo } from '@/dtos';
 import type { DadosAlerta } from '@/dtos';
 import { alertaPrincipal } from '@/features/rebanho/services/alertas';
 import { buscarAnimais } from '@/features/rebanho/services/busca';
@@ -19,9 +19,11 @@ import {
   situacaoReprodutiva,
   textoDaDose,
   textoDaProximaDose,
+  textoDaVariacao,
   textoDoPeriodo,
   textoDoProgresso,
 } from '@/features/rebanho/services/ficha';
+import { historicoDeLeite } from '@/features/rebanho/services/leite';
 import {
   calcularFase,
   calcularSituacaoLeite,
@@ -77,6 +79,10 @@ function tratamento(parcial: Partial<Tratamento>): Tratamento {
 
 function pesagem(data: Date, pesoKg: number): Pesagem {
   return { id: String(data.getTime()), animalId: 'a', data, pesoKg, metodo: 'balanca', fazendaId: 'f', createdBy: null, deletedAt: null, createdAt: data, updatedAt: data };
+}
+
+function controle(data: Date, litros: number): ControleLeiteiro {
+  return { id: String(data.getTime()), animalId: 'a', data, litros, fazendaId: 'f', createdBy: null, deletedAt: null, createdAt: data, updatedAt: data };
 }
 
 console.log('=========================================================');
@@ -154,6 +160,27 @@ check(
   historicoDePeso([pesagem(dia(1, 10), 100), pesagem(dia(1, 10), 102)]).gmdKg === null,
   'duas pesagens no mesmo dia não dão GMD (divisão por zero)'
 );
+
+// Histórico de leite (mesmo jeito do peso): 14/9 22 L → 10/10 18 L → 17/10 19,5 L; hoje 24/10
+const leite = historicoDeLeite(
+  [controle(dia(10, 10), 18), controle(dia(17, 10), 19.5), controle(dia(14, 9), 22)],
+  HOJE
+);
+check(leite.linhas.map((l) => l.controle.litros).join(',') === '19.5,18,22', 'registros de leite do mais recente para o mais antigo');
+check(
+  leite.linhas[0].variacaoL === 1.5 && leite.linhas[0].dias === 7 && leite.linhas[1].variacaoL === -4,
+  'cada registro de leite tem a variação desde o anterior (+1,5 L em 7 dias; -4 L)'
+);
+check(leite.linhas[2].variacaoL === null && leite.linhas[2].dias === null, 'o primeiro registro de leite não tem variação');
+check(leite.ultimoLitros === 19.5, 'último registro de leite: 19,5 L');
+check(leite.media30Dias === 18.8, 'média de 30 dias só com os registros da janela: (18 + 19,5) / 2 = 18,8 L');
+const semLeite = historicoDeLeite([], HOJE);
+check(
+  semLeite.linhas.length === 0 && semLeite.ultimoLitros === null && semLeite.media30Dias === null,
+  'sem registro de leite não há último nem média'
+);
+check(textoDaVariacao(1.5, 7, 'L') === '+1,5 L em 7 dias', 'variação do leite em litros: "+1,5 L em 7 dias"');
+check(textoDaVariacao(-3.5, 7) === '-3,5 kg em 7 dias', 'variação do peso continua em kg');
 
 // Previsão de parto
 check(formatDataBR(calcularPrevisaoParto(dia(1, 1))) === '11/10/2026', 'previsão de parto = cobertura + 283 dias');

@@ -96,7 +96,6 @@ async function runCadastroTest() {
     criasAnteriores: animal.criasAnteriores,
     jaPariu: animal.jaPariu,
     producaoLeiteL: animal.producaoLeiteL,
-    racaoKgDia: animal.racaoKgDia,
     maeId: animal.maeId,
     paiId: animal.paiId,
     paiDescricao: animal.paiDescricao,

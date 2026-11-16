@@ -34,7 +34,6 @@ export const novoAnimalSchema = z.object({
   // "Mais detalhes"
   pesoKg: decimalOpcional,
   producaoLeiteL: decimalOpcional,
-  racaoKgDia: decimalOpcional,
   maeId: z.string().nullable(),
   pai: z.object({ id: z.string().nullable(), descricao: z.string().nullable() }),
 });
@@ -51,7 +50,6 @@ const DEFAULT_VALUES: NovoAnimalFormValues = {
   crias: '',
   pesoKg: '',
   producaoLeiteL: '',
-  racaoKgDia: '',
   maeId: null,
   pai: { id: null, descricao: null },
 };
@@ -89,7 +87,6 @@ function valoresDoAnimal(animal: Animal): NovoAnimalFormValues {
     crias: animal.criasAnteriores > 0 ? String(animal.criasAnteriores) : '',
     pesoKg: '',
     producaoLeiteL: decimalParaCampo(animal.producaoLeiteL),
-    racaoKgDia: decimalParaCampo(animal.racaoKgDia),
     maeId: animal.maeId,
     pai: { id: animal.paiId, descricao: animal.paiDescricao },
   };
@@ -126,11 +123,10 @@ export function useNovoAnimalForm(onSaved: (animal: Animal) => void, animal?: An
       dataNascimento:
         idadeMesesTotal === null ? undefined : dataNascimentoPorIdade(idadeMesesTotal),
       nascimentoAproximado: idadeMesesTotal !== null,
-      // Quem já teve cria é vaca (Embrapa); leite e ração não se aplicam a macho
+      // Quem já teve cria é vaca (Embrapa); leite não se aplica a macho
       criasAnteriores,
       jaPariu: criasAnteriores > 0,
       producaoLeiteL: ehFemea ? decimalOuNull(values.producaoLeiteL) : null,
-      racaoKgDia: ehFemea ? decimalOuNull(values.racaoKgDia) : null,
       maeId: values.maeId,
       paiId: values.pai.id,
       paiDescricao: values.pai.descricao,
@@ -154,7 +150,6 @@ export function useNovoAnimalForm(onSaved: (animal: Animal) => void, animal?: An
           criasAnteriores,
           jaPariu: criasAnteriores > 0,
           producaoLeiteL: novo.producaoLeiteL ?? null,
-          racaoKgDia: novo.racaoKgDia ?? null,
           maeId: values.maeId,
           paiId: values.pai.id,
           paiDescricao: values.pai.descricao,

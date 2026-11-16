@@ -3,6 +3,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppIcon } from '@/components/ui';
 import { AgroColors, Radius, Shadows } from '@/constants/theme';
+import type { OcorrenciaNoMapa } from '@/services/ocorrenciaService';
+import { LinhaDePinos } from './CamadaOcorrenciasMapa';
 import { CoresTexto } from './elementos';
 
 export interface RotuloAreaProps {
@@ -11,14 +13,30 @@ export interface RotuloAreaProps {
   legenda: string | null;
   /** Pasto ocupado: selo verde com a vaca e quantas cabeças estão nele */
   cabecas?: number | null;
+  /** Ocorrências abertas no centro da área (relatadas sem GPS): pinos presos no canto do cartão */
+  ocorrencias?: readonly OcorrenciaNoMapa[];
+  ocorrenciaSelecionadaId?: string | null;
+  onPressOcorrencia?: (ocorrenciaId: string) => void;
   /** Sem `onPress` o rótulo é só leitura (ex.: durante o desenho) */
   onPress?: () => void;
 }
 
-/** Cartão branco no centro da área: nome em negrito, a situação embaixo e o selo de cabeças. */
-export function RotuloArea({ nome, legenda, cabecas = null, onPress }: RotuloAreaProps) {
+/**
+ * Cartão branco no centro da área: nome em negrito, a situação embaixo e o
+ * selo de cabeças. As ocorrências do centro da área ficam no canto de cima do
+ * cartão, cada uma tocável, em vez de um pino solto por cima do nome.
+ */
+export function RotuloArea({
+  nome,
+  legenda,
+  cabecas = null,
+  ocorrencias,
+  ocorrenciaSelecionadaId = null,
+  onPressOcorrencia,
+  onPress,
+}: RotuloAreaProps) {
   const conteudo = (
-    <View style={estilos.coluna}>
+    <>
       <View style={estilos.cartao}>
         <Text style={estilos.nome} numberOfLines={1}>
           {nome}
@@ -35,24 +53,45 @@ export function RotuloArea({ nome, legenda, cabecas = null, onPress }: RotuloAre
           <Text style={estilos.seloTexto}>{cabecas}</Text>
         </View>
       ) : null}
-    </View>
+    </>
   );
 
-  if (!onPress) return conteudo;
   return (
-    <Pressable
-      onPress={onPress}
-      hitSlop={6}
-      accessibilityRole="button"
-      accessibilityLabel={[nome, legenda, cabecas ? `${cabecas} cabeças` : null].filter(Boolean).join(', ')}
-      style={({ pressed }) => pressed && estilos.pressionado}>
-      {conteudo}
-    </Pressable>
+    <View style={estilos.coluna}>
+      {ocorrencias && ocorrencias.length > 0 ? (
+        // Antes do cartão no layout e por cima dele no desenho (zIndex), encostado no canto
+        <View style={estilos.pinos}>
+          <LinhaDePinos
+            ocorrencias={ocorrencias}
+            selecionadaId={ocorrenciaSelecionadaId}
+            compacto
+            onPress={onPressOcorrencia}
+          />
+        </View>
+      ) : null}
+      {onPress ? (
+        <Pressable
+          onPress={onPress}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel={[nome, legenda, cabecas ? `${cabecas} cabeças` : null].filter(Boolean).join(', ')}
+          style={({ pressed }) => [estilos.corpo, pressed && estilos.pressionado]}>
+          {conteudo}
+        </Pressable>
+      ) : (
+        <View style={estilos.corpo}>{conteudo}</View>
+      )}
+    </View>
   );
 }
 
+/** Quanto os pinos descem sobre a borda de cima do cartão */
+const SOBRE_O_CARTAO = 9;
+
 const estilos = StyleSheet.create({
-  coluna: { alignItems: 'center', gap: 8 },
+  coluna: { alignItems: 'center' },
+  corpo: { alignItems: 'center', gap: 5 },
+  pinos: { alignSelf: 'flex-end', marginBottom: -SOBRE_O_CARTAO, zIndex: 1 },
   selo: {
     flexDirection: 'row',
     alignItems: 'center',

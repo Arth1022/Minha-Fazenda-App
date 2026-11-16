@@ -1,8 +1,8 @@
 # Mapeamento do schema do app para o back-end
 
-Gerado de `src/entities/` (fonte da verdade do schema no app) em 2026-11-11 · `SCHEMA_VERSION = 1` · branch `feature/conta-e-sync`.
+Gerado de `src/entities/` (fonte da verdade do schema no app) em 2026-11-11 · `SCHEMA_VERSION = 2` (2026-11-16: sem `animais.racao_kg_dia`, SC-050) · branch `feature/conta-e-sync`.
 
-Este é o schema que o celular sincroniza com o Postgres. Cada tabela abaixo precisa existir no Postgres com estas colunas e tipos (o teste `npm run test:schema` do app compara com `contracts/schema-colunas.json` do CI do back). O pedido formal de cada tabela está no `SCHEMA_CHANGES.md` (SC-001 a SC-033).
+Este é o schema que o celular sincroniza com o Postgres. Cada tabela abaixo precisa existir no Postgres com estas colunas e tipos (o teste `npm run test:schema` do app compara com `contracts/schema-colunas.json` do CI do back). O pedido formal de cada tabela está no `SCHEMA_CHANGES.md` (SC-001 a SC-033; a saída de `animais.racao_kg_dia` é o SC-050).
 
 ## Convenções
 
@@ -216,7 +216,6 @@ Rebanho.
 | `motivo_saida` | text | String | sim |  |  |
 | `lote_id` | uuid | UUID | sim |  | → lotes.id |
 | `producao_leite_l` | numeric | BigDecimal | sim |  |  |
-| `racao_kg_dia` | numeric | BigDecimal | sim |  |  |
 | `valor_compra` | numeric | BigDecimal | sim |  |  |
 | `valor_venda` | numeric | BigDecimal | sim |  |  |
 | `peso_saida_kg` | numeric | BigDecimal | sim |  |  |

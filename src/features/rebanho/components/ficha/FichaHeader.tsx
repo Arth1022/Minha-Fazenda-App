@@ -32,7 +32,6 @@ export function FichaHeader({
   onVerQrCode,
 }: FichaHeaderProps) {
   const { animal, fase, idade, situacaoLeite, podeReproduzir } = ficha;
-  const brinco = `Brinco ${animal.brinco}`;
   const subtitulo = [
     FASE_LABEL[fase],
     animal.raca,
@@ -52,8 +51,9 @@ export function FichaHeader({
     <FichaTopo
       titulo="Ficha do animal"
       avatar={<AnimalAvatar size={60} variant="translucido" />}
-      nome={animal.nome || brinco}
-      etiqueta={animal.nome ? brinco : null}
+      // Sem nome, o brinco vira o título; com nome, a etiqueta leva só o número (cabe na linha)
+      nome={animal.nome || `Brinco ${animal.brinco}`}
+      etiqueta={animal.nome ? animal.brinco : null}
       subtitulo={subtitulo}
       acoes={[
         { icone: 'qrcode', label: 'Ver QR Code do animal', onPress: onVerQrCode },

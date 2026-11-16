@@ -93,6 +93,10 @@ export interface ProblemaMaquinaInput {
   fotoUri?: string | null;
   /** Outra cópia da mesma foto para a tarefa: o envio de mídia apaga o arquivo depois de subir */
   fotoTarefaUri?: string | null;
+  /** Fotos da tarefa (relato com várias fotos); sem isso, vale `fotoTarefaUri` */
+  fotosTarefa?: string[];
+  /** Nota de voz da tarefa */
+  audioUri?: string | null;
   lat?: number | null;
   lng?: number | null;
   autor?: Usuario;
@@ -219,7 +223,8 @@ export async function registrarProblemaMaquina(
       maquinaParada: !input.podeUsar,
       pontoLat: input.lat ?? null,
       pontoLng: input.lng ?? null,
-      fotos: input.fotoTarefaUri ? [input.fotoTarefaUri] : [],
+      fotos: input.fotosTarefa ?? (input.fotoTarefaUri ? [input.fotoTarefaUri] : []),
+      audioUri: input.audioUri,
       autor: input.autor,
       agora: input.agora,
     },

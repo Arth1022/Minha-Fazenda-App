@@ -2,9 +2,12 @@ import React, { memo, useMemo } from 'react';
 import Mapbox from '@rnmapbox/maps';
 
 import type { Talhao } from '@/database';
+import type { OcorrenciaNoMapa } from '@/services/ocorrenciaService';
 import type { Coordenada } from '@/utils/geoMath';
 import { colecaoDasAreas, situacaoDaArea } from '../services/areas';
 import type { OcupacaoArea } from '../services/ocupacao';
+import { faixaDoRotulo, PRIORIDADE_NO_MAPA } from '../services/rotulos';
+import { PinosNoMapa } from './CamadaOcorrenciasMapa';
 import { RotuloArea } from './RotuloArea';
 
 export interface CamadaTalhoesSalvosProps {
@@ -18,6 +21,10 @@ export interface CamadaTalhoesSalvosProps {
   mostrarNomes?: boolean;
   /** Camada "Rebanho": o selo de cabeças nos pastos ocupados */
   mostrarRebanho?: boolean;
+  /** Ocorrências abertas no centro de cada área (ver `ocorrenciasNosRotulos`): presas no rótulo */
+  ocorrenciasPorArea?: ReadonlyMap<string, readonly OcorrenciaNoMapa[]>;
+  ocorrenciaSelecionadaId?: string | null;
+  onPressOcorrencia?: (ocorrenciaId: string) => void;
   onPressTalhao?: (talhaoId: string, coordenada?: Coordenada) => void;
 }
 
@@ -34,6 +41,9 @@ export const CamadaTalhoesSalvos = memo(function CamadaTalhoesSalvos({
   destacadoId = null,
   mostrarNomes = true,
   mostrarRebanho = true,
+  ocorrenciasPorArea,
+  ocorrenciaSelecionadaId = null,
+  onPressOcorrencia,
   onPressTalhao,
 }: CamadaTalhoesSalvosProps) {
   const colecao = useMemo(() => colecaoDasAreas(talhoes, ocupacoes), [talhoes, ocupacoes]);
@@ -48,10 +58,12 @@ export const CamadaTalhoesSalvos = memo(function CamadaTalhoesSalvos({
               legenda: situacaoDaArea(t, ocupacao).legenda,
               cabecas: mostrarRebanho && t.tipo === 'pasto' ? (ocupacao?.cabecas ?? 0) : 0,
               centro: [t.centroLng, t.centroLat] as Coordenada,
+              ...faixaDoRotulo(t),
+              ocorrencias: ocorrenciasPorArea?.get(t.id),
             };
           })
         : [],
-    [talhoes, ocupacoes, mostrarNomes, mostrarRebanho],
+    [talhoes, ocupacoes, mostrarNomes, mostrarRebanho, ocorrenciasPorArea],
   );
 
   // Expressões escritas dentro de cada `style`: fora dele o TypeScript perde o tipo de expressão do Mapbox
@@ -110,20 +122,62 @@ export const CamadaTalhoesSalvos = memo(function CamadaTalhoesSalvos({
         />
       </Mapbox.ShapeSource>
 
-      {rotulos.map((r) => (
-        <Mapbox.MarkerView
-          key={`rotulo-${r.id}`}
-          coordinate={r.centro}
-          anchor={{ x: 0.5, y: 0.5 }}
-          priority={r.id === idAtivo ? 1 : 0}>
-          <RotuloArea
-            nome={r.nome}
-            legenda={r.legenda}
-            cabecas={r.cabecas}
-            onPress={onPressTalhao ? () => onPressTalhao(r.id) : undefined}
-          />
-        </Mapbox.MarkerView>
-      ))}
+      {rotulos.map((r) => {
+        const ativo =
+          r.id === idAtivo ||
+          (ocorrenciaSelecionadaId !== null && r.ocorrencias?.some((oc) => oc.id === ocorrenciaSelecionadaId) === true);
+        // A área aberta no painel (ou com a ocorrência aberta) mostra o rótulo também de longe
+        const zoomMinimo = ativo ? 0 : r.zoomMinimo;
+        return (
+          <React.Fragment key={`rotulo-${r.id}`}>
+            <Mapbox.MarkerView
+              coordinate={r.centro}
+              anchor={{ x: 0.5, y: 0.5 }}
+              // Sem sobrepor, o Mapbox some com o rótulo que encosta em outro, num pino ou no ponto
+              // azul do GPS: ele só aparecia em alguns zooms. Quem esconde é a faixa de zoom: longe
+              // demais (as vizinhas se empilhariam) e perto demais (a área já toma a tela).
+              allowOverlap
+              allowOverlapWithPuck
+              // Sempre número: o Mapbox só atualiza o que vem preenchido (null manteria o anterior)
+              minZoom={zoomMinimo}
+              maxZoom={r.zoomMaximo}
+              priority={ativo ? PRIORIDADE_NO_MAPA.rotuloAtivo : PRIORIDADE_NO_MAPA.rotulo}>
+              <RotuloArea
+                nome={r.nome}
+                legenda={r.legenda}
+                cabecas={r.cabecas}
+                ocorrencias={r.ocorrencias}
+                ocorrenciaSelecionadaId={ocorrenciaSelecionadaId}
+                onPressOcorrencia={onPressOcorrencia}
+                onPress={onPressTalhao ? () => onPressTalhao(r.id) : undefined}
+              />
+            </Mapbox.MarkerView>
+
+            {/* Fora da faixa do rótulo, as ocorrências presas nele voltam a ser pinos no centro da área */}
+            {r.ocorrencias && r.ocorrencias.length > 0 ? (
+              <>
+                {zoomMinimo > 0 ? (
+                  <PinosNoMapa
+                    coordenada={r.centro}
+                    ocorrencias={r.ocorrencias}
+                    selecionadaId={ocorrenciaSelecionadaId}
+                    zoomMinimo={0}
+                    zoomMaximo={zoomMinimo}
+                    onPress={onPressOcorrencia}
+                  />
+                ) : null}
+                <PinosNoMapa
+                  coordenada={r.centro}
+                  ocorrencias={r.ocorrencias}
+                  selecionadaId={ocorrenciaSelecionadaId}
+                  zoomMinimo={r.zoomMaximo}
+                  onPress={onPressOcorrencia}
+                />
+              </>
+            ) : null}
+          </React.Fragment>
+        );
+      })}
     </>
   );
 });

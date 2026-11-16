@@ -25,8 +25,10 @@ export interface FichaTopoProps<K extends string> {
   /** Círculo à esquerda do nome */
   avatar: React.ReactNode;
   nome: string;
-  /** Etiqueta ao lado do nome (ex.: "Brinco 23232", "Parada") */
+  /** Etiqueta abaixo do subtítulo (ex.: "Brinco 23232", "Parada") */
   etiqueta?: string | null;
+  /** 'alerta' destaca a etiqueta em laranja com ícone (ex.: "Parada por problema") */
+  etiquetaTom?: 'padrao' | 'alerta';
   subtitulo: string;
   /** Botões redondos na linha do nome, encostados à direita (QR Code, editar) */
   acoes: AcaoFichaTopo[];
@@ -45,6 +47,7 @@ export function FichaTopo<K extends string>({
   avatar,
   nome,
   etiqueta,
+  etiquetaTom = 'padrao',
   subtitulo,
   acoes,
   abas = [],
@@ -71,30 +74,33 @@ export function FichaTopo<K extends string>({
       <View style={styles.perfil}>
         {avatar}
         <View style={styles.perfilTextos}>
-          <View style={styles.nomeLinha}>
-            <Text style={styles.nome} numberOfLines={1}>
-              {nome}
-            </Text>
-            {etiqueta ? (
-              <View style={styles.etiqueta}>
-                <Text style={styles.etiquetaTexto}>{etiqueta}</Text>
-              </View>
-            ) : null}
-            <View style={styles.acoes}>
-              {acoes.map((acao) => (
-                <Pressable
-                  key={acao.label}
-                  onPress={acao.onPress}
-                  hitSlop={6}
-                  style={({ pressed }) => [styles.acao, pressed && styles.pressed]}
-                  accessibilityRole="button"
-                  accessibilityLabel={acao.label}>
-                  <AppIcon name={acao.icone} size={20} color={AgroColors.textInverse} />
-                </Pressable>
-              ))}
+          <Text style={styles.nome} numberOfLines={2}>
+            {nome}
+          </Text>
+          <Text style={styles.subtitulo} numberOfLines={1}>
+            {subtitulo}
+          </Text>
+          {etiqueta ? (
+            <View style={[styles.etiqueta, etiquetaTom === 'alerta' && styles.etiquetaAlerta]}>
+              {etiquetaTom === 'alerta' ? <AppIcon name="alert" size={13} color={AgroColors.health} /> : null}
+              <Text style={[styles.etiquetaTexto, etiquetaTom === 'alerta' && styles.etiquetaTextoAlerta]}>
+                {etiqueta}
+              </Text>
             </View>
-          </View>
-          <Text style={styles.subtitulo}>{subtitulo}</Text>
+          ) : null}
+        </View>
+        <View style={styles.acoes}>
+          {acoes.map((acao) => (
+            <Pressable
+              key={acao.label}
+              onPress={acao.onPress}
+              hitSlop={6}
+              style={({ pressed }) => [styles.acao, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel={acao.label}>
+              <AppIcon name={acao.icone} size={20} color={AgroColors.textInverse} />
+            </Pressable>
+          ))}
         </View>
       </View>
 
@@ -157,7 +163,7 @@ const styles = StyleSheet.create({
   },
   perfil: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: Spacing.three,
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.lg,
@@ -165,35 +171,32 @@ const styles = StyleSheet.create({
   },
   perfilTextos: {
     flex: 1,
-    gap: Spacing.one,
-  },
-  nomeLinha: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
+    gap: Spacing.xs,
   },
   nome: {
-    fontSize: 26,
-    lineHeight: 32,
+    fontSize: 22,
+    lineHeight: 27,
     fontWeight: '800',
     color: AgroColors.textInverse,
-    flexShrink: 1,
   },
   acoes: {
-    marginLeft: 'auto',
     flexDirection: 'row',
     gap: Spacing.two,
   },
   acao: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.16)',
   },
   etiqueta: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    marginTop: Spacing.half,
     paddingHorizontal: Spacing.two,
     paddingVertical: Spacing.half,
     borderRadius: Radius.xs,
@@ -204,8 +207,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: AgroColors.textInverse,
   },
+  etiquetaAlerta: {
+    backgroundColor: AgroColors.healthBg,
+  },
+  etiquetaTextoAlerta: {
+    fontSize: 12,
+    color: AgroColors.health,
+  },
   subtitulo: {
     ...Typography.bodyMedium,
+    fontSize: 14,
     color: 'rgba(255, 255, 255, 0.85)',
   },
   semAbas: { height: Spacing.sm },

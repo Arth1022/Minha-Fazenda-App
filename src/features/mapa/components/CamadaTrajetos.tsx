@@ -4,6 +4,7 @@ import Mapbox from '@rnmapbox/maps';
 
 import { Radius, Shadows, Spacing } from '@/constants/theme';
 import type { PontoRastro } from '@/database';
+import { PRIORIDADE_NO_MAPA } from '../services/rotulos';
 import { CoresTexto } from './elementos';
 
 /** Um trajeto desenhado: o rastro simplificado do uso, na cor fixa da máquina. */
@@ -96,7 +97,10 @@ export function CamadaTrajetos({ id, trajetos, marcas = [], destaqueId = null, p
           key={`${id}-marca-${marca.id}`}
           coordinate={[marca.coordenada[0], marca.coordenada[1]]}
           anchor={{ x: 1, y: 0.5 }}
-          allowOverlap>
+          allowOverlap
+          // Quem está na máquina fica com o ponto azul do GPS em cima da etiqueta dela
+          allowOverlapWithPuck
+          priority={PRIORIDADE_NO_MAPA.pino}>
           <Pressable
             onPress={onPress ? () => onPress(marca.id) : undefined}
             accessibilityRole="button"
@@ -113,7 +117,11 @@ export function CamadaTrajetos({ id, trajetos, marcas = [], destaqueId = null, p
       ))}
 
       {ponta ? (
-        <Mapbox.MarkerView coordinate={[ponta.coordenada[0], ponta.coordenada[1]]} anchor={{ x: 0.5, y: 0.5 }} allowOverlap>
+        <Mapbox.MarkerView
+          coordinate={[ponta.coordenada[0], ponta.coordenada[1]]}
+          anchor={{ x: 0.5, y: 0.5 }}
+          allowOverlap
+          priority={PRIORIDADE_NO_MAPA.pino}>
           <View style={[estilos.halo, { backgroundColor: `${ponta.cor}40` }]} pointerEvents="none">
             <View style={[estilos.pontaPonto, { backgroundColor: ponta.cor }]} />
           </View>
