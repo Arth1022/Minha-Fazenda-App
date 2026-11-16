@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppIcon, type AppIconName, BottomSheet, IconeRedondo, type TomFicha } from '@/components/ui';
 import { AgroColors, IconSize, Radius, Spacing, Typography } from '@/constants/theme';
 
-export type TipoRegistro = 'tratamento' | 'pesagem' | 'cobertura' | 'parto' | 'saida' | 'ocorrencia';
+export type TipoRegistro = 'tratamento' | 'pesagem' | 'leite' | 'cobertura' | 'parto' | 'saida' | 'ocorrencia';
 
 interface OpcaoRegistro {
   tipo: TipoRegistro;
@@ -14,6 +14,8 @@ interface OpcaoRegistro {
   tom: TomFicha;
   /** Só para fêmea em idade reprodutiva (novilha ou vaca) */
   reprodutiva?: boolean;
+  /** Só para vaca de fazenda que produz leite */
+  leiteira?: boolean;
 }
 
 const OPCOES: OpcaoRegistro[] = [
@@ -32,6 +34,14 @@ const OPCOES: OpcaoRegistro[] = [
     tom: 'saude',
   },
   { tipo: 'pesagem', titulo: 'Pesagem', descricao: 'Peso atual do animal', icone: 'weight', tom: 'sucesso' },
+  {
+    tipo: 'leite',
+    titulo: 'Registro de leite',
+    descricao: 'Litros que a vaca deu no dia',
+    icone: 'milk',
+    tom: 'sucesso',
+    leiteira: true,
+  },
   {
     tipo: 'cobertura',
     titulo: 'Cobertura',
@@ -57,13 +67,17 @@ export interface RegistrarMenuProps {
   identificacao: string;
   /** Fêmea novilha ou vaca: mostra Cobertura e Parto */
   reprodutiva: boolean;
+  /** Vaca de fazenda que produz leite: mostra o Registro de leite */
+  leiteira: boolean;
   onClose: () => void;
   onSelect: (tipo: TipoRegistro) => void;
 }
 
 /** Menu do botão "Registrar" da ficha. */
-export function RegistrarMenu({ visible, identificacao, reprodutiva, onClose, onSelect }: RegistrarMenuProps) {
-  const opcoes = OPCOES.filter((opcao) => reprodutiva || !opcao.reprodutiva);
+export function RegistrarMenu({ visible, identificacao, reprodutiva, leiteira, onClose, onSelect }: RegistrarMenuProps) {
+  const opcoes = OPCOES.filter(
+    (opcao) => (reprodutiva || !opcao.reprodutiva) && (leiteira || !opcao.leiteira)
+  );
 
   return (
     <BottomSheet visible={visible} title="O que deseja registrar?" subtitle={identificacao} onClose={onClose}>

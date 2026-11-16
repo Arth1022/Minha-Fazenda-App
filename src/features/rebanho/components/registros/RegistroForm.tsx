@@ -3,6 +3,7 @@ import React from 'react';
 import type { Animal } from '@/dtos';
 import type { TipoRegistro } from '../ficha/RegistrarMenu';
 import { CoberturaForm } from './CoberturaForm';
+import { LeiteForm } from './LeiteForm';
 import { PartoForm } from './PartoForm';
 import { PesagemForm } from './PesagemForm';
 import { SaidaForm } from './SaidaForm';
@@ -24,6 +25,8 @@ export function RegistroForm({ tipo, animalId, touros, onClose }: RegistroFormPr
   switch (tipo) {
     case 'pesagem':
       return <PesagemForm animalId={animalId} onClose={onClose} />;
+    case 'leite':
+      return <LeiteForm animalId={animalId} onClose={onClose} />;
     case 'cobertura':
       return <CoberturaForm animalId={animalId} touros={touros} onClose={onClose} />;
     case 'parto':

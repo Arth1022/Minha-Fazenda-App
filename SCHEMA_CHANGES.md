@@ -47,6 +47,7 @@ Nulo? abaixo é o que o app grava hoje (não = o app sempre preenche). Coluna no
 | SC-031 | 2026-11-11 | ciclos_plantio | + tabela `ciclos_plantio` (18 colunas) | ver SC-031 | ver SC-031 | front | proposto |
 | SC-032 | 2026-11-11 | etapas_ciclo | + tabela `etapas_ciclo` (17 colunas) | ver SC-032 | ver SC-032 | front | proposto |
 | SC-033 | 2026-11-11 | usos_area | + tabela `usos_area` (11 colunas) | ver SC-033 | ver SC-033 | front | proposto |
+| SC-050 | 2026-11-16 | animais | − coluna `racao_kg_dia` (SCHEMA_VERSION 2) | — | — | front | proposto |
 
 ## SC-001 — tabela `fazendas`
 - Só leitura no celular (desce pelo sync; muda pelos endpoints REST). Colunas que o celular recebe.
@@ -739,3 +740,10 @@ Nulo? abaixo é o que o app grava hoje (não = o app sempre preenche). Coluna no
 | `created_at` | timestamptz | sim |
 | `updated_at` | timestamptz | sim |
 | `deleted_at` | timestamptz | sim |
+
+## SC-050 — `animais`: sai a coluna `racao_kg_dia`
+- Número na sequência do `SCHEMA_CHANGES.md` da API (lá o último era o SC-049; a lista daqui parou no SC-033 com outra numeração).
+- A ração concentrada por dia saiu do app (cadastro e ficha do animal) a pedido do produtor. Desde o `SCHEMA_VERSION` 2 o app não lê nem grava a coluna.
+- API: tirar o campo `racaoKgDia` da entity `Animal` e, no mesmo deploy, o changeset que apaga a coluna (`dropColumn` de `animais.racao_kg_dia`); tirar a coluna de `contracts/schema-colunas.json`. Apagar a coluna antes de tirar o campo da entity quebra as consultas de animais.
+- Impacto em apps antigos: nenhum. A API ignora colunas que a tabela não tem, então o upload de um app v1 que ainda mande `racao_kg_dia` continua aceito (sem a coluna).
+- Dados: os valores de ração já gravados se perdem (não eram usados em outro lugar).

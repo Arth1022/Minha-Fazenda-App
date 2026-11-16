@@ -12,6 +12,7 @@ import { definirLote } from '@/services/loteService';
 import { moverAnimais } from '@/services/movimentacaoService';
 import { CriasSheet } from '../components/ficha/CriasSheet';
 import { EditarTratamentoModal } from '../components/ficha/EditarTratamentoModal';
+import { LeiteSheet } from '../components/ficha/LeiteSheet';
 import { PesagensSheet } from '../components/ficha/PesagensSheet';
 import { QrCodeAnimalModal } from '../components/ficha/QrCodeAnimalModal';
 import { FichaHeader, type AbaFicha } from '../components/ficha/FichaHeader';
@@ -33,6 +34,7 @@ import { useLocalDoAnimal } from '../hooks/useLocalDoAnimal';
 import { useRebanho } from '../hooks/useRebanho';
 import { dosesParaHoje } from '../services/ficha';
 import { historicoDePeso } from '../services/indicadores';
+import { historicoDeLeite } from '../services/leite';
 import { resumoDoLocal } from '../services/local';
 
 /** Espaço no fim da rolagem para o botão "Registrar" não cobrir o último card. */
@@ -65,6 +67,7 @@ export default function AnimalDetalheScreen() {
   const [editando, setEditando] = useState<Tratamento | null>(null);
   const [informarTouroDe, setInformarTouroDe] = useState<string | null>(null);
   const [pesagensVisible, setPesagensVisible] = useState(false);
+  const [leiteVisible, setLeiteVisible] = useState(false);
   const [criasVisible, setCriasVisible] = useState(false);
   const [editarAnimal, setEditarAnimal] = useState(false);
   const [qrVisible, setQrVisible] = useState(false);
@@ -147,6 +150,8 @@ export default function AnimalDetalheScreen() {
             onAplicar={aplicar}
             onRegistrarPeso={() => setRegistro('pesagem')}
             onVerPesagens={() => setPesagensVisible(true)}
+            onRegistrarLeite={() => setRegistro('leite')}
+            onVerLeite={() => setLeiteVisible(true)}
             onVerCrias={() => setCriasVisible(true)}
             onVerReproducao={() => setAba('reproducao')}
             local={{
@@ -195,6 +200,7 @@ export default function AnimalDetalheScreen() {
         visible={menuVisible}
         identificacao={identificacao}
         reprodutiva={podeReproduzir}
+        leiteira={ficha.leite !== null}
         onClose={() => setMenuVisible(false)}
         onSelect={escolherRegistro}
       />
@@ -226,6 +232,16 @@ export default function AnimalDetalheScreen() {
         onRegistrar={() => {
           setPesagensVisible(false);
           setRegistro('pesagem');
+        }}
+      />
+
+      <LeiteSheet
+        visible={leiteVisible}
+        historico={historicoDeLeite(ficha.controlesLeiteiros)}
+        onClose={() => setLeiteVisible(false)}
+        onRegistrar={() => {
+          setLeiteVisible(false);
+          setRegistro('leite');
         }}
       />
 

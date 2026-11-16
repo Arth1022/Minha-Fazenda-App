@@ -158,27 +158,14 @@ export function NovoAnimalForm({
         )}
 
         {femea ? (
-          <View style={styles.twoColInputs}>
-            <ControlledInput
-              control={control}
-              name="producaoLeiteL"
-              containerStyle={{ flex: 1 }}
-              label="Produção de Leite"
-              placeholder="22,1"
-              keyboardType="numeric"
-              suffix="L/dia"
-            />
-
-            <ControlledInput
-              control={control}
-              name="racaoKgDia"
-              containerStyle={{ flex: 1 }}
-              label="Ração Concentrado"
-              placeholder="6,5"
-              keyboardType="numeric"
-              suffix="kg/dia"
-            />
-          </View>
+          <ControlledInput
+            control={control}
+            name="producaoLeiteL"
+            label="Produção de Leite"
+            placeholder="22,1"
+            keyboardType="numeric"
+            suffix="L/dia"
+          />
         ) : null}
 
         <Controller

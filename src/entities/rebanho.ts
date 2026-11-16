@@ -99,10 +99,11 @@ export const animais = sqliteTable(
     dataSaida: dataHora('data_saida'),
     motivoSaida: text('motivo_saida'),
     loteId: text('lote_id'),
-    /** Leite estimado por dia (litros), informado pelo produtor; opcional */
+    /**
+     * Leite por dia (litros): o estimado no cadastro e, depois, o registro de
+     * leite mais recente (`registrarControleLeiteiro`); opcional
+     */
     producaoLeiteL: real('producao_leite_l'),
-    /** Ração por dia (kg), informada pelo produtor; opcional */
-    racaoKgDia: real('racao_kg_dia'),
     /** Quanto pagou (R$), quando a origem é compra */
     valorCompra: real('valor_compra'),
     /** Venda: quanto recebeu (R$) e o peso na saída */

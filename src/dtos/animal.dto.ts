@@ -75,7 +75,6 @@ export type DadosEdicaoAnimal = Required<
     | 'criasAnteriores'
     | 'jaPariu'
     | 'producaoLeiteL'
-    | 'racaoKgDia'
     | 'maeId'
     | 'paiId'
     | 'paiDescricao'

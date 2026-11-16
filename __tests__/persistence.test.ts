@@ -15,6 +15,7 @@ import {
   registrarSaida,
   ultimosPartos,
 } from '@/features/rebanho/data/animais';
+import { controlesDoAnimal, registrarControleLeiteiro } from '@/features/rebanho/data/leite';
 import { createPesagem, pesagensDoAnimal, pesosAtuais } from '@/features/rebanho/data/pesagens';
 import { createReproducao, reproducoesDoAnimal } from '@/features/rebanho/data/reproducoes';
 import {
@@ -99,10 +100,11 @@ async function runPersistenceTest() {
     calcularFase({ ...compradaParida, ultimoParto: null }, dia(24, 10)) === 'vaca',
     'comprada com ja_pariu é vaca sem cria registrada'
   );
-  check(vaca.producaoLeiteL === null && vaca.racaoKgDia === null, 'leite estimado e ração são opcionais (null)');
-  const leiteira = await createAnimal({ brinco: '#206', producaoLeiteL: 18.5, racaoKgDia: 6 });
+  check(vaca.producaoLeiteL === null, 'leite estimado é opcional (null)');
+  const leiteira = await createAnimal({ brinco: '#206', producaoLeiteL: 18.5 });
   const gravada = await animalPorId(leiteira.id);
-  check(gravada?.producaoLeiteL === 18.5 && gravada.racaoKgDia === 6, 'createAnimal grava leite estimado e ração por dia');
+  check(gravada?.producaoLeiteL === 18.5, 'createAnimal grava o leite estimado por dia');
+  check(!!gravada && !('racaoKgDia' in gravada), 'ração concentrada saiu do cadastro do animal');
 
   // 3. Cobertura com previsão de parto
   const cobertura = await createReproducao({ animalId: vaca.id, tipo: 'inseminacao', data: dia(1, 1) });
@@ -162,6 +164,25 @@ async function runPersistenceTest() {
     'peso atual é o da pesagem mais recente, com a data dela'
   );
   check(atuais.get(cria.id)?.pesoKg === 42.5, 'peso atual da cria');
+
+  // 5b. Registro de leite (controle leiteiro): o mais recente vira o leite do cadastro
+  await registrarControleLeiteiro({ animalId: leiteira.id, data: dia(10, 10), litros: 17 });
+  await registrarControleLeiteiro({ animalId: leiteira.id, data: dia(17, 10), litros: 19.5 });
+  const controles = await controlesDoAnimal(leiteira.id);
+  check(
+    controles.map((c) => c.litros).join(',') === '19.5,17',
+    'registros de leite da vaca, do mais recente para o mais antigo'
+  );
+  check((await animalPorId(leiteira.id))?.producaoLeiteL === 19.5, 'registro de leite mais recente vira o leite do cadastro');
+  await registrarControleLeiteiro({ animalId: leiteira.id, data: dia(1, 10), litros: 12 });
+  check(
+    (await animalPorId(leiteira.id))?.producaoLeiteL === 19.5 && (await controlesDoAnimal(leiteira.id)).length === 3,
+    'registro de leite atrasado entra no histórico sem mexer no leite do cadastro'
+  );
+  check(
+    await rejeita(() => registrarControleLeiteiro({ animalId: leiteira.id, data: dia(18, 10), litros: Number.NaN })),
+    'registro de leite sem litros válidos é recusado'
+  );
 
   // 6. Tratamentos, dias e último uso do remédio
   const tratamento = await createTratamento({

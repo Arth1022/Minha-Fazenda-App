@@ -34,12 +34,12 @@ export function textoEmDias(data: Date, hoje = new Date()): string {
   return dias > 0 ? `em ${dias} dias` : `há ${-dias} dias`;
 }
 
-/** "+12 kg em 30 dias", "-3,5 kg em 7 dias" ou "+2 kg no mesmo dia". */
-export function textoDaVariacao(kg: number, dias: number): string {
-  const sinal = kg > 0 ? '+' : '';
-  const valor = Number.isInteger(kg) ? String(kg) : formatDecimal(kg);
+/** "+12 kg em 30 dias", "-3,5 kg em 7 dias", "+2 kg no mesmo dia" (ou em litros: "+1,5 L em 7 dias"). */
+export function textoDaVariacao(quantidade: number, dias: number, unidade = 'kg'): string {
+  const sinal = quantidade > 0 ? '+' : '';
+  const valor = Number.isInteger(quantidade) ? String(quantidade) : formatDecimal(quantidade);
   const periodo = dias === 0 ? 'no mesmo dia' : dias === 1 ? 'em 1 dia' : `em ${dias} dias`;
-  return `${sinal}${valor} kg ${periodo}`;
+  return `${sinal}${valor} ${unidade} ${periodo}`;
 }
 
 // ---------------------------------------------------------------- Tratamentos
